@@ -7,7 +7,6 @@ export const geistMono = GeistMono;
 
 export const newsreader = Newsreader({
   subsets: ['latin'],
-  axes: ['opsz'],
   style: ['normal', 'italic'],
   weight: ['300', '400', '500'],
   display: 'swap',

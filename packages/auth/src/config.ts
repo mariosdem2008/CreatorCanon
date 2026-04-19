@@ -63,10 +63,9 @@ export const authConfig = {
       return token;
     },
     session({ session, token }) {
-      // Always assign so session.user.id is never undefined at runtime even
-      // though the type augmentation declares it as string (non-optional).
-      session.user.id = token.userId ?? token.sub ?? '';
-      session.user.isAdmin = token.isAdmin ?? false;
+      // JWT has Record<string,unknown> index signature — cast to expected types.
+      session.user.id = ((token.userId as string | undefined) ?? token.sub) ?? '';
+      session.user.isAdmin = (token.isAdmin as boolean | undefined) ?? false;
       return session;
     },
   },

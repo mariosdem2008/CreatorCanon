@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { auth, signIn } from '@atlas/auth';
 import { Logo } from '@atlas/ui';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Sign in',
 };

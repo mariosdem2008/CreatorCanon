@@ -4,6 +4,7 @@
 
 import { auth, signOut } from '@atlas/auth';
 
+export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'Home',
 };

@@ -28,7 +28,6 @@ export const Avatar = ({ name = 'A', size = 28, palette = 0, src, className }: A
 
   if (src) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={name}

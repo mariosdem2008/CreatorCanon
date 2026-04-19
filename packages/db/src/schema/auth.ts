@@ -16,14 +16,17 @@ import { citext } from './_vector';
  * https://authjs.dev/getting-started/adapters/drizzle
  *
  * Extended with Atlas-specific columns: `is_admin`, `google_sub`, `last_login_at`.
- * `email` uses `citext` so lookups are case-insensitive (requires `CREATE EXTENSION citext`).
+ * `email` uses plain `text` (not citext) so @auth/drizzle-adapter's PgText
+ * type check passes. Case-insensitive uniqueness is enforced via a functional
+ * index `LOWER(email)` added in post-migration SQL. Google OAuth always
+ * returns lowercase emails so this is a non-issue in practice.
  */
 export const user = pgTable(
   'user',
   {
     id: text('id').primaryKey(),
     name: text('name'),
-    email: citext('email').notNull(),
+    email: text('email').notNull(),
     emailVerified: timestamp('email_verified', {
       withTimezone: true,
       mode: 'date',
@@ -47,6 +50,8 @@ export const user = pgTable(
   }),
 );
 
+// Column TS property names must match @auth/drizzle-adapter's DefaultPostgresAccountsTable:
+// camelCase for userId/type/provider/providerAccountId, snake_case for the OAuth token fields.
 export const account = pgTable(
   'account',
   {
@@ -56,13 +61,13 @@ export const account = pgTable(
     type: text('type').notNull(),
     provider: text('provider').notNull(),
     providerAccountId: text('provider_account_id').notNull(),
-    refreshToken: text('refresh_token'),
-    accessToken: text('access_token'),
-    expiresAt: integer('expires_at'),
-    tokenType: text('token_type'),
+    refresh_token: text('refresh_token'),
+    access_token: text('access_token'),
+    expires_at: integer('expires_at'),
+    token_type: text('token_type'),
     scope: text('scope'),
-    idToken: text('id_token'),
-    sessionState: text('session_state'),
+    id_token: text('id_token'),
+    session_state: text('session_state'),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.provider, t.providerAccountId] }),

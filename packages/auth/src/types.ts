@@ -1,5 +1,9 @@
-// Module augmentation for Auth.js — carry Atlas-specific fields (user id,
-// isAdmin flag) on the Session and JWT so callers get typed access.
+// Module augmentation for Auth.js v5 — carry Atlas-specific fields on Session.
+//
+// JWT augmentation via 'next-auth/jwt' is not reliable in Auth.js v5 because
+// the JWT interface lives in @auth/core/jwt (re-exported by next-auth/jwt) and
+// has a `Record<string, unknown>` index signature that swallows custom fields.
+// We type-cast JWT property access in config.ts instead.
 
 import type { DefaultSession } from 'next-auth';
 
@@ -12,13 +16,6 @@ declare module 'next-auth' {
   }
 
   interface User {
-    isAdmin?: boolean;
-  }
-}
-
-declare module 'next-auth/jwt' {
-  interface JWT {
-    userId?: string;
     isAdmin?: boolean;
   }
 }
