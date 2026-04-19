@@ -1,0 +1,37 @@
+{
+  "name": "@atlas/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Channel Atlas Next.js 14 application — creator app, hub runtime, admin, marketing.",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'web: no tests yet'",
+    "clean": "rm -rf .next .turbo"
+  },
+  "dependencies": {
+    "@atlas/auth": "workspace:*",
+    "@atlas/core": "workspace:*",
+    "@atlas/db": "workspace:*",
+    "@atlas/ui": "workspace:*",
+    "next": "14.2.13",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@atlas/config": "workspace:*",
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.5",
+    "@types/react-dom": "18.3.0",
+    "autoprefixer": "10.4.20",
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.13",
+    "postcss": "8.4.47",
+    "tailwindcss": "3.4.10",
+    "typescript": "5.6.2"
+  }
+}

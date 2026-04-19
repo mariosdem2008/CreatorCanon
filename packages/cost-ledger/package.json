@@ -1,0 +1,27 @@
+{
+  "name": "@atlas/cost-ledger",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Per-stage cost accounting across OpenAI + Gemini + Stripe + Cloudflare.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'cost-ledger: no tests yet'",
+    "build": "echo 'cost-ledger: source-only, no build'",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@atlas/core": "workspace:*",
+    "@atlas/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@atlas/config": "workspace:*",
+    "typescript": "5.6.2"
+  }
+}

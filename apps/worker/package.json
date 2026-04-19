@@ -1,0 +1,30 @@
+{
+  "name": "@atlas/worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Trigger.dev worker process — hosts the 16-stage pipeline tasks.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/dev-server.ts",
+    "start": "node --import tsx/esm src/dev-server.ts",
+    "trigger:dev": "trigger dev",
+    "trigger:deploy": "trigger deploy",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'worker: no tests yet'",
+    "build": "echo 'worker: source-only, no build'",
+    "clean": "rm -rf dist .turbo .trigger"
+  },
+  "dependencies": {
+    "@atlas/core": "workspace:*",
+    "@atlas/cost-ledger": "workspace:*",
+    "@atlas/db": "workspace:*",
+    "@atlas/pipeline": "workspace:*"
+  },
+  "devDependencies": {
+    "@atlas/config": "workspace:*",
+    "@types/node": "20.14.10",
+    "tsx": "4.19.1",
+    "typescript": "5.6.2"
+  }
+}

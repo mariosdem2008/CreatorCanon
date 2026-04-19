@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Warm-paper base will be fully defined in ticket 0.3 when prototype/styles.css is ported. */
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
