@@ -19,7 +19,10 @@
     "@atlas/core": "workspace:*",
     "@atlas/cost-ledger": "workspace:*",
     "@atlas/db": "workspace:*",
-    "@atlas/pipeline": "workspace:*"
+    "@atlas/pipeline": "workspace:*",
+    "@sentry/node": "8.33.1",
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/sdk-node": "0.53.0"
   },
   "devDependencies": {
     "@atlas/config": "workspace:*",

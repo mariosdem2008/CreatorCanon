@@ -1,7 +1,8 @@
 import { PIPELINE_STAGES, PIPELINE_VERSION } from '@atlas/core/pipeline-stages';
 
-// Minimal placeholder dev-server so `pnpm dev --filter @atlas/worker` has something to run
-// before Trigger.dev is wired (ticket 0.9). Real task definitions land in Epic 5.
+import { initTelemetry } from './instrumentation';
+
+initTelemetry();
 
 const log = (msg: string, meta: Record<string, unknown> = {}) => {
   // eslint-disable-next-line no-console
@@ -11,6 +12,7 @@ const log = (msg: string, meta: Record<string, unknown> = {}) => {
 log('worker dev-server starting', {
   pipelineVersion: PIPELINE_VERSION,
   stages: PIPELINE_STAGES.length,
+  sentry: !!process.env.SENTRY_DSN,
 });
 
 const heartbeat = setInterval(() => {

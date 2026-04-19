@@ -2,12 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Warm-paper base will be fully defined in ticket 0.3 when prototype/styles.css is ported. */
-:root {
-  color-scheme: light;
+/* Inherit design tokens from @atlas/ui */
+@import '@atlas/ui/globals.css';
+
+/* ==================== Tailwind base layer overrides ==================== */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background-color: var(--paper);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+    color: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background: var(--amber-wash);
+    color: var(--amber-ink);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
 }
 
-html,
-body {
-  height: 100%;
+/* ==================== Utilities ==================== */
+@layer utilities {
+  .dotgrid {
+    background-image: radial-gradient(oklch(0.85 0.008 85) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  .hide-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scroll {
+    scrollbar-width: none;
+  }
+
+  .ph {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--paper-3) 0 8px,
+      var(--paper-2) 8px 16px
+    );
+    color: var(--ink-4);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .shimmer-bg {
+    background: linear-gradient(
+      90deg,
+      var(--paper-2) 25%,
+      var(--paper-3) 50%,
+      var(--paper-2) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
 }

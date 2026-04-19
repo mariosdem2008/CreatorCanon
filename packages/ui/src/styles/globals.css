@@ -1,1 +1,69 @@
-/* Design tokens + base styles land in ticket 0.3 (port of prototype/styles.css). */
+/* Channel Atlas Design System — exact port of prototype/styles.css */
+
+:root {
+  /* Paper & ink — warm editorial palette */
+  --paper: oklch(0.985 0.005 85);
+  --paper-2: oklch(0.965 0.006 85);
+  --paper-3: oklch(0.945 0.007 85);
+  --paper-warm: oklch(0.975 0.01 75);
+  --paper-studio: oklch(0.93 0.009 85);
+  --paper-studio-2: oklch(0.9 0.01 85);
+
+  --ink: oklch(0.18 0.012 260);
+  --ink-2: oklch(0.32 0.01 260);
+  --ink-3: oklch(0.48 0.008 260);
+  --ink-4: oklch(0.64 0.006 260);
+  --ink-5: oklch(0.78 0.005 260);
+  --studio-ink: oklch(0.15 0.01 260);
+  --studio-ink-2: oklch(0.24 0.012 260);
+
+  --rule: oklch(0.91 0.006 85);
+  --rule-strong: oklch(0.85 0.008 85);
+  --rule-dark: oklch(0.8 0.01 85);
+
+  /* Accents — single amber + sage + rose */
+  --amber: oklch(0.62 0.12 55);
+  --amber-ink: oklch(0.35 0.09 55);
+  --amber-wash: oklch(0.96 0.025 75);
+
+  --sage: oklch(0.52 0.05 160);
+  --sage-wash: oklch(0.96 0.015 160);
+
+  --rose: oklch(0.58 0.12 25);
+  --rose-wash: oklch(0.965 0.02 25);
+
+  /* Radii */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* Shadow — very restrained */
+  --shadow-1: 0 1px 2px oklch(0.18 0.012 260 / 0.04), 0 1px 1px oklch(0.18 0.012 260 / 0.03);
+  --shadow-2: 0 4px 12px oklch(0.18 0.012 260 / 0.06), 0 1px 3px oklch(0.18 0.012 260 / 0.04);
+  --shadow-pop: 0 14px 40px oklch(0.18 0.012 260 / 0.12), 0 2px 6px oklch(0.18 0.012 260 / 0.05);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+
+::selection {
+  background: var(--amber-wash);
+  color: var(--amber-ink);
+}
