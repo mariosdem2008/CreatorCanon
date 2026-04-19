@@ -49,10 +49,10 @@ export function MarketingNav() {
 
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="sm">
-            <Link href="/signin">Sign in</Link>
+            <Link href="/sign-in">Sign in</Link>
           </Button>
           <Button asChild variant="accent" size="sm">
-            <Link href="/signup">
+            <Link href="/sign-in">
               Start a hub
               <Icon name="arrowRight" size={12} />
             </Link>

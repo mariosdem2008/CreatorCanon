@@ -3,7 +3,20 @@ import { z } from 'zod';
 export const serverEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+  REDIS_URL: z
+    .string()
+    .url()
+    .refine(
+      (v) => {
+        try {
+          const proto = new URL(v).protocol;
+          return proto === 'https:' || proto === 'http:';
+        } catch {
+          return false;
+        }
+      },
+      { message: 'REDIS_URL must be an Upstash REST URL (https:// or http://)' },
+    ),
 
   R2_ACCOUNT_ID: z.string().min(1),
   R2_ACCESS_KEY_ID: z.string().min(1),

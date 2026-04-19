@@ -4,9 +4,28 @@ import type { ServerEnv } from '@atlas/core';
 import { z } from 'zod';
 
 /**
+ * Maps a Gemini model-reported confidence score (0–1) to the DB enum used by
+ * `frame_observation.confidence` ('strong' | 'moderate' | 'weak'). Call this
+ * when writing FrameObservation.confidence to the database in Epic 5.
+ */
+export const confidenceBucket = (
+  score: number,
+): 'strong' | 'moderate' | 'weak' => {
+  if (score >= 0.75) return 'strong';
+  if (score >= 0.4) return 'moderate';
+  return 'weak';
+};
+
+/**
  * Structured visual observation emitted by the Gemini visual lane.
  * Matches the contract pinned in plan/03-target-architecture.md (§ Gemini
  * visual lane — architectural notes) and plan/05-pipeline-plan.md (Stage 8).
+ *
+ * Note: `confidence` is a 0–1 float as emitted by the model. When writing to
+ * the DB (`frame_observation.confidence` is a string enum), call
+ * `confidenceBucket(observation.confidence)` to convert.
+ *
+ * Note: `entities` mirrors the DB `frame_observation.entities` jsonb shape.
  */
 export const frameObservationSchema = z.object({
   /** Observation start timestamp inside the source video, in ms. */
@@ -22,16 +41,26 @@ export const frameObservationSchema = z.object({
     'ui',
     'diagram',
     'infographic',
+    'other',
   ]),
-  /** Short human title (≤ 80 chars). */
+  /** Short human title (≤ 200 chars). */
   title: z.string().min(1).max(200),
   /** 1–3 sentence description of what the frame shows. */
   summary: z.string().min(1),
   /** OCR'd or directly-read on-screen text; empty string if none. */
   text_extracted: z.string(),
-  /** Salient named entities (product names, people, concepts). */
-  entities: z.array(z.string()).default([]),
-  /** Model self-reported confidence in [0, 1]. */
+  /**
+   * Salient named entities keyed by role. Mirrors `frame_observation.entities`
+   * jsonb shape so callers can store without transformation.
+   */
+  entities: z
+    .object({
+      concepts: z.array(z.string()).optional(),
+      numbers: z.array(z.union([z.string(), z.number()])).optional(),
+      labels: z.array(z.string()).optional(),
+    })
+    .default({}),
+  /** Model self-reported confidence in [0, 1]. Convert with `confidenceBucket` before DB insert. */
   confidence: z.number().min(0).max(1),
 });
 

@@ -8,18 +8,20 @@ export const metadata: Metadata = {
   title: 'Sign in',
 };
 
-type SearchParams = {
-  callbackUrl?: string;
-  error?: string;
-};
-
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams?: SearchParams;
+  searchParams?: { [key: string]: string | string[] | undefined };
 }) {
   const session = await auth();
-  const callbackUrl = searchParams?.callbackUrl ?? '/app';
+
+  // Guard against open-redirect: only accept same-origin relative paths.
+  const raw = searchParams?.callbackUrl;
+  const callbackUrl =
+    typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//')
+      ? raw
+      : '/app';
+
   if (session?.user) redirect(callbackUrl);
 
   async function signInWithGoogle() {
@@ -40,7 +42,7 @@ export default async function SignInPage({
         </p>
       </div>
 
-      {searchParams?.error && (
+      {searchParams?.error != null && (
         <p className="text-body-sm text-[var(--rose)]" role="alert">
           Something went wrong. Please try again.
         </p>

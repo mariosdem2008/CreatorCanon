@@ -41,7 +41,7 @@ export interface ListChannelVideosResult {
     privacyStatus?: string;
     isShort?: boolean;
     isLivestream?: boolean;
-    captionStatus?: 'unknown' | 'available' | 'auto-only' | 'none';
+    captionStatus?: 'unknown' | 'available' | 'auto_only' | 'none';
   }>;
   nextPageToken?: string;
   totalResults?: number;

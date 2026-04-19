@@ -31,7 +31,10 @@ export const authConfig = {
           scope: 'openid email profile',
         },
       },
-      allowDangerousEmailAccountLinking: true,
+      // Keep false: with multiple providers it would enable account-takeover
+      // via provider-verified email. Google-only is safe today but leave this
+      // off to block future unsafe combinations.
+      allowDangerousEmailAccountLinking: false,
     }),
   ],
   pages: {
@@ -60,7 +63,9 @@ export const authConfig = {
       return token;
     },
     session({ session, token }) {
-      if (token.userId) session.user.id = token.userId;
+      // Always assign so session.user.id is never undefined at runtime even
+      // though the type augmentation declares it as string (non-optional).
+      session.user.id = token.userId ?? token.sub ?? '';
       session.user.isAdmin = token.isAdmin ?? false;
       return session;
     },
