@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm --filter @atlas/web build",
+  "outputDirectory": ".next",
+  "_comment_rewrites": [
+    "Hub subdomain routing (sub.atlas.co -> workspace slug) is NOT configured",
+    "as Vercel rewrites. It lives in apps/web/src/middleware.ts (ticket 8.2)",
+    "because the mapping needs DB/Redis access to look up published-hub state,",
+    "which static rewrites cannot do.",
+    "",
+    "Only add a real `rewrites` key here for static concerns like /.well-known/*",
+    "or legacy redirect paths. Subdomain logic stays in middleware.",
+    "",
+    "Custom-domain attachment (post-launch, concierge only) will be wired via",
+    "the Vercel Domains API from the admin console, not from this file."
+  ]
+}

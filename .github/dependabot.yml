@@ -1,0 +1,158 @@
+version: 2
+updates:
+  # Root workspace manifest.
+  - package-ecosystem: 'npm'
+    directory: '/SaaS'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+    commit-message:
+      prefix: 'chore(deps)'
+
+  # Apps.
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/apps/web'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'app:web'
+    commit-message:
+      prefix: 'chore(deps/web)'
+
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/apps/worker'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'app:worker'
+    commit-message:
+      prefix: 'chore(deps/worker)'
+
+  # Shared packages — one entry per package so bumps land isolated.
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/packages/auth'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'pkg:auth'
+    commit-message:
+      prefix: 'chore(deps/auth)'
+
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/packages/config'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'pkg:config'
+    commit-message:
+      prefix: 'chore(deps/config)'
+
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/packages/core'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'pkg:core'
+    commit-message:
+      prefix: 'chore(deps/core)'
+
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/packages/cost-ledger'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'pkg:cost-ledger'
+    commit-message:
+      prefix: 'chore(deps/cost-ledger)'
+
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/packages/db'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'pkg:db'
+    commit-message:
+      prefix: 'chore(deps/db)'
+
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/packages/pipeline'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'pkg:pipeline'
+    commit-message:
+      prefix: 'chore(deps/pipeline)'
+
+  - package-ecosystem: 'npm'
+    directory: '/SaaS/packages/ui'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'pkg:ui'
+    commit-message:
+      prefix: 'chore(deps/ui)'
+
+  # GitHub Actions themselves.
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    assignees:
+      - 'maintainers'
+    labels:
+      - 'deps'
+      - 'ci'
+    commit-message:
+      prefix: 'chore(deps/actions)'

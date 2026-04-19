@@ -1,0 +1,65 @@
+name: Deploy worker (Railway)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'SaaS/apps/worker/**'
+      - 'SaaS/packages/**'
+      - 'SaaS/pnpm-lock.yaml'
+      - 'SaaS/pnpm-workspace.yaml'
+      - 'SaaS/turbo.json'
+      - '.github/workflows/deploy-worker.yml'
+
+concurrency:
+  group: deploy-worker-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build image and deploy to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- Registry login (placeholder) ---------------------------------------
+      # Uncomment + fill in once a registry is chosen (GHCR, Railway's
+      # registry, or Docker Hub). Railway can also build from source, which
+      # makes this section optional; keeping here for when we outgrow that.
+      #
+      # - name: Log in to GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: SaaS
+          file: SaaS/apps/worker/Dockerfile
+          # Flip to `true` once a registry is wired (see commented login above).
+          push: false
+          load: true
+          tags: channel-atlas-worker:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@3.20.0
+
+      # Railway CLI `up` ships the current directory (or uses the linked service
+      # from the token) and triggers a deploy. `--detach` exits once queued so
+      # the job doesn't wait on full boot — a healthcheck in railway.toml is the
+      # gate for traffic.
+      - name: Deploy to Railway
+        working-directory: SaaS/apps/worker
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service ${{ secrets.RAILWAY_WORKER_SERVICE_ID }} --detach

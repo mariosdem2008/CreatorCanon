@@ -1,0 +1,59 @@
+name: Drizzle migration check
+
+on:
+  pull_request:
+    paths:
+      - 'SaaS/packages/db/src/schema/**'
+      - 'SaaS/packages/db/drizzle.config.ts'
+      - 'SaaS/packages/db/drizzle/**'
+
+concurrency:
+  group: drizzle-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20.11.0'
+  PNPM_VERSION: '9.12.0'
+
+jobs:
+  check-migrations:
+    name: Verify migrations are committed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: SaaS
+    env:
+      # Scratch preview DB — a disposable Postgres URL (Neon branch or local
+      # docker). drizzle-kit `generate` does not actually connect, but the
+      # config may require the var to be set. Replace the secret value with
+      # a throwaway connection string; never point this at a real DB.
+      DATABASE_URL: ${{ secrets.DRIZZLE_SCRATCH_DATABASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: SaaS/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate migrations from current schema
+        run: pnpm --filter @atlas/db exec drizzle-kit generate --name=pr_check --custom=false
+
+      # If the generate step produced any new / modified files under the
+      # committed migrations directory, the PR author forgot to commit them.
+      # Fail loudly so nobody merges a schema change without its migration.
+      - name: Fail if schema drift vs committed migrations
+        run: git diff --exit-code packages/db/drizzle/out

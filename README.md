@@ -57,3 +57,9 @@ See `../plan/08-build-order-and-milestones.md` for the exact sequence.
 
 Copy `.env.example` → `.env` and fill in the dev values. The schema is
 validated by `@atlas/core/env` (see `packages/core/src/env.ts`).
+
+## Deployment
+
+- **Web (`apps/web`) → Vercel.** Framework preset `nextjs`; install and build commands pnpm-filtered from the repo root (see `apps/web/vercel.json`).
+- **Worker (`apps/worker`) → Railway.** Multi-stage Dockerfile; deploys are triggered by `.github/workflows/deploy-worker.yml` on pushes to `main` that touch worker or shared package code.
+- **Trigger.dev** project is managed separately via the Trigger.dev dashboard and the `trigger:deploy` script in `apps/worker/package.json`; task code lives under `apps/worker/src/tasks/`.

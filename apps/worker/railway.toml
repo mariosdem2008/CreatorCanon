@@ -1,0 +1,24 @@
+# Railway service config — Channel Atlas worker.
+# Build context is the repo `SaaS/` root; the Dockerfile lives here.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/worker/Dockerfile"
+
+[deploy]
+# Placeholder healthcheck. The worker does not yet expose an HTTP endpoint;
+# a lightweight `/healthz` server lands in a later ticket (worker hardening).
+# Until then Railway will treat the container as healthy once the process
+# stays up past the start grace period.
+healthcheckPath = "/"
+healthcheckTimeout = 30
+
+# Crash-loop protection without masking a broken deploy.
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
+
+# Single instance for MVP. Autoscaling lands post-launch with per-stage
+# concurrency controls (see launch checklist — "Worker autoscaling tested").
+numReplicas = 1
+
+startCommand = "node --import tsx/esm apps/worker/src/dev-server.ts"
