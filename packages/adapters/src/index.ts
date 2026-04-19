@@ -56,6 +56,7 @@ export { createYouTubeClient } from './youtube/client';
 export type {
   YouTubeClient,
   YouTubeOAuthTokens,
+  OwnChannelInfo,
   ListChannelVideosInput,
   ListChannelVideosResult,
   CaptionTrack,

@@ -12,7 +12,14 @@ import NextAuth from 'next-auth';
 import type { NextAuthResult } from 'next-auth';
 
 import { getDb } from '@atlas/db';
-import { account, session, user, verificationToken } from '@atlas/db/schema';
+import {
+  account,
+  session,
+  user,
+  verificationToken,
+  workspace,
+  workspaceMember,
+} from '@atlas/db/schema';
 
 import { authConfig } from './config';
 
@@ -64,10 +71,43 @@ function getInstance(): NextAuthResult {
       async signIn({ user: signedInUser }) {
         if (!signedInUser?.id) return;
         const db = getDb();
+
         await db
           .update(user)
           .set({ lastLoginAt: new Date() })
           .where(eq(user.id, signedInUser.id));
+
+        // Provision a workspace if the user doesn't have one yet.
+        const existing = await db
+          .select({ workspaceId: workspaceMember.workspaceId })
+          .from(workspaceMember)
+          .where(eq(workspaceMember.userId, signedInUser.id))
+          .limit(1);
+
+        if (existing.length === 0) {
+          const workspaceId = crypto.randomUUID();
+          const rawName = signedInUser.name ?? signedInUser.email ?? 'workspace';
+          const namePart = rawName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 30);
+          const slug = `${namePart}-${workspaceId.slice(0, 8)}`;
+
+          await db.insert(workspace).values({
+            id: workspaceId,
+            ownerUserId: signedInUser.id,
+            name: rawName,
+            slug,
+          });
+
+          await db.insert(workspaceMember).values({
+            workspaceId,
+            userId: signedInUser.id,
+            role: 'owner',
+            joinedAt: new Date(),
+          });
+        }
       },
     },
   });

@@ -28,7 +28,12 @@ export const authConfig = {
           prompt: 'consent',
           access_type: 'offline',
           response_type: 'code',
-          scope: 'openid email profile',
+          scope: [
+          'openid',
+          'email',
+          'profile',
+          'https://www.googleapis.com/auth/youtube.readonly',
+        ].join(' '),
         },
       },
       // Keep false: with multiple providers it would enable account-takeover

@@ -26,3 +26,4 @@
 // Publishing a release (Epic 8.4) is a user action, not a pipeline stage.
 
 export { helloTask } from './hello';
+export { syncChannelTask } from './sync-channel';
