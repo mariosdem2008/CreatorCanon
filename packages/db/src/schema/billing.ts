@@ -1,6 +1,5 @@
 import {
   boolean,
-  doublePrecision,
   index,
   integer,
   jsonb,

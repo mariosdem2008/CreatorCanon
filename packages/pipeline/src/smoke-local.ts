@@ -1,7 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { and, eq, getDb } from '@creatorcanon/db';
 import {
   generationRun,
@@ -18,9 +14,7 @@ import { closeDb } from '@creatorcanon/db/client';
 import { runGenerationPipeline } from './run-generation-pipeline';
 import { publishRunAsHub } from './publish-run-as-hub';
 import { releaseManifestV0Schema } from './contracts';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '../../..');
+import { loadDefaultEnvFiles } from './env-files';
 
 const RUN_ID = 'local-smoke-run';
 const PROJECT_ID = 'local-smoke-project';
@@ -36,39 +30,12 @@ const REQUIRED_STAGES = [
   'draft_pages_v0',
 ] as const;
 
-function loadEnvFile(filePath: string, opts?: { override?: boolean }) {
-  if (!fs.existsSync(filePath)) return;
-
-  const raw = fs.readFileSync(filePath, 'utf8');
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    const eqIndex = trimmed.indexOf('=');
-    if (eqIndex <= 0) continue;
-
-    const key = trimmed.slice(0, eqIndex).trim();
-    if (!opts?.override && process.env[key] !== undefined) continue;
-
-    let value = trimmed.slice(eqIndex + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    process.env[key] = value;
-  }
-}
-
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 async function run() {
-  loadEnvFile(path.resolve(repoRoot, '.env'));
-  loadEnvFile(path.resolve(repoRoot, '.env.local'), { override: true });
+  loadDefaultEnvFiles();
 
   process.env.ARTIFACT_STORAGE ??= 'local';
   process.env.LOCAL_ARTIFACT_DIR ??= '.local/artifacts';

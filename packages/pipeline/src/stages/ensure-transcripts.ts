@@ -145,6 +145,7 @@ export async function ensureTranscripts(
 
     let vttContent: string | null = null;
     let chosenLang = 'en';
+    let skipReason = 'No captions available';
     const provider: TranscriptResult['provider'] = 'youtube_timedtext';
 
     try {
@@ -153,9 +154,16 @@ export async function ensureTranscripts(
       if (best) {
         vttContent = await downloadVtt(vid.youtubeVideoId, best.lang, best.kind, best.name);
         chosenLang = best.lang;
+        if (!vttContent) {
+          skipReason = `Caption track was found (${best.lang}), but timedtext download did not return usable VTT.`;
+        }
+      } else {
+        skipReason = 'No public YouTube caption tracks were found for this video.';
       }
-    } catch {
-      // Network errors are non-fatal; video will be skipped.
+    } catch (error) {
+      skipReason = error instanceof Error
+        ? `Timedtext lookup failed: ${error.message}`
+        : 'Timedtext lookup failed for an unknown reason.';
     }
 
     if (!vttContent) {
@@ -167,7 +175,7 @@ export async function ensureTranscripts(
         wordCount: 0,
         language: 'en',
         skipped: true,
-        skipReason: 'No captions available',
+        skipReason,
       });
       continue;
     }

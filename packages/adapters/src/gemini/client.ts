@@ -66,7 +66,7 @@ export const frameObservationSchema = z.object({
 
 export type FrameObservation = z.infer<typeof frameObservationSchema>;
 
-const frameObservationsEnvelopeSchema = z.object({
+export const frameObservationsEnvelopeSchema = z.object({
   observations: z.array(frameObservationSchema),
 });
 

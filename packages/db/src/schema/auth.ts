@@ -9,7 +9,6 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-import { citext } from './_vector';
 
 /**
  * Auth.js v5 Drizzle-adapter compatible shape.

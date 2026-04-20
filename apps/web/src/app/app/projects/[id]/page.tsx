@@ -124,8 +124,17 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   const isActive = run && ACTIVE_RUN_STATUSES.has(run.status);
   const hasStageRuns = stageRuns.length > 0;
+  const transcriptStage = stageRuns.find((sr) => sr.stageName === 'ensure_transcripts' && sr.status === 'succeeded');
   const reviewStage = stageRuns.find((sr) => sr.stageName === 'synthesize_v0_review' && sr.status === 'succeeded');
   const draftPagesStage = stageRuns.find((sr) => sr.stageName === 'draft_pages_v0' && sr.status === 'succeeded');
+  const transcriptOutput = transcriptStage?.outputJson as {
+    fetchedCount?: number;
+    skippedCount?: number;
+    transcripts?: Array<{ youtubeVideoId?: string; skipped?: boolean; skipReason?: string }>;
+  } | null | undefined;
+  const skippedTranscriptReasons = transcriptOutput?.transcripts
+    ?.filter((item) => item.skipped)
+    .slice(0, 3) ?? [];
   const parsedReview = reviewStage?.outputJson != null
     ? v0ReviewStageOutputSchema.safeParse(reviewStage.outputJson)
     : null;
@@ -232,6 +241,24 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 ? 'This run failed during processing. Review the local server logs or rerun after fixing the failing stage.'
                 : 'This run failed before any pipeline work began. Check your worker or Trigger.dev configuration and try again.'}
             </p>
+          )}
+
+          {transcriptOutput && (transcriptOutput.skippedCount ?? 0) > 0 && (
+            <div className="rounded-md border border-amber/30 bg-amber/10 px-4 py-3">
+              <p className="text-body-sm font-medium text-ink">Limited transcript coverage</p>
+              <p className="mt-1 text-caption text-ink-4">
+                {transcriptOutput.fetchedCount ?? 0} video{(transcriptOutput.fetchedCount ?? 0) === 1 ? '' : 's'} had usable captions; {transcriptOutput.skippedCount} video{transcriptOutput.skippedCount === 1 ? '' : 's'} did not. Atlas still generates draft pages with limited source support where needed.
+              </p>
+              {skippedTranscriptReasons.length > 0 && (
+                <ul className="mt-2 space-y-1 text-caption text-ink-4">
+                  {skippedTranscriptReasons.map((item) => (
+                    <li key={`${item.youtubeVideoId}-${item.skipReason}`}>
+                      {item.youtubeVideoId ?? 'Video'}: {item.skipReason ?? 'No usable transcript material.'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
 
           {draftPagesReady && (

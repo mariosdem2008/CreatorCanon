@@ -16,6 +16,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo 'pipeline: no tests yet'",
     "build": "echo 'pipeline: source-only, no build'",
+    "env:doctor": "tsx ./src/env-doctor.ts",
+    "smoke:alpha": "tsx ./src/smoke-alpha.ts",
     "smoke:local": "tsx ./src/smoke-local.ts",
     "clean": "rm -rf dist .turbo"
   },

@@ -1,65 +1,97 @@
-# CreatorCanon — SaaS monorepo
+# CreatorCanon SaaS Monorepo
 
-Creator archive productization SaaS. YouTube channel → Hosted Knowledge Hub with
-grounded citations and chat. Hybrid text + visual pipeline (OpenAI + Gemini).
-
-See `../plan/` for the full implementation plan.
+Creator archive productization SaaS: YouTube channel to hosted knowledge hub
+with grounded citations, draft pages, source evidence, Stripe-gated runs, local
+fallback execution, admin rescue, and public hub publishing.
 
 ## Layout
 
-```
+```text
 SaaS/
-├── apps/
-│   ├── web/          # Next.js 14 — marketing, creator app, hub runtime, admin
-│   └── worker/       # Trigger.dev worker — hosts the 16-stage pipeline
-└── packages/
-    ├── auth/         # Auth.js v5 config + Google OAuth
-    ├── config/       # shared tsconfig + eslint presets
-    ├── core/         # shared types, zod env schema, ids, pipeline stage registry
-    ├── cost-ledger/  # per-stage cost accounting (OpenAI, Gemini, R2, …)
-    ├── db/           # Drizzle schema + client (Postgres + pgvector)
-    ├── pipeline/     # stage contracts, idempotency keys
-    └── ui/           # shared primitives (Logo, Thumb, …) + design tokens
+  apps/
+    web/          Next.js app: marketing, creator app, public hubs, admin
+    worker/       Trigger.dev worker wrapper around the shared pipeline
+  packages/
+    auth/         Auth.js v5 config and Google OAuth
+    config/       shared TypeScript and lint config
+    core/         shared env, pricing, ids, pipeline stage registry
+    cost-ledger/  cost accounting primitives
+    db/           Drizzle schema and Postgres client
+    pipeline/     pipeline runner, stage contracts, publish helpers, smoke checks
+    ui/           shared primitives and design tokens
 ```
 
-## Tooling
-
-- pnpm 9 workspaces + Turborepo pipelines
-- Node 20.11+
-- TypeScript 5.6 strict
-- Next.js 14 (App Router)
-- Tailwind 3 (tokens ported from `../prototype/styles.css` in ticket 0.3)
-
-## Getting started (after ticket 0.1 — current)
+## Local Alpha Smoke
 
 ```bash
 pnpm install
-pnpm dev      # runs web (:3000) and the worker dev-server in parallel
+pnpm dev:db:reset
+pnpm smoke:local
+pnpm --filter @creatorcanon/web dev
 ```
 
-Neither real auth nor the DB is wired yet — that comes in tickets 0.5 / 0.7.
-See `../plan/08-build-order-and-milestones.md` for the exact sequence.
+Local smoke uses Docker Postgres with pgvector, local filesystem artifacts,
+seeded creator data, dev-only auth bypass, the shared pipeline runner, draft
+page generation, source evidence, publish-to-hub, and public hub rendering.
+Open `http://localhost:3000/sign-in` and use the local dev sign-in button.
 
-## Scripts (root)
+## Private-Alpha Smoke
+
+Use this after real test/preview env keys are configured:
+
+```powershell
+pnpm env:doctor
+$env:ALPHA_SMOKE_RUN_ID="<existing-paid-or-review-ready-run-id>"
+pnpm smoke:alpha
+```
+
+`env:doctor` is read-only. `smoke:alpha` is intentionally side-effectful: it
+runs migrations, verifies R2 put/get/delete, creates a Stripe test Checkout
+session, runs the selected generation run if it is not already published,
+publishes the hub, and verifies the release manifest includes source refs.
+
+## Scripts
 
 | Command             | What it does                                     |
 | ------------------- | ------------------------------------------------ |
-| `pnpm dev`          | `turbo run dev --parallel` (web + worker)        |
-| `pnpm build`        | `turbo run build`                                |
-| `pnpm lint`         | `turbo run lint`                                 |
-| `pnpm typecheck`    | `turbo run typecheck`                            |
-| `pnpm test`         | `turbo run test`                                 |
-| `pnpm db:migrate`   | apply Drizzle migrations (lands in ticket 0.5)   |
-| `pnpm db:studio`    | Drizzle Studio                                   |
-| `pnpm format`       | Prettier write                                   |
+| `pnpm dev`          | Runs web and worker dev processes in parallel    |
+| `pnpm build`        | Builds the workspace                             |
+| `pnpm lint`         | Runs lint across packages                        |
+| `pnpm typecheck`    | Runs TypeScript checks across packages           |
+| `pnpm test`         | Runs package tests                               |
+| `pnpm db:migrate`   | Applies Drizzle migrations                       |
+| `pnpm db:studio`    | Opens Drizzle Studio                             |
+| `pnpm dev:db:reset` | Resets local Docker Postgres and writes envs     |
+| `pnpm smoke:local`  | Deterministic local end-to-end smoke             |
+| `pnpm env:doctor`   | Read-only alpha environment readiness check      |
+| `pnpm smoke:alpha`  | Real-service alpha smoke for a selected run      |
+| `pnpm format`       | Formats the workspace                            |
 
 ## Environment
 
-Copy `.env.example` → `.env` and fill in the dev values. The schema is
-validated by `@atlas/core/env` (see `packages/core/src/env.ts`).
+Copy `.env.example` to `.env` for real preview/test environments. Local smoke
+writes `.env.local` and `apps/web/.env.local` automatically.
+
+Required local mode defaults are generated by `pnpm dev:db:reset`.
+
+Required private-alpha/test mode values:
+
+- `DATABASE_URL` for Neon/Postgres.
+- `ARTIFACT_STORAGE=r2` plus `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and `R2_PUBLIC_BASE_URL`.
+- `AUTH_SECRET`, `AUTH_GOOGLE_ID`, and `AUTH_GOOGLE_SECRET`.
+- `YOUTUBE_OAUTH_CLIENT_ID` and `YOUTUBE_OAUTH_CLIENT_SECRET`.
+- `STRIPE_SECRET_KEY=sk_test_...` and `STRIPE_WEBHOOK_SECRET=whsec_...`.
+- `TRIGGER_SECRET_KEY` for worker dispatch, with local fallback still available
+  when Trigger dispatch fails.
+- `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_HUB_ROOT_DOMAIN`.
+
+Production uses the same keys, but Stripe must move from test mode to live mode
+only after the private-alpha smoke passes.
 
 ## Deployment
 
-- **Web (`apps/web`) → Vercel.** Framework preset `nextjs`; install and build commands pnpm-filtered from the repo root (see `apps/web/vercel.json`).
-- **Worker (`apps/worker`) → Railway.** Multi-stage Dockerfile; deploys are triggered by `.github/workflows/deploy-worker.yml` on pushes to `main` that touch worker or shared package code.
-- **Trigger.dev** project is managed separately via the Trigger.dev dashboard and the `trigger:deploy` script in `apps/worker/package.json`; task code lives under `apps/worker/src/tasks/`.
+- Web deploys to Vercel from `apps/web`.
+- Worker deploys to Railway from `apps/worker`.
+- Trigger.dev remains the production-oriented async runner; the shared pipeline
+  runner is also used by local fallback and smoke checks.
