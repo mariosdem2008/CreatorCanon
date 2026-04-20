@@ -1,4 +1,4 @@
-import { AtlasError } from '@atlas/core';
+import { CanonError } from '@creatorcanon/core';
 import { z } from 'zod';
 
 import type { RedisClient } from './client';
@@ -26,8 +26,8 @@ export interface RateLimiter {
   check(key: string): Promise<RateLimitResult>;
 }
 
-const notImplemented = (): AtlasError =>
-  new AtlasError({
+const notImplemented = (): CanonError =>
+  new CanonError({
     code: 'not_implemented',
     category: 'internal',
     message: 'RateLimiter.check is not implemented yet (lands in Epic 5).',

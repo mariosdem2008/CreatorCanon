@@ -1,6 +1,6 @@
 import { google, type youtube_v3 } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
-import { AtlasError } from '@atlas/core';
+import { CanonError } from '@creatorcanon/core';
 import { z } from 'zod';
 
 export const youtubeOAuthTokensSchema = z.object({
@@ -100,8 +100,8 @@ function parseDuration(iso: string): number {
     + parseInt(m[3] ?? '0', 10);
 }
 
-function notImplemented(op: string): AtlasError {
-  return new AtlasError({
+function notImplemented(op: string): CanonError {
+  return new CanonError({
     code: 'not_implemented',
     category: 'internal',
     message: `YouTubeClient.${op} is not implemented yet.`,
@@ -139,7 +139,7 @@ export const createYouTubeClient = (oauth2Tokens: YouTubeOAuthTokens): YouTubeCl
 
       const item = data.items?.[0];
       if (!item?.id) {
-        throw new AtlasError({
+        throw new CanonError({
           code: 'not_found',
           category: 'provider_upstream',
           message: 'No YouTube channel found for this Google account.',
@@ -149,7 +149,7 @@ export const createYouTubeClient = (oauth2Tokens: YouTubeOAuthTokens): YouTubeCl
       const uploadsPlaylistId =
         item.contentDetails?.relatedPlaylists?.uploads;
       if (!uploadsPlaylistId) {
-        throw new AtlasError({
+        throw new CanonError({
           code: 'not_found',
           category: 'provider_upstream',
           message: 'Could not determine uploads playlist for this channel.',

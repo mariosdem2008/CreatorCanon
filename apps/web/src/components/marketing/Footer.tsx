@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Logo } from '@atlas/ui';
+import { Logo } from '@creatorcanon/ui';
 
 export function Footer() {
   const year = new Date().getFullYear();
@@ -20,7 +20,7 @@ export function Footer() {
       links: [
         { label: 'About', href: '/about' },
         { label: 'Help', href: '/help' },
-        { label: 'Contact', href: 'mailto:hello@channelatlas.co' },
+        { label: 'Contact', href: 'mailto:hello@creatorcanon.com' },
       ],
     },
     {
@@ -63,8 +63,8 @@ export function Footer() {
         </div>
 
         <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-rule pt-6 text-caption text-ink-4 sm:flex-row sm:items-center">
-          <div>© {year} Channel Atlas. All rights reserved.</div>
-          <div>hello@channelatlas.co</div>
+          <div>© {year} CreatorCanon. All rights reserved.</div>
+          <div>hello@creatorcanon.com</div>
         </div>
       </div>
     </footer>

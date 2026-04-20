@@ -1,11 +1,11 @@
 import { Resend } from 'resend';
-import { AtlasError } from '@atlas/core';
-import type { ServerEnv } from '@atlas/core';
+import { CanonError } from '@creatorcanon/core';
+import type { ServerEnv } from '@creatorcanon/core';
 import { z } from 'zod';
 
 /**
  * Minimal structural type for a React element — we avoid depending on
- * `react` directly in `@atlas/adapters` so downstream packages pick their
+ * `react` directly in `@creatorcanon/adapters` so downstream packages pick their
  * own React version. At call time Resend validates this for us.
  */
 export interface ReactEmailElement {
@@ -39,8 +39,8 @@ export interface ResendAdapterClient {
   send(input: SendEmailInput): Promise<SendEmailResult>;
 }
 
-const notImplemented = (op: string): AtlasError =>
-  new AtlasError({
+const notImplemented = (op: string): CanonError =>
+  new CanonError({
     code: 'not_implemented',
     category: 'internal',
     message: `ResendClient.${op} is not implemented yet (lands in Epic 5).`,
@@ -48,14 +48,14 @@ const notImplemented = (op: string): AtlasError =>
 
 /**
  * NOTE (contract ambiguity): `RESEND_API_KEY` is optional in
- * `@atlas/core/env` because some deploys (local dev) skip email. We throw
- * an explicit `AtlasError` at factory time in that case so the caller gets
+ * `@creatorcanon/core/env` because some deploys (local dev) skip email. We throw
+ * an explicit `CanonError` at factory time in that case so the caller gets
  * a consistent error shape rather than a runtime null-deref deep inside the
  * Resend SDK.
  */
 export const createResendClient = (env: ServerEnv): ResendAdapterClient => {
   if (!env.RESEND_API_KEY) {
-    throw new AtlasError({
+    throw new CanonError({
       code: 'resend_disabled',
       category: 'internal',
       message:

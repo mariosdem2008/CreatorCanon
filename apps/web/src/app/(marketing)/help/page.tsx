@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { Icon, type IconName } from '@atlas/ui';
+import { Icon, type IconName } from '@creatorcanon/ui';
 
 import { FAQItem } from '@/components/marketing/FAQItem';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
   title: 'Help',
-  description: 'Quickstart guides, frequently asked questions, and how to reach the Atlas team.',
+  description: 'Quickstart guides, frequently asked questions, and how to reach the CreatorCanon team.',
 };
 
 interface QuickCard {
@@ -45,19 +45,19 @@ const FAQS: Array<{ q: string; a: string }> = [
     a: 'Usually 3–6 minutes for an 8-lesson topic. Longer topics or chat-enabled topics take up to 12 minutes.',
   },
   {
-    q: 'Can I edit everything Atlas writes?',
+    q: 'Can I edit everything CreatorCanon writes?',
     a: "Yes. Every word. You can also regenerate any single section, or the whole topic, as many times as you want — it's all free after the first generation charge.",
   },
   {
     q: 'Who owns the generated content?',
-    a: 'You do. Atlas is a service that helps you draft — we claim no rights to your lessons, your chat answers, or your subscriber list.',
+    a: 'You do. CreatorCanon is a service that helps you draft — we claim no rights to your lessons, your chat answers, or your subscriber list.',
   },
   {
     q: 'What happens if YouTube removes a video?',
-    a: "Your hub stays up. Atlas caches the transcript once it's generated, so your lessons survive even if a video is unlisted or deleted.",
+    a: "Your hub stays up. CreatorCanon caches the transcript once it's generated, so your lessons survive even if a video is unlisted or deleted.",
   },
   {
-    q: 'How do I move off Atlas?',
+    q: 'How do I move off CreatorCanon?',
     a: 'Settings › Advanced › Export. You get clean markdown + JSON. Most creators host their export on Ghost or a static site.',
   },
 ];
@@ -115,13 +115,13 @@ export default function HelpPage() {
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild variant="primary" size="sm">
-                  <a href="mailto:hello@channelatlas.co">
+                  <a href="mailto:hello@creatorcanon.com">
                     <Icon name="chat" size={12} />
                     Chat with us
                   </a>
                 </Button>
                 <Button asChild variant="secondary" size="sm">
-                  <a href="mailto:hello@channelatlas.co">hello@channelatlas.co</a>
+                  <a href="mailto:hello@creatorcanon.com">hello@creatorcanon.com</a>
                 </Button>
               </div>
             </div>
@@ -130,11 +130,11 @@ export default function HelpPage() {
               <Icon name="users" size={18} className="text-amber-ink" />
               <div className="mt-3 text-heading-md text-ink">Join the creator salon</div>
               <div className="mt-2 text-body-sm text-ink-3">
-                A private Discord for creators using Atlas. Weekly critiques, patterns that work,
+                A private Discord for creators using CreatorCanon. Weekly critiques, patterns that work,
                 patterns that flop.
               </div>
               <Button asChild variant="secondary" size="sm" className="mt-4">
-                <a href="mailto:hello@channelatlas.co?subject=Creator%20salon%20access">
+                <a href="mailto:hello@creatorcanon.com?subject=Creator%20salon%20access">
                   Request access
                   <Icon name="arrowRight" size={12} />
                 </a>

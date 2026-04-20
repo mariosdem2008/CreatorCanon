@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   PIPELINE_VERSION,
   type PipelineStage,
-} from '@atlas/core/pipeline-stages';
+} from '@creatorcanon/core/pipeline-stages';
 
 export interface StageIdempotencyKeyInput {
   runId: string;

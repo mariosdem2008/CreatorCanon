@@ -7,11 +7,12 @@
 // not throw. The DB pool is established on the first actual auth request.
 
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import NextAuth from 'next-auth';
 import type { NextAuthResult } from 'next-auth';
+import Credentials from 'next-auth/providers/credentials';
 
-import { getDb } from '@atlas/db';
+import { getDb } from '@creatorcanon/db';
 import {
   account,
   session,
@@ -19,7 +20,7 @@ import {
   verificationToken,
   workspace,
   workspaceMember,
-} from '@atlas/db/schema';
+} from '@creatorcanon/db/schema';
 
 import { authConfig } from './config';
 
@@ -32,8 +33,55 @@ let _instance: NextAuthResult | undefined;
 function getInstance(): NextAuthResult {
   if (_instance) return _instance;
 
+  const devBypassEnabled = process.env.DEV_AUTH_BYPASS_ENABLED === 'true';
+
   _instance = NextAuth({
     ...authConfig,
+    providers: [
+      ...authConfig.providers,
+      ...(devBypassEnabled
+        ? [
+            Credentials({
+              id: 'credentials',
+              name: 'Local Dev',
+              credentials: {
+                email: { label: 'Email', type: 'email' },
+              },
+              async authorize(credentials) {
+                const email = typeof credentials?.email === 'string'
+                  ? credentials.email.trim().toLowerCase()
+                  : '';
+
+                if (!email) return null;
+
+                const db = getDb();
+                const rows = await db
+                  .select({
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    image: user.image,
+                    isAdmin: user.isAdmin,
+                  })
+                  .from(user)
+                  .where(eq(user.email, email))
+                  .limit(1);
+
+                const existingUser = rows[0];
+                if (!existingUser) return null;
+
+                return {
+                  id: existingUser.id,
+                  email: existingUser.email,
+                  name: existingUser.name,
+                  image: existingUser.image,
+                  isAdmin: existingUser.isAdmin,
+                };
+              },
+            }),
+          ]
+        : []),
+    ],
     adapter: DrizzleAdapter(getDb(), {
       usersTable: user,
       accountsTable: account,
@@ -43,7 +91,7 @@ function getInstance(): NextAuthResult {
     callbacks: {
       ...authConfig.callbacks,
       // DB-aware jwt override: hydrates isAdmin from the DB on first sign-in.
-      async jwt({ token, user: signedInUser, trigger }) {
+      async jwt({ token, user: signedInUser, trigger, account: oauthAccount }) {
         if (signedInUser?.id) {
           const db = getDb();
           const rows = await db
@@ -53,6 +101,30 @@ function getInstance(): NextAuthResult {
             .limit(1);
           token.userId = signedInUser.id;
           token.isAdmin = rows[0]?.isAdmin ?? false;
+
+          // JWT strategy doesn't auto-update stored tokens on re-sign-in.
+          // Manually persist fresh tokens so server actions can use them.
+          if (oauthAccount?.access_token) {
+            try {
+              await db
+                .update(account)
+                .set({
+                  access_token: oauthAccount.access_token,
+                  refresh_token: (oauthAccount.refresh_token as string | undefined) ?? null,
+                  expires_at: (oauthAccount.expires_at as number | undefined) ?? null,
+                  scope: (oauthAccount.scope as string | undefined) ?? null,
+                  id_token: (oauthAccount.id_token as string | undefined) ?? null,
+                })
+                .where(
+                  and(
+                    eq(account.provider, oauthAccount.provider),
+                    eq(account.providerAccountId, oauthAccount.providerAccountId),
+                  ),
+                );
+            } catch (e) {
+              console.error('[auth] failed to refresh account tokens:', e);
+            }
+          }
         }
         const existingId = token.userId as string | undefined;
         if (trigger === 'update' && existingId) {

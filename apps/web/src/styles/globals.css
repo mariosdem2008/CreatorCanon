@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Inherit design tokens from @atlas/ui */
-@import '@atlas/ui/globals.css';
+/* Inherit design tokens from @creatorcanon/ui */
+@import '@creatorcanon/ui/globals.css';
 
 /* ==================== Tailwind base layer overrides ==================== */
 @layer base {

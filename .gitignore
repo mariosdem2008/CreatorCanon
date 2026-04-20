@@ -60,4 +60,5 @@ playwright/.cache/
 
 # Local state
 .vercel
+.local/
 *.local

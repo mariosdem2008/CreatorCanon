@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import * as React from 'react';
 
-import { Logo, Icon } from '@atlas/ui';
+import { Logo, Icon } from '@creatorcanon/ui';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ export function MarketingNav() {
       )}
     >
       <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between px-6">
-        <Link href="/" className="inline-flex items-center" aria-label="Channel Atlas home">
+        <Link href="/" className="inline-flex items-center" aria-label="CreatorCanon home">
           <Logo size={18} />
         </Link>
 

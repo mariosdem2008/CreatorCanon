@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Icon } from '@atlas/ui';
+import { Icon } from '@creatorcanon/ui';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ export function Hero() {
         </h1>
 
         <p className="mt-6 max-w-[760px] text-body-lg text-ink-2">
-          Channel Atlas helps business creators turn repeat lessons, frameworks, and operating
+          CreatorCanon helps business creators turn repeat lessons, frameworks, and operating
           advice into a source-linked hub with playbooks, searchable lessons, grounded answers,
           and a product their audience can pay to use.
         </p>

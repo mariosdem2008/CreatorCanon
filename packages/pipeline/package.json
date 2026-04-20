@@ -1,5 +1,5 @@
 {
-  "name": "@atlas/pipeline",
+  "name": "@creatorcanon/pipeline",
   "version": "0.0.0",
   "private": true,
   "description": "16-stage hybrid text+visual content pipeline. Stages, artifact contracts, idempotency keys.",
@@ -16,16 +16,18 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo 'pipeline: no tests yet'",
     "build": "echo 'pipeline: source-only, no build'",
+    "smoke:local": "tsx ./src/smoke-local.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@atlas/adapters": "workspace:*",
-    "@atlas/core": "workspace:*",
-    "@atlas/db": "workspace:*",
+    "@creatorcanon/adapters": "workspace:*",
+    "@creatorcanon/core": "workspace:*",
+    "@creatorcanon/db": "workspace:*",
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@atlas/config": "workspace:*",
+    "@creatorcanon/config": "workspace:*",
+    "tsx": "4.19.1",
     "typescript": "5.6.2"
   }
 }

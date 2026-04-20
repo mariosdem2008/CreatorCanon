@@ -12,6 +12,7 @@ export const newsreader = Newsreader({
   display: 'swap',
   variable: '--font-newsreader',
   preload: true,
+  adjustFontFallback: false,
 });
 
 export const jetbrainsMono = JetBrains_Mono({

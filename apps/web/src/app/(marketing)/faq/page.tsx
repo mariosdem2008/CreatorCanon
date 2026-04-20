@@ -6,7 +6,7 @@ import { FAQItem } from '@/components/marketing/FAQItem';
 export const metadata: Metadata = {
   title: 'FAQ',
   description:
-    'Common questions about Channel Atlas — what it is, how it works, and who owns what.',
+    'Common questions about CreatorCanon — what it is, how it works, and who owns what.',
 };
 
 const GROUPS: Array<{
@@ -14,10 +14,10 @@ const GROUPS: Array<{
   items: Array<{ q: string; a: string }>;
 }> = [
   {
-    title: 'What Atlas actually is',
+    title: 'What CreatorCanon actually is',
     items: [
       {
-        q: 'What does Channel Atlas do?',
+        q: 'What does CreatorCanon do?',
         a: 'It turns a selection of your YouTube videos into a hosted knowledge hub — structured lessons, named frameworks, playbooks, citations, and an optional grounded chat called Iris. The hub lives on your own subdomain and you can paywall it.',
       },
       {
@@ -26,7 +26,7 @@ const GROUPS: Array<{
       },
       {
         q: 'How is this different from “chat with your videos” tools?',
-        a: 'Atlas produces a full editorial product — structured tracks, lessons, and playbooks — not a chat box on top of transcripts. Every block carries a visible citation or explicit weak-support label, and Iris never speaks in first person as the creator.',
+        a: 'CreatorCanon produces a full editorial product — structured tracks, lessons, and playbooks — not a chat box on top of transcripts. Every block carries a visible citation or explicit weak-support label, and Iris never speaks in first person as the creator.',
       },
     ],
   },
@@ -46,7 +46,7 @@ const GROUPS: Array<{
         a: 'The self-serve cap on selected source video. It keeps pipeline cost, time, and quality predictable. Archives larger than that move to the Concierge tier where an operator reviews before generation.',
       },
       {
-        q: 'Can I edit what Atlas writes?',
+        q: 'Can I edit what CreatorCanon writes?',
         a: 'Yes. Every word. You can also regenerate any single section as many times as you want after the first generation charge.',
       },
     ],
@@ -64,7 +64,7 @@ const GROUPS: Array<{
       },
       {
         q: 'What if a video gets deleted on YouTube?',
-        a: 'Your hub stays up. Atlas caches the transcript once it’s generated, so lessons survive even if a source video is unlisted or removed.',
+        a: 'Your hub stays up. CreatorCanon caches the transcript once it’s generated, so lessons survive even if a source video is unlisted or removed.',
       },
     ],
   },
@@ -73,10 +73,10 @@ const GROUPS: Array<{
     items: [
       {
         q: 'Who owns the generated content?',
-        a: 'You do. Atlas is a drafting and publishing service — we claim no rights to your lessons, your chat answers, or your subscriber list.',
+        a: 'You do. CreatorCanon is a drafting and publishing service — we claim no rights to your lessons, your chat answers, or your subscriber list.',
       },
       {
-        q: 'How do I move off Atlas?',
+        q: 'How do I move off CreatorCanon?',
         a: 'Settings → Advanced → Export. You get clean markdown and JSON. Most creators re-host on Ghost or a static site.',
       },
       {
@@ -99,10 +99,10 @@ export default function FAQPage() {
           <p className="mt-5 text-body-lg text-ink-3">
             If something is missing, email{' '}
             <a
-              href="mailto:hello@channelatlas.co"
+              href="mailto:hello@creatorcanon.com"
               className="text-amber-ink underline-offset-4 hover:underline"
             >
-              hello@channelatlas.co
+              hello@creatorcanon.com
             </a>{' '}
             — we answer within one business day.
           </p>

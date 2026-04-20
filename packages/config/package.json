@@ -1,5 +1,5 @@
 {
-  "name": "@atlas/config",
+  "name": "@creatorcanon/config",
   "version": "0.0.0",
   "private": true,
   "description": "Shared build + lint configs (tsconfig presets, eslint presets).",

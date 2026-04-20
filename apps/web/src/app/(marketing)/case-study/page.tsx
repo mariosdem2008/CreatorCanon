@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { Icon } from '@atlas/ui';
+import { Icon } from '@creatorcanon/ui';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 export const metadata: Metadata = {
   title: 'Case study',
   description:
-    'How a business creator archive becomes a structured, sellable education product on Channel Atlas.',
+    'How a business creator archive becomes a structured, sellable education product on CreatorCanon.',
 };
 
 const ROWS: Array<[string, string, string]> = [

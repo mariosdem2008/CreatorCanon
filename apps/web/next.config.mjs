@@ -5,8 +5,15 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     typedRoutes: true,
+    instrumentationHook: true,
+    serverComponentsExternalPackages: [
+      '@sentry/node',
+      'require-in-the-middle',
+      '@opentelemetry/instrumentation',
+      '@opentelemetry/sdk-node',
+    ],
   },
-  transpilePackages: ['@atlas/ui', '@atlas/core', '@atlas/auth', '@atlas/db'],
+  transpilePackages: ['@creatorcanon/ui', '@creatorcanon/core', '@creatorcanon/auth', '@creatorcanon/db'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'i.ytimg.com' },

@@ -1,8 +1,8 @@
 {
-  "name": "@atlas/web",
+  "name": "@creatorcanon/web",
   "version": "0.0.0",
   "private": true,
-  "description": "Channel Atlas Next.js 14 application — creator app, hub runtime, admin, marketing.",
+  "description": "CreatorCanon Next.js 14 application — creator app, hub runtime, admin, marketing.",
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
@@ -13,11 +13,12 @@
     "clean": "rm -rf .next .turbo"
   },
   "dependencies": {
-    "@atlas/adapters": "workspace:*",
-    "@atlas/auth": "workspace:*",
-    "@atlas/core": "workspace:*",
-    "@atlas/db": "workspace:*",
-    "@atlas/ui": "workspace:*",
+    "@creatorcanon/adapters": "workspace:*",
+    "@creatorcanon/auth": "workspace:*",
+    "@creatorcanon/core": "workspace:*",
+    "@creatorcanon/db": "workspace:*",
+    "@creatorcanon/pipeline": "workspace:*",
+    "@creatorcanon/ui": "workspace:*",
     "next-auth": "5.0.0-beta.25",
     "@radix-ui/react-dialog": "1.1.1",
     "@radix-ui/react-dropdown-menu": "2.1.1",
@@ -36,10 +37,11 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "tailwind-merge": "2.5.2",
-    "zod": "3.23.8"
+    "zod": "3.23.8",
+    "@trigger.dev/sdk": "3.0.13"
   },
   "devDependencies": {
-    "@atlas/config": "workspace:*",
+    "@creatorcanon/config": "workspace:*",
     "@types/node": "20.14.10",
     "@types/react": "18.3.5",
     "@types/react-dom": "18.3.0",

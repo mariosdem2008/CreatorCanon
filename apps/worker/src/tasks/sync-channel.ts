@@ -1,8 +1,8 @@
 import { task } from '@trigger.dev/sdk/v3';
 
-import { createYouTubeClient } from '@atlas/adapters/youtube';
-import { and, eq, getDb } from '@atlas/db';
-import { account, channel, video } from '@atlas/db/schema';
+import { createYouTubeClient } from '@creatorcanon/adapters/youtube';
+import { and, eq, getDb } from '@creatorcanon/db';
+import { account, channel, video } from '@creatorcanon/db/schema';
 
 /** Max pages of 50 to fetch per sync (caps at 500 videos for alpha). */
 const MAX_PAGES = 10;

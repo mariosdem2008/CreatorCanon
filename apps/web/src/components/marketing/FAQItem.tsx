@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { Icon } from '@atlas/ui';
+import { Icon } from '@creatorcanon/ui';
 
 import { cn } from '@/lib/utils';
 

@@ -2,10 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "cd ../.. && pnpm --filter @atlas/web build",
+  "buildCommand": "cd ../.. && pnpm --filter @creatorcanon/web build",
   "outputDirectory": ".next",
   "_comment_rewrites": [
-    "Hub subdomain routing (sub.atlas.co -> workspace slug) is NOT configured",
+    "Hub subdomain routing (sub.creatorcanon.com -> workspace slug) is NOT configured",
     "as Vercel rewrites. It lives in apps/web/src/middleware.ts (ticket 8.2)",
     "because the mapping needs DB/Redis access to look up published-hub state,",
     "which static rewrites cannot do.",

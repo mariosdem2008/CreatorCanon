@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis';
-import { AtlasError } from '@atlas/core';
-import type { ServerEnv } from '@atlas/core';
+import { CanonError } from '@creatorcanon/core';
+import type { ServerEnv } from '@creatorcanon/core';
 
 export type RedisClient = Redis;
 
@@ -24,7 +24,7 @@ export const createRedisClient = (env: ServerEnv): RedisClient => {
   try {
     url = new URL(raw);
   } catch (cause) {
-    throw new AtlasError({
+    throw new CanonError({
       code: 'invalid_env',
       category: 'internal',
       message: 'REDIS_URL is not a valid URL.',
@@ -33,7 +33,7 @@ export const createRedisClient = (env: ServerEnv): RedisClient => {
   }
 
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new AtlasError({
+    throw new CanonError({
       code: 'invalid_env',
       category: 'internal',
       message:
@@ -43,7 +43,7 @@ export const createRedisClient = (env: ServerEnv): RedisClient => {
 
   const token = url.password || url.username;
   if (!token) {
-    throw new AtlasError({
+    throw new CanonError({
       code: 'invalid_env',
       category: 'internal',
       message:

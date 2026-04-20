@@ -47,7 +47,7 @@ jobs:
           # Flip to `true` once a registry is wired (see commented login above).
           push: false
           load: true
-          tags: channel-atlas-worker:${{ github.sha }}
+          tags: creatorcanon-worker:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

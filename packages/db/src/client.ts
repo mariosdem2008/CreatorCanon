@@ -23,12 +23,13 @@ export const getDb = (databaseUrl?: string): AtlasDb => {
   }
 
   const poolMax = Number(process.env.DATABASE_POOL_MAX) || 10;
+  const connectTimeout = Number(process.env.DATABASE_CONNECT_TIMEOUT) || 10;
 
   const client = postgres(url, {
     prepare: false,
     max: poolMax,
     idle_timeout: 20,
-    connect_timeout: 10,
+    connect_timeout: connectTimeout,
   });
 
   const db = drizzle(client, { schema });

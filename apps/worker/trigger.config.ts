@@ -3,13 +3,13 @@ import { defineConfig } from '@trigger.dev/sdk/v3';
 /**
  * Trigger.dev v3 project config.
  *
- * NOTE: `project` below is a placeholder slug. Replace `proj_channel_atlas`
+ * NOTE: `project` below is a placeholder slug. Replace `proj_creatorcanon`
  * with the real project ID from the Trigger.dev dashboard after the founder
  * creates the project (https://cloud.trigger.dev). The CLI will also write
  * this value on `trigger.dev init` if run against a real account.
  */
 export default defineConfig({
-  project: 'proj_channel_atlas',
+  project: 'proj_creatorcanon',
   logLevel: 'info',
   // Task code lives alongside src/dev-server.ts — the CLI auto-discovers
   // every `task()` export under the dirs listed here.

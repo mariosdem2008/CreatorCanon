@@ -1,7 +1,7 @@
 # CODEOWNERS — required reviewers per path.
 #
 # Placeholder: `@founder` is a stand-in handle. Replace with the real GitHub
-# username (or team slug, e.g. `@channel-atlas/maintainers`) once the repo is
+# username (or team slug, e.g. `@creatorcanon/maintainers`) once the repo is
 # transferred to the production org. Order matters: later patterns win.
 
 # Default catch-all.

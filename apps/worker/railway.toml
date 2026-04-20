@@ -1,4 +1,4 @@
-# Railway service config — Channel Atlas worker.
+# Railway service config — CreatorCanon worker.
 # Build context is the repo `SaaS/` root; the Dockerfile lives here.
 
 [build]

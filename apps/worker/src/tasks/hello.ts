@@ -1,6 +1,6 @@
 import { task } from '@trigger.dev/sdk/v3';
 
-import { PIPELINE_VERSION } from '@atlas/core/pipeline-stages';
+import { PIPELINE_VERSION } from '@creatorcanon/core/pipeline-stages';
 
 /**
  * Smoke-test task. Used by ticket 0.9 to prove the worker can register and

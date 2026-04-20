@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
   title: 'Privacy policy',
-  description: 'Channel Atlas privacy policy — placeholder pending full legal copy.',
+  description: 'CreatorCanon privacy policy — placeholder pending full legal copy.',
 };
 
 export default function PrivacyPage() {
@@ -42,10 +42,10 @@ export default function PrivacyPage() {
         <p className="mt-10 text-body-sm text-ink-3">
           Questions before the full policy lands? Email{' '}
           <a
-            href="mailto:privacy@channelatlas.co"
+            href="mailto:privacy@creatorcanon.com"
             className="text-amber-ink underline-offset-4 hover:underline"
           >
-            privacy@channelatlas.co
+            privacy@creatorcanon.com
           </a>
           .
         </p>

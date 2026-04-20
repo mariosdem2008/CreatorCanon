@@ -1,4 +1,4 @@
-# Channel Atlas — SaaS monorepo
+# CreatorCanon — SaaS monorepo
 
 Creator archive productization SaaS. YouTube channel → Hosted Knowledge Hub with
 grounded citations and chat. Hybrid text + visual pipeline (OpenAI + Gemini).

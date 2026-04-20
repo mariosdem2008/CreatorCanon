@@ -1,1 +1,1 @@
-export { cn } from '@atlas/ui';
+export { cn } from '@creatorcanon/ui';

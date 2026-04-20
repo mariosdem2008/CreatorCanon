@@ -5,7 +5,7 @@ import { CTA } from '@/components/marketing/CTA';
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'Channel Atlas is a studio for turning business teaching archives into structured, cited knowledge products.',
+    'CreatorCanon is a studio for turning business teaching archives into structured, cited knowledge products.',
 };
 
 const PRINCIPLES = [
@@ -37,7 +37,7 @@ export default function AboutPage() {
             A studio for turning teaching archives into structured, cited knowledge products.
           </h1>
           <p className="mt-6 font-serif text-body-lg leading-relaxed text-ink-2">
-            Channel Atlas exists for creators whose best teaching is already on YouTube but whose
+            CreatorCanon exists for creators whose best teaching is already on YouTube but whose
             audience can’t easily find, sequence, or pay for it. We take a focused selection of
             videos and build a premium knowledge hub around them — frameworks, playbooks, cited
             lessons, and grounded member chat called Iris.

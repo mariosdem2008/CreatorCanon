@@ -1,8 +1,8 @@
 // Root middleware: wraps the edge-safe NextAuth instance. The `authorized`
-// callback in @atlas/auth/config decides redirect vs. pass-through based on
+// callback in @creatorcanon/auth/config decides redirect vs. pass-through based on
 // the requested pathname. Redirects to /sign-in are handled by NextAuth.
 
-export { edgeAuth as default } from '@atlas/auth/middleware';
+export { edgeAuth as default } from '@creatorcanon/auth/middleware';
 
 export const config = {
   // Run on everything except static assets, images, and the NextAuth API

@@ -7,8 +7,9 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { AtlasError } from '@atlas/core';
-import type { ServerEnv } from '@atlas/core';
+import type { ServerEnv } from '@creatorcanon/core';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { z } from 'zod';
 
 const nonEmpty = z.string().min(1);
@@ -17,9 +18,7 @@ const putObjectSchema = z.object({
   key: nonEmpty,
   body: z.union([z.instanceof(Uint8Array), z.instanceof(Buffer), z.string()]),
   contentType: z.string().min(1).optional(),
-  /** Optional object metadata (string → string). */
   metadata: z.record(z.string()).optional(),
-  /** Optional cache-control header for objects served via the public base URL. */
   cacheControl: z.string().optional(),
 });
 
@@ -37,7 +36,6 @@ export interface R2GetObjectOutput {
 const signedUrlSchema = z.object({
   key: nonEmpty,
   operation: z.enum(['get', 'put']).default('get'),
-  /** TTL in seconds for the presigned URL. */
   expiresInSeconds: z.number().int().positive().max(60 * 60 * 24 * 7).default(60 * 15),
   contentType: z.string().optional(),
 });
@@ -60,9 +58,7 @@ export interface R2ListObjectsOutput {
 }
 
 export interface R2Client {
-  /** The underlying S3 client, exposed for advanced callers (multipart, etc.). */
-  readonly s3: S3Client;
-  /** Configured bucket name. */
+  readonly s3?: S3Client;
   readonly bucket: string;
 
   putObject(input: R2PutObjectInput): Promise<{ key: string; etag?: string }>;
@@ -77,21 +73,121 @@ export interface R2Client {
   }): Promise<R2ListObjectsOutput>;
 }
 
-const notImplemented = (op: string): AtlasError =>
-  new AtlasError({
-    code: 'not_implemented',
-    category: 'internal',
-    message: `R2Client.${op} is not implemented yet (lands in Epic 5).`,
-  });
+function safeLocalPath(root: string, key: string): string {
+  const normalizedRoot = path.resolve(root);
+  const target = path.resolve(normalizedRoot, key);
+  if (target !== normalizedRoot && !target.startsWith(`${normalizedRoot}${path.sep}`)) {
+    throw new Error(`Invalid local artifact key: ${key}`);
+  }
+  return target;
+}
 
-/**
- * Build an R2 (S3-compatible) client configured for a workspace's bucket.
- *
- * Reads exclusively from the passed `env` — never touches `process.env`.
- * The endpoint follows Cloudflare's `https://<account_id>.r2.cloudflarestorage.com`
- * convention and signs requests with `region: 'auto'`.
- */
 export const createR2Client = (env: ServerEnv): R2Client => {
+  if (env.ARTIFACT_STORAGE === 'local') {
+    const root = path.resolve(process.cwd(), env.LOCAL_ARTIFACT_DIR);
+    const bucket = env.R2_BUCKET || 'local-artifacts';
+
+    return {
+      bucket,
+
+      async putObject(input) {
+        const parsed = putObjectSchema.parse(input);
+        const target = safeLocalPath(root, parsed.key);
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        const body = typeof parsed.body === 'string'
+          ? Buffer.from(parsed.body)
+          : Buffer.from(parsed.body);
+        await fs.writeFile(target, body);
+        if (parsed.contentType || parsed.metadata || parsed.cacheControl) {
+          await fs.writeFile(`${target}.meta.json`, JSON.stringify({
+            contentType: parsed.contentType,
+            metadata: parsed.metadata,
+            cacheControl: parsed.cacheControl,
+          }, null, 2));
+        }
+        return { key: parsed.key, etag: `local-${body.byteLength}` };
+      },
+
+      async getObject(key) {
+        nonEmpty.parse(key);
+        const target = safeLocalPath(root, key);
+        const [body, stats, metaRaw] = await Promise.all([
+          fs.readFile(target),
+          fs.stat(target),
+          fs.readFile(`${target}.meta.json`, 'utf8').catch(() => undefined),
+        ]);
+        const meta = metaRaw ? JSON.parse(metaRaw) as {
+          contentType?: string;
+          metadata?: Record<string, string>;
+        } : {};
+        return {
+          key,
+          body,
+          contentType: meta.contentType,
+          etag: `local-${body.byteLength}`,
+          lastModified: stats.mtime,
+          metadata: meta.metadata,
+        };
+      },
+
+      async getSignedUrl(input) {
+        const parsed = signedUrlSchema.parse(input);
+        return `file://${safeLocalPath(root, parsed.key)}`;
+      },
+
+      async deleteObject(key) {
+        nonEmpty.parse(key);
+        const target = safeLocalPath(root, key);
+        await fs.rm(target, { force: true });
+        await fs.rm(`${target}.meta.json`, { force: true });
+      },
+
+      async headObject(key) {
+        nonEmpty.parse(key);
+        const target = safeLocalPath(root, key);
+        const [stats, metaRaw] = await Promise.all([
+          fs.stat(target),
+          fs.readFile(`${target}.meta.json`, 'utf8').catch(() => undefined),
+        ]);
+        const meta = metaRaw ? JSON.parse(metaRaw) as {
+          contentType?: string;
+          metadata?: Record<string, string>;
+        } : {};
+        return {
+          key,
+          contentLength: stats.size,
+          contentType: meta.contentType,
+          etag: `local-${stats.size}`,
+          lastModified: stats.mtime,
+          metadata: meta.metadata,
+        };
+      },
+
+      async listObjects(input) {
+        const prefixRoot = safeLocalPath(root, input.prefix);
+        const keys: string[] = [];
+
+        async function walk(dir: string): Promise<void> {
+          const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+          for (const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              await walk(full);
+            } else if (!entry.name.endsWith('.meta.json')) {
+              keys.push(path.relative(root, full).replace(/\\/g, '/'));
+            }
+          }
+        }
+
+        await walk(prefixRoot);
+        return {
+          keys: keys.slice(0, input.maxKeys ?? keys.length),
+          isTruncated: input.maxKeys != null && keys.length > input.maxKeys,
+        };
+      },
+    };
+  }
+
   const endpoint = `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
   const s3 = new S3Client({
@@ -109,53 +205,79 @@ export const createR2Client = (env: ServerEnv): R2Client => {
   return {
     s3,
     bucket,
+
     async putObject(input) {
-      putObjectSchema.parse(input);
-      throw notImplemented('putObject');
-      // Implementation (Epic 5):
-      // const cmd = new PutObjectCommand({
-      //   Bucket: bucket, Key: input.key, Body: input.body,
-      //   ContentType: input.contentType, Metadata: input.metadata,
-      //   CacheControl: input.cacheControl,
-      // });
-      // const res = await s3.send(cmd);
-      // return { key: input.key, etag: res.ETag };
+      const parsed = putObjectSchema.parse(input);
+      const cmd = new PutObjectCommand({
+        Bucket: bucket,
+        Key: parsed.key,
+        Body: parsed.body,
+        ContentType: parsed.contentType,
+        Metadata: parsed.metadata,
+        CacheControl: parsed.cacheControl,
+      });
+      const res = await s3.send(cmd);
+      return { key: parsed.key, etag: res.ETag };
     },
-    async getObject(_key) {
-      nonEmpty.parse(_key);
-      throw notImplemented('getObject');
-      // const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: _key }));
-      // ...
+
+    async getObject(key) {
+      nonEmpty.parse(key);
+      const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const bytes = await res.Body?.transformToByteArray();
+      return {
+        key,
+        body: bytes ?? new Uint8Array(),
+        contentType: res.ContentType,
+        etag: res.ETag,
+        lastModified: res.LastModified,
+        metadata: res.Metadata as Record<string, string> | undefined,
+      };
     },
+
     async getSignedUrl(input) {
       const parsed = signedUrlSchema.parse(input);
-      // Wired to the real SDK so Epic 5 only needs to flip the throw off;
-      // today we still throw to preserve the consistent not_implemented contract.
-      void parsed;
-      void getSignedUrl;
-      void GetObjectCommand;
-      void PutObjectCommand;
-      throw notImplemented('getSignedUrl');
+      if (parsed.operation === 'put') {
+        const cmd = new PutObjectCommand({
+          Bucket: bucket,
+          Key: parsed.key,
+          ContentType: parsed.contentType,
+        });
+        return getSignedUrl(s3, cmd, { expiresIn: parsed.expiresInSeconds });
+      }
+      const cmd = new GetObjectCommand({ Bucket: bucket, Key: parsed.key });
+      return getSignedUrl(s3, cmd, { expiresIn: parsed.expiresInSeconds });
     },
-    async deleteObject(_key) {
-      nonEmpty.parse(_key);
-      throw notImplemented('deleteObject');
-      // await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: _key }));
+
+    async deleteObject(key) {
+      nonEmpty.parse(key);
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     },
-    async headObject(_key) {
-      nonEmpty.parse(_key);
-      throw notImplemented('headObject');
-      // const res = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: _key }));
-      // ...
+
+    async headObject(key) {
+      nonEmpty.parse(key);
+      const res = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+      return {
+        key,
+        contentLength: res.ContentLength,
+        contentType: res.ContentType,
+        etag: res.ETag,
+        lastModified: res.LastModified,
+        metadata: res.Metadata as Record<string, string> | undefined,
+      };
     },
-    async listObjects(_input) {
-      throw notImplemented('listObjects');
-      // const res = await s3.send(new ListObjectsV2Command({
-      //   Bucket: bucket, Prefix: _input.prefix,
-      //   ContinuationToken: _input.continuationToken,
-      //   MaxKeys: _input.maxKeys,
-      // }));
-      // ...
+
+    async listObjects(input) {
+      const res = await s3.send(new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: input.prefix,
+        ContinuationToken: input.continuationToken,
+        MaxKeys: input.maxKeys,
+      }));
+      return {
+        keys: (res.Contents ?? []).map((o) => o.Key ?? '').filter(Boolean),
+        nextContinuationToken: res.NextContinuationToken,
+        isTruncated: res.IsTruncated ?? false,
+      };
     },
   };
 };

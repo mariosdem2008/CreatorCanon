@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
   title: 'Terms of service',
-  description: 'Channel Atlas terms of service — placeholder pending full legal copy.',
+  description: 'CreatorCanon terms of service — placeholder pending full legal copy.',
 };
 
 export default function TermsPage() {
@@ -23,7 +23,7 @@ export default function TermsPage() {
           <div className="text-eyebrow uppercase text-ink-4">Summary of intent</div>
           <ul className="mt-4 space-y-3 text-body-md text-ink-2">
             <li>
-              Creators own their content. Atlas is a drafting and publishing tool, not a rights
+              Creators own their content. CreatorCanon is a drafting and publishing tool, not a rights
               holder.
             </li>
             <li>
@@ -35,7 +35,7 @@ export default function TermsPage() {
               pipeline failures.
             </li>
             <li>
-              Workspace deletion removes all data from Atlas databases and R2 artifacts within
+              Workspace deletion removes all data from CreatorCanon databases and R2 artifacts within
               the documented GDPR hard-delete window.
             </li>
           </ul>
@@ -43,10 +43,10 @@ export default function TermsPage() {
         <p className="mt-10 text-body-sm text-ink-3">
           Questions before the full terms land? Email{' '}
           <a
-            href="mailto:hello@channelatlas.co"
+            href="mailto:hello@creatorcanon.com"
             className="text-amber-ink underline-offset-4 hover:underline"
           >
-            hello@channelatlas.co
+            hello@creatorcanon.com
           </a>
           .
         </p>

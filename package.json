@@ -1,8 +1,8 @@
 {
-  "name": "channel-atlas",
+  "name": "creatorcanon",
   "version": "0.0.0",
   "private": true,
-  "description": "Channel Atlas — creator archive productization SaaS (Hosted Knowledge Hubs from YouTube channels).",
+  "description": "CreatorCanon — creator archive productization SaaS (Hosted Knowledge Hubs from YouTube channels).",
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20.11.0",
@@ -11,12 +11,17 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:db:up": "docker compose -f docker-compose.dev.yml up -d && node ./scripts/write-local-env.mjs",
+    "dev:db:down": "docker compose -f docker-compose.dev.yml down",
+    "dev:db:reset": "docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d && node ./scripts/write-local-env.mjs",
+    "dev:seed": "pnpm --filter @creatorcanon/db seed:local",
+    "smoke:local": "pnpm db:migrate && pnpm dev:seed && pnpm --filter @creatorcanon/pipeline smoke:local",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "db:generate": "pnpm --filter @atlas/db generate",
-    "db:migrate": "pnpm --filter @atlas/db migrate",
-    "db:studio": "pnpm --filter @atlas/db studio",
+    "db:generate": "pnpm --filter @creatorcanon/db generate",
+    "db:migrate": "pnpm --filter @creatorcanon/db migrate",
+    "db:studio": "pnpm --filter @creatorcanon/db studio",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json,css}\"",
     "clean": "turbo run clean && rm -rf node_modules"

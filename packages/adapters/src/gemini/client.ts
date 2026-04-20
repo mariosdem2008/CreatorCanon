@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AtlasError } from '@atlas/core';
-import type { ServerEnv } from '@atlas/core';
+import { CanonError } from '@creatorcanon/core';
+import type { ServerEnv } from '@creatorcanon/core';
 import { z } from 'zod';
 
 /**
@@ -150,8 +150,8 @@ export interface GeminiClient {
   ): Promise<FrameObservation[]>;
 }
 
-const notImplemented = (op: string): AtlasError =>
-  new AtlasError({
+const notImplemented = (op: string): CanonError =>
+  new CanonError({
     code: 'not_implemented',
     category: 'internal',
     message: `GeminiClient.${op} is not implemented yet (lands in Epic 5).`,

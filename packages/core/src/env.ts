@@ -3,6 +3,9 @@ import { z } from 'zod';
 export const serverEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
+  DATABASE_CONNECT_TIMEOUT: z.coerce.number().positive().optional(),
+  ARTIFACT_STORAGE: z.enum(['r2', 'local']).default('r2'),
+  LOCAL_ARTIFACT_DIR: z.string().min(1).default('.local/artifacts'),
   REDIS_URL: z
     .string()
     .url()

@@ -1,5 +1,5 @@
 {
-  "name": "@atlas/worker",
+  "name": "@creatorcanon/worker",
   "version": "0.0.0",
   "private": true,
   "description": "Trigger.dev worker process — hosts the 16-stage pipeline tasks.",
@@ -16,11 +16,11 @@
     "clean": "rm -rf dist .turbo .trigger"
   },
   "dependencies": {
-    "@atlas/adapters": "workspace:*",
-    "@atlas/core": "workspace:*",
-    "@atlas/cost-ledger": "workspace:*",
-    "@atlas/db": "workspace:*",
-    "@atlas/pipeline": "workspace:*",
+    "@creatorcanon/adapters": "workspace:*",
+    "@creatorcanon/core": "workspace:*",
+    "@creatorcanon/cost-ledger": "workspace:*",
+    "@creatorcanon/db": "workspace:*",
+    "@creatorcanon/pipeline": "workspace:*",
     "@sentry/node": "8.33.1",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/sdk-node": "0.53.0",
@@ -29,7 +29,7 @@
     "tsx": "4.19.1"
   },
   "devDependencies": {
-    "@atlas/config": "workspace:*",
+    "@creatorcanon/config": "workspace:*",
     "@types/node": "20.14.10",
     "trigger.dev": "3.0.13",
     "typescript": "5.6.2"

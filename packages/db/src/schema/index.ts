@@ -1,5 +1,5 @@
 // Drizzle schema barrel. Order-independent — each domain file imports what it
-// needs directly. Consumers should import from `@atlas/db/schema`.
+// needs directly. Consumers should import from `@creatorcanon/db/schema`.
 
 export * from './_vector';
 export * from './enums';

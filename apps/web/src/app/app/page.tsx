@@ -1,11 +1,12 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { auth, signOut } from '@atlas/auth';
-import { count, eq, getDb } from '@atlas/db';
-import { channel, video, workspaceMember } from '@atlas/db/schema';
+import { auth, signOut } from '@creatorcanon/auth';
+import { count, eq, getDb } from '@creatorcanon/db';
+import { channel, video, workspaceMember } from '@creatorcanon/db/schema';
 
-import { connectYouTubeChannel } from './actions';
+import { ConnectChannelForm } from './ConnectChannelForm';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Home' };
@@ -96,11 +97,17 @@ export default async function AppHomePage() {
               </div>
             </dl>
 
-            {videoCount === 0 && ch.uploadsPlaylistId && (
+            {videoCount > 0 ? (
+              <Link
+                href="/app/library"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
+              >
+                Browse library ({fmtNumber(videoCount)} videos) →
+              </Link>
+            ) : (
               <p className="text-body-sm text-ink-3">
-                Video sync is handled by the worker. Run{' '}
-                <code className="font-mono text-caption">trigger dev</code> to
-                process all {ch.videoCount ?? ''} videos.
+                Channel metadata is connected and CreatorCanon will sync your video
+                library inline when you reconnect or resync this source.
               </p>
             )}
           </>
@@ -113,14 +120,7 @@ export default async function AppHomePage() {
               We&apos;ll pull your channel metadata and video list from YouTube
               using the account you signed in with.
             </p>
-            <form action={connectYouTubeChannel}>
-              <button
-                type="submit"
-                className="h-10 rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
-              >
-                Connect YouTube Channel
-              </button>
-            </form>
+            <ConnectChannelForm />
           </>
         )}
 

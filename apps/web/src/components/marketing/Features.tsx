@@ -8,7 +8,7 @@ const FEATURES: Feature[] = [
   {
     n: '01',
     title: 'Repeated advice becomes named frameworks',
-    body: 'Atlas turns recurring teaching patterns into clear lessons, tracks, and operator notes.',
+    body: 'CreatorCanon turns recurring teaching patterns into clear lessons, tracks, and operator notes.',
   },
   {
     n: '02',

@@ -1,4 +1,4 @@
-import { PIPELINE_STAGES, PIPELINE_VERSION } from '@atlas/core/pipeline-stages';
+import { PIPELINE_STAGES, PIPELINE_VERSION } from '@creatorcanon/core/pipeline-stages';
 
 import { initTelemetry } from './instrumentation';
 
@@ -6,7 +6,7 @@ initTelemetry();
 
 const log = (msg: string, meta: Record<string, unknown> = {}) => {
   // eslint-disable-next-line no-console
-  console.info(JSON.stringify({ ts: new Date().toISOString(), svc: 'atlas-worker', msg, ...meta }));
+  console.info(JSON.stringify({ ts: new Date().toISOString(), svc: 'creatorcanon-worker', msg, ...meta }));
 };
 
 log('worker dev-server starting', {

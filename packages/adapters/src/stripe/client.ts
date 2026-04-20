@@ -1,13 +1,16 @@
 import Stripe from 'stripe';
-import { AtlasError } from '@atlas/core';
-import type { ServerEnv } from '@atlas/core';
+import { CanonError } from '@creatorcanon/core';
+import type { ServerEnv } from '@creatorcanon/core';
 import { z } from 'zod';
 
 const createCheckoutSessionSchema = z.object({
   /** Stripe customer id; omit for guest checkout (customer created on success). */
   customerId: z.string().optional(),
-  /** Price id for the line item. */
-  priceId: z.string().min(1),
+  /** Price id for the line item. Optional when passing inline amount data. */
+  priceId: z.string().min(1).optional(),
+  amountCents: z.number().int().positive().optional(),
+  currency: z.string().min(3).default('usd'),
+  productName: z.string().min(1).optional(),
   mode: z.enum(['payment', 'subscription']).default('payment'),
   quantity: z.number().int().positive().default(1),
   successUrl: z.string().url(),
@@ -44,7 +47,7 @@ export interface StripeAdapterClient {
   createCustomer(email: string): Promise<Stripe.Customer>;
   /**
    * Verify a Stripe webhook signature using `STRIPE_WEBHOOK_SECRET` and
-   * return the parsed event. Raises `AtlasError` on signature failure.
+   * return the parsed event. Raises `CanonError` on signature failure.
    */
   handleWebhook(
     event: unknown,
@@ -52,13 +55,6 @@ export interface StripeAdapterClient {
     rawBody: string | Buffer,
   ): Promise<WebhookHandleResult>;
 }
-
-const notImplemented = (op: string): AtlasError =>
-  new AtlasError({
-    code: 'not_implemented',
-    category: 'internal',
-    message: `StripeClient.${op} is not implemented yet (lands in Epic 5).`,
-  });
 
 export const createStripeClient = (env: ServerEnv): StripeAdapterClient => {
   const raw = new Stripe(env.STRIPE_SECRET_KEY, {
@@ -70,22 +66,85 @@ export const createStripeClient = (env: ServerEnv): StripeAdapterClient => {
   return {
     raw,
     async createCheckoutSession(params) {
-      createCheckoutSessionSchema.parse(params);
-      throw notImplemented('createCheckoutSession');
+      const parsed = createCheckoutSessionSchema.parse(params);
+      if (!parsed.priceId && (!parsed.amountCents || !parsed.productName)) {
+        throw new CanonError({
+          code: 'invalid_input',
+          category: 'validation',
+          message: 'Stripe checkout requires either a priceId or inline amount/product data.',
+        });
+      }
+
+      const session = await raw.checkout.sessions.create({
+        mode: parsed.mode,
+        customer: parsed.customerId,
+        success_url: parsed.successUrl,
+        cancel_url: parsed.cancelUrl,
+        metadata: parsed.metadata,
+        payment_intent_data: {
+          metadata: parsed.metadata,
+        },
+        line_items: [
+          parsed.priceId
+            ? {
+                price: parsed.priceId,
+                quantity: parsed.quantity,
+              }
+            : {
+                quantity: parsed.quantity,
+                price_data: {
+                  currency: parsed.currency,
+                  unit_amount: parsed.amountCents,
+                  product_data: {
+                    name: parsed.productName!,
+                  },
+                },
+              },
+        ],
+      }, {
+        idempotencyKey: parsed.idempotencyKey,
+      });
+
+      if (!session.url) {
+        throw new CanonError({
+          code: 'provider_error',
+          category: 'provider_upstream',
+          message: 'Stripe did not return a checkout URL.',
+        });
+      }
+
+      return {
+        id: session.id,
+        url: session.url,
+        status: session.status,
+      };
     },
     async retrieveCheckout(id) {
-      z.string().min(1).parse(id);
-      throw notImplemented('retrieveCheckout');
+      const checkoutId = z.string().min(1).parse(id);
+      return raw.checkout.sessions.retrieve(checkoutId);
     },
     async createCustomer(email) {
-      z.string().email().parse(email);
-      throw notImplemented('createCustomer');
+      const customerEmail = z.string().email().parse(email);
+      return raw.customers.create({ email: customerEmail });
     },
-    async handleWebhook(_event, signature, _rawBody) {
-      z.string().min(1).parse(signature);
-      // Epic 5: `raw.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)`
-      void env.STRIPE_WEBHOOK_SECRET;
-      throw notImplemented('handleWebhook');
+    async handleWebhook(_event, signature, rawBody) {
+      const signedHeader = z.string().min(1).parse(signature);
+
+      try {
+        const event = raw.webhooks.constructEvent(
+          rawBody,
+          signedHeader,
+          env.STRIPE_WEBHOOK_SECRET,
+        );
+
+        return { event, verified: true };
+      } catch (error) {
+        throw new CanonError({
+          code: 'invalid_input',
+          category: 'validation',
+          message: error instanceof Error ? error.message : 'Stripe webhook verification failed.',
+        });
+      }
     },
   };
 };

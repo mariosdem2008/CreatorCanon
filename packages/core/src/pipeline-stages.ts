@@ -12,6 +12,8 @@ export const PIPELINE_STAGES = [
   'ensure_visual_assets', // 4
   'normalize_transcripts', // 5
   'segment_transcripts', // 6
+  'synthesize_v0_review', // v0 review artifact
+  'draft_pages_v0', // v0 persisted draft pages
   'extract_text_atoms', // 7
   'extract_visual_observations', // 8
   'merge_multimodal_atoms', // 9

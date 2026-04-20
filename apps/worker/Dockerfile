@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # -----------------------------------------------------------------------------
-# Channel Atlas worker — multi-stage Docker build.
+# CreatorCanon worker — multi-stage Docker build.
 #
 # Build context must be the repo `SaaS/` root (so workspace packages resolve).
 # Runtime uses `tsx` to execute TypeScript directly. A dedicated `build` stage
@@ -31,9 +31,9 @@ COPY packages/pipeline/package.json packages/pipeline/
 COPY packages/ui/package.json packages/ui/
 
 # Install only the worker and its transitive workspace deps. `...` pulls in
-# every dependency of @atlas/worker across the workspace.
+# every dependency of @creatorcanon/worker across the workspace.
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --filter @atlas/worker...
+    pnpm install --frozen-lockfile --filter @creatorcanon/worker...
 
 # Now bring in the actual source after deps are resolved.
 COPY apps/worker apps/worker
@@ -48,13 +48,13 @@ ENV NODE_OPTIONS=--enable-source-maps
 WORKDIR /app
 
 RUN corepack enable \
-    && addgroup -S atlas \
-    && adduser -S atlas -G atlas
+    && addgroup -S creatorcanon \
+    && adduser -S creatorcanon -G creatorcanon
 
 # Copy the fully installed workspace from the deps stage.
-COPY --from=deps --chown=atlas:atlas /app /app
+COPY --from=deps --chown=creatorcanon:creatorcanon /app /app
 
-USER atlas
+USER creatorcanon
 
 # Optional: expose a port placeholder for a future healthcheck server.
 # Trigger.dev workers don't bind a port today, but the Railway healthcheck

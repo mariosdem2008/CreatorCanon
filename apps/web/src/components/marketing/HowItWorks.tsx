@@ -1,4 +1,4 @@
-import { Icon, type IconName } from '@atlas/ui';
+import { Icon, type IconName } from '@creatorcanon/ui';
 
 interface Step {
   n: string;
@@ -24,7 +24,7 @@ const STEPS: Step[] = [
     n: '03',
     icon: 'sparkle',
     title: 'Review the framework structure',
-    body: 'Atlas proposes tracks, lessons, support labels, and playbooks.',
+    body: 'CreatorCanon proposes tracks, lessons, support labels, and playbooks.',
   },
   {
     n: '04',
@@ -41,10 +41,10 @@ export function HowItWorks() {
         <div className="max-w-[760px]">
           <div className="text-eyebrow uppercase text-ink-4">How it works</div>
           <h2 className="mt-3 font-serif text-display-md text-ink">
-            Select the source archive. Atlas builds the operating manual.
+            Select the source archive. CreatorCanon builds the operating manual.
           </h2>
           <p className="mt-5 text-body-lg text-ink-2">
-            Connect your channel, choose the strongest teaching videos, and let Atlas turn
+            Connect your channel, choose the strongest teaching videos, and let CreatorCanon turn
             recurring ideas into structured frameworks, tactical lessons, playbooks, citations,
             and grounded chat your audience can actually use.
           </p>

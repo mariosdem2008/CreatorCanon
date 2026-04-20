@@ -1,5 +1,5 @@
 {
-  "name": "@atlas/core",
+  "name": "@creatorcanon/core",
   "version": "0.0.0",
   "private": true,
   "description": "Shared domain types, zod schemas, result/error types, invariants.",
@@ -23,7 +23,7 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@atlas/config": "workspace:*",
+    "@creatorcanon/config": "workspace:*",
     "typescript": "5.6.2"
   }
 }

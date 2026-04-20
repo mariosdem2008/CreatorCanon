@@ -50,7 +50,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate migrations from current schema
-        run: pnpm --filter @atlas/db exec drizzle-kit generate --name=pr_check --custom=false
+        run: pnpm --filter @creatorcanon/db exec drizzle-kit generate --name=pr_check --custom=false
 
       # If the generate step produced any new / modified files under the
       # committed migrations directory, the PR author forgot to commit them.

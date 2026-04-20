@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 const PRICING_FAQS = [
   {
     q: 'What am I paying for, exactly?',
-    a: 'A one-time fee per hub generation. You connect your channel, pick the strongest teaching videos, and Atlas produces structured lessons, frameworks, playbooks, citations, and optional grounded chat — all yours to edit and publish.',
+    a: 'A one-time fee per hub generation. You connect your channel, pick the strongest teaching videos, and CreatorCanon produces structured lessons, frameworks, playbooks, citations, and optional grounded chat — all yours to edit and publish.',
   },
   {
     q: 'Why is there a 20-hour cap on self-serve?',
@@ -21,7 +21,7 @@ const PRICING_FAQS = [
   },
   {
     q: 'Do I pay a revenue share if my hub is paywalled?',
-    a: 'Atlas takes 15% on paywalled hubs in addition to Stripe fees (2.9% + €0.30). Concierge and custom deployments can negotiate this down.',
+    a: 'CreatorCanon takes 15% on paywalled hubs in addition to Stripe fees (2.9% + €0.30). Concierge and custom deployments can negotiate this down.',
   },
   {
     q: 'Can I edit the output after generation?',
@@ -29,7 +29,7 @@ const PRICING_FAQS = [
   },
   {
     q: 'What if the output quality is not good enough?',
-    a: 'You review a draft before publishing. If support on a section is weak, Atlas labels it and suggests a rerun or operator help. Nothing ships without your explicit publish click.',
+    a: 'You review a draft before publishing. If support on a section is weak, CreatorCanon labels it and suggests a rerun or operator help. Nothing ships without your explicit publish click.',
   },
 ];
 

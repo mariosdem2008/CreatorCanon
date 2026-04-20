@@ -1,5 +1,5 @@
 {
-  "name": "@atlas/auth",
+  "name": "@creatorcanon/auth",
   "version": "0.0.0",
   "private": true,
   "description": "Auth.js v5 configuration, Google OAuth provider, session helpers.",
@@ -19,8 +19,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@atlas/core": "workspace:*",
-    "@atlas/db": "workspace:*",
+    "@creatorcanon/core": "workspace:*",
+    "@creatorcanon/db": "workspace:*",
     "@auth/drizzle-adapter": "1.7.2",
     "drizzle-orm": "0.33.0",
     "next-auth": "5.0.0-beta.25"
@@ -29,7 +29,7 @@
     "next": "14.2.13"
   },
   "devDependencies": {
-    "@atlas/config": "workspace:*",
+    "@creatorcanon/config": "workspace:*",
     "typescript": "5.6.2"
   }
 }

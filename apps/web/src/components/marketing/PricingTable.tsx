@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Icon } from '@atlas/ui';
+import { Icon } from '@creatorcanon/ui';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ const TIERS: Tier[] = [
       'Structured lessons and support labels',
       'Citations on every block',
       'Section-level editing',
-      'Basic hub publishing on atlas.co subdomain',
+      'Basic hub publishing on creatorcanon.com subdomain',
     ],
     cta: { label: 'Start a hub', href: '/signup' },
   },
@@ -59,7 +59,7 @@ const TIERS: Tier[] = [
       'Custom domain and white-label options',
       'Direct line for first-week adjustments',
     ],
-    cta: { label: 'Talk to us', href: 'mailto:hello@channelatlas.co' },
+    cta: { label: 'Talk to us', href: 'mailto:hello@creatorcanon.com' },
     contactOnly: true,
   },
 ];

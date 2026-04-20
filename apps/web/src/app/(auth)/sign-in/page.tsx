@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
-import { auth, signIn } from '@atlas/auth';
-import { Logo } from '@atlas/ui';
+import { auth, signIn } from '@creatorcanon/auth';
+import { Logo } from '@creatorcanon/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,8 @@ export default async function SignInPage({
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
   const session = await auth();
+  const devBypassEnabled = process.env.DEV_AUTH_BYPASS_ENABLED === 'true';
+  const devBypassEmail = process.env.DEV_AUTH_BYPASS_EMAIL ?? '';
 
   // Guard against open-redirect: only accept same-origin relative paths.
   const raw = searchParams?.callbackUrl;
@@ -31,13 +33,29 @@ export default async function SignInPage({
     await signIn('google', { redirectTo: callbackUrl });
   }
 
+  async function signInWithDevUser() {
+    'use server';
+
+    if (process.env.DEV_AUTH_BYPASS_ENABLED !== 'true') return;
+
+    const email = process.env.DEV_AUTH_BYPASS_EMAIL ?? '';
+    if (!email) {
+      throw new Error('DEV_AUTH_BYPASS_EMAIL is not configured.');
+    }
+
+    await signIn('credentials', {
+      email,
+      redirectTo: callbackUrl,
+    });
+  }
+
   return (
     <div className="flex flex-col items-center gap-10 text-center">
       <Logo />
 
       <div className="space-y-3">
         <h1 className="font-serif text-heading-lg text-ink">
-          Sign in to Channel Atlas
+          Sign in to CreatorCanon
         </h1>
         <p className="text-body-md text-ink-3">
           Use the Google account that owns your YouTube channel.
@@ -59,6 +77,28 @@ export default async function SignInPage({
           Continue with Google
         </button>
       </form>
+
+      {devBypassEnabled && (
+        <form action={signInWithDevUser} className="w-full">
+          <button
+            type="submit"
+            className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-dashed border-rule-strong bg-paper px-4 text-body-md font-medium text-ink transition hover:bg-paper-2"
+          >
+            Continue as local dev user
+          </button>
+          <p className="mt-2 text-caption text-ink-4">
+            Dev-only bypass for {devBypassEmail || 'configured local user'}.
+          </p>
+          <p className="mt-2 text-caption">
+            <a
+              href="/api/dev/reset-auth"
+              className="text-ink-4 underline-offset-4 hover:text-ink hover:underline"
+            >
+              Reset local session
+            </a>
+          </p>
+        </form>
+      )}
 
       <p className="text-caption text-ink-4">
         By continuing you agree to our{' '}

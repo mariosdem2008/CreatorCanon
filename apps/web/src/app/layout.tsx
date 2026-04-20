@@ -11,8 +11,8 @@ import '../styles/globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Channel Atlas',
-    template: '%s | Channel Atlas',
+    default: 'CreatorCanon',
+    template: '%s | CreatorCanon',
   },
   description:
     'Turn your YouTube archive into a hosted knowledge hub — grounded, cited, creator-owned.',

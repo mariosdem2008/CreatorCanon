@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Icon } from '@atlas/ui';
+import { Icon } from '@creatorcanon/ui';
 
 import { Button } from '@/components/ui/button';
 

@@ -8,7 +8,7 @@ export type ErrorCategory =
   | 'quota_exhausted'
   | 'internal';
 
-export class AtlasError extends Error {
+export class CanonError extends Error {
   readonly code: string;
   readonly category: ErrorCategory;
   readonly retryable: boolean;
@@ -23,7 +23,7 @@ export class AtlasError extends Error {
     cause?: unknown;
   }) {
     super(opts.message, { cause: opts.cause });
-    this.name = 'AtlasError';
+    this.name = 'CanonError';
     this.code = opts.code;
     this.category = opts.category;
     this.retryable = opts.retryable ?? false;
@@ -31,5 +31,5 @@ export class AtlasError extends Error {
   }
 }
 
-export const isAtlasError = (e: unknown): e is AtlasError =>
-  e instanceof AtlasError;
+export const isCanonError = (e: unknown): e is CanonError =>
+  e instanceof CanonError;

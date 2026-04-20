@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { Icon, ChannelMark } from '@atlas/ui';
+import { Icon, ChannelMark } from '@creatorcanon/ui';
 
 import { CTA } from '@/components/marketing/CTA';
 import { Features } from '@/components/marketing/Features';
@@ -8,9 +8,9 @@ import { Hero } from '@/components/marketing/Hero';
 import { HowItWorks } from '@/components/marketing/HowItWorks';
 
 export const metadata: Metadata = {
-  title: 'Channel Atlas — turn your videos into a premium business knowledge system',
+  title: 'CreatorCanon — turn your videos into a premium business knowledge system',
   description:
-    'Channel Atlas helps business creators turn repeat lessons, frameworks, and operating advice into a source-linked hub their audience can pay to use.',
+    'CreatorCanon helps business creators turn repeat lessons, frameworks, and operating advice into a source-linked hub their audience can pay to use.',
 };
 
 const PROOFS = [
