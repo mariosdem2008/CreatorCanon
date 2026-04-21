@@ -18,6 +18,8 @@
     "alpha:e2e": "pnpm --filter @creatorcanon/pipeline run:alpha:e2e",
     "env:doctor": "pnpm --filter @creatorcanon/pipeline env:doctor",
     "smoke:local": "pnpm db:migrate && pnpm dev:seed && pnpm --filter @creatorcanon/pipeline smoke:local",
+    "smoke:browser:local": "pnpm --filter @creatorcanon/pipeline smoke:browser:local",
+    "smoke:all:local": "pnpm dev:db:reset && pnpm smoke:local && pnpm smoke:browser:local",
     "smoke:alpha": "pnpm db:migrate && pnpm --filter @creatorcanon/pipeline smoke:alpha",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

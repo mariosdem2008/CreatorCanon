@@ -27,6 +27,7 @@ SaaS/
 pnpm install
 pnpm dev:db:reset
 pnpm smoke:local
+pnpm smoke:browser:local
 pnpm --filter @creatorcanon/web dev
 ```
 
@@ -34,6 +35,13 @@ Local smoke uses Docker Postgres with pgvector, local filesystem artifacts,
 seeded creator data, dev-only auth bypass, the shared pipeline runner, draft
 page generation, source evidence, publish-to-hub, and public hub rendering.
 Open `http://localhost:3000/sign-in` and use the local dev sign-in button.
+
+`pnpm smoke:browser:local` is the deterministic browser pass for the visible
+MVP surfaces. It uses the local dev auth bypass, never touches Google OAuth,
+Stripe, R2, Trigger, or live provider services, and writes Playwright snapshots
+under ignored `.local/browser-smoke/`. It verifies the creator app, project
+review/pages, admin run rescue routes, the public hub, the public page, and all
+three hub templates by switching only the seeded local hub theme.
 
 ## Private-Alpha Smoke
 
@@ -73,6 +81,8 @@ against a non-local database or R2 bucket unless `ALPHA_E2E_CONFIRM=true`.
 | `pnpm db:studio`    | Opens Drizzle Studio                             |
 | `pnpm dev:db:reset` | Resets local Docker Postgres and writes envs     |
 | `pnpm smoke:local`  | Deterministic local end-to-end smoke             |
+| `pnpm smoke:browser:local` | Deterministic local browser smoke for MVP routes |
+| `pnpm smoke:all:local` | Resets DB, runs local pipeline smoke, then browser smoke |
 | `pnpm env:doctor`   | Read-only alpha environment readiness check      |
 | `pnpm smoke:alpha`  | Real-service alpha smoke for a selected run      |
 | `pnpm alpha:e2e`    | Seeded alpha demo against explicit target env    |

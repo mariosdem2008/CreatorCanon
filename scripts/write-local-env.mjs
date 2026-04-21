@@ -2,6 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
+const alphaLock = path.join(root, '.local', '.env.alpha.lock');
+if (fs.existsSync(alphaLock) && !process.env.ALLOW_LOCAL_ENV_REWRITE) {
+  console.error(
+    '[local-env] refusing to rewrite .env.local: alpha lock present at ' +
+      alphaLock +
+      '. Delete the lock or set ALLOW_LOCAL_ENV_REWRITE=1 to override.',
+  );
+  process.exit(1);
+}
+
 const artifactDir = path.join(root, '.local', 'artifacts').replace(/\\/g, '/');
 
 const localVars = {
