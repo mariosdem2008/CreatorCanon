@@ -320,7 +320,7 @@ async function run() {
       tone: 'direct',
       length_preset: 'standard',
       chat_enabled: false,
-      presentation_preset: 'playbook',
+      presentation_preset: 'midnight',
     },
     currentRunId: IDS.run,
     createdAt: now,

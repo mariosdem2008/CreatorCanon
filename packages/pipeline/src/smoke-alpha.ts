@@ -25,6 +25,12 @@ const REQUIRED_STAGES = [
   'draft_pages_v0',
 ] as const;
 
+function normalizeTheme(value: unknown): 'paper' | 'midnight' | 'field' {
+  if (value === 'midnight' || value === 'playbook') return 'midnight';
+  if (value === 'field' || value === 'guided') return 'field';
+  return 'paper';
+}
+
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
@@ -119,6 +125,7 @@ async function verifyPublishedManifest(input: {
   workspaceId: string;
   projectId: string;
   runId: string;
+  expectedTheme: 'paper' | 'midnight' | 'field';
   publishResult?: {
     hubId: string;
     releaseId: string;
@@ -132,14 +139,16 @@ async function verifyPublishedManifest(input: {
   let manifestR2Key = input.publishResult?.manifestR2Key;
   let publicPath = input.publishResult?.publicPath;
   let releaseId = input.publishResult?.releaseId;
+  let theme: string | undefined;
 
   if (!manifestR2Key) {
     const rows = await db
       .select({
-        subdomain: hub.subdomain,
-        liveReleaseId: hub.liveReleaseId,
-        manifestR2Key: release.manifestR2Key,
-        releaseId: release.id,
+      subdomain: hub.subdomain,
+      theme: hub.theme,
+      liveReleaseId: hub.liveReleaseId,
+      manifestR2Key: release.manifestR2Key,
+      releaseId: release.id,
       })
       .from(hub)
       .innerJoin(release, eq(release.id, hub.liveReleaseId))
@@ -150,7 +159,16 @@ async function verifyPublishedManifest(input: {
     manifestR2Key = row.manifestR2Key;
     publicPath = `/h/${row.subdomain}`;
     releaseId = row.releaseId;
+    theme = row.theme;
+  } else {
+    const rows = await db
+      .select({ theme: hub.theme })
+      .from(hub)
+      .where(eq(hub.id, input.publishResult!.hubId))
+      .limit(1);
+    theme = rows[0]?.theme;
   }
+  assert(theme === input.expectedTheme, `Expected published hub theme ${input.expectedTheme}, got ${String(theme)}.`);
 
   const manifestObject = await r2.getObject(manifestR2Key);
   const manifest = releaseManifestV0Schema.parse(
@@ -169,6 +187,7 @@ async function verifyPublishedManifest(input: {
     releaseId,
     manifestR2Key,
     publicPath,
+    theme,
     pageCount: manifest.pages.length,
     sourceRefCount: sourceRefs.length,
   };
@@ -194,6 +213,7 @@ async function main() {
       pipelineVersion: generationRun.pipelineVersion,
       status: generationRun.status,
       projectTitle: project.title,
+      projectConfig: project.config,
     })
     .from(generationRun)
     .innerJoin(project, eq(project.id, generationRun.projectId))
@@ -247,6 +267,7 @@ async function main() {
     workspaceId: run.workspaceId,
     projectId: run.projectId,
     runId: run.id,
+    expectedTheme: normalizeTheme((run.projectConfig as { presentation_preset?: unknown } | null)?.presentation_preset),
     publishResult,
   });
 

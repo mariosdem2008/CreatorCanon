@@ -41,6 +41,18 @@ type BlockTree = {
   }>;
 };
 
+type HubTheme = 'paper' | 'midnight' | 'field';
+
+type ProjectConfigWithTheme = {
+  presentation_preset?: unknown;
+};
+
+function normalizeHubTheme(value: unknown): HubTheme {
+  if (value === 'midnight' || value === 'playbook') return 'midnight';
+  if (value === 'field' || value === 'guided') return 'field';
+  return 'paper';
+}
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -77,6 +89,7 @@ async function getOrCreateHub(input: {
   workspaceId: string;
   projectId: string;
   title: string;
+  theme: HubTheme;
 }) {
   const db = getDb();
   const existing = await db
@@ -85,7 +98,17 @@ async function getOrCreateHub(input: {
     .where(and(eq(hub.projectId, input.projectId), eq(hub.workspaceId, input.workspaceId)))
     .limit(1);
 
-  if (existing[0]) return existing[0];
+  if (existing[0]) {
+    if (existing[0].theme !== input.theme) {
+      await db
+        .update(hub)
+        .set({ theme: input.theme, updatedAt: new Date() })
+        .where(eq(hub.id, existing[0].id));
+      const updated = await db.select().from(hub).where(eq(hub.id, existing[0].id)).limit(1);
+      return updated[0]!;
+    }
+    return existing[0];
+  }
 
   const subdomain = await pickSubdomain(input);
   const hubId = crypto.randomUUID();
@@ -96,7 +119,7 @@ async function getOrCreateHub(input: {
     workspaceId: input.workspaceId,
     projectId: input.projectId,
     subdomain,
-    theme: 'paper',
+    theme: input.theme,
     accessMode: 'public',
     freePreview: 'all',
     createdAt: now,
@@ -188,10 +211,13 @@ export async function publishRunAsHub(
     throw new Error(`Cannot publish a run with status ${runRow.status}.`);
   }
 
+  const projectConfig = projectRow.config as ProjectConfigWithTheme | null;
+  const theme = normalizeHubTheme(projectConfig?.presentation_preset);
   const hubRow = await getOrCreateHub({
     workspaceId: input.workspaceId,
     projectId: input.projectId,
     title: projectRow.title,
+    theme,
   });
 
   const existingLive = await db

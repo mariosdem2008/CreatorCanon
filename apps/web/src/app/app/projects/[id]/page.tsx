@@ -13,6 +13,7 @@ import {
   videoSetItem,
   workspaceMember,
 } from '@creatorcanon/db/schema';
+import { getHubTemplate } from '@/components/hub/templates';
 import { RefreshButton } from './RefreshButton';
 import { publishCurrentRun } from './publish';
 
@@ -104,6 +105,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   const proj = projects[0];
   if (!proj || proj.workspaceId !== workspaceId) redirect('/app');
+  const selectedTemplate = getHubTemplate(proj.config?.presentation_preset);
 
   const runs = proj.currentRunId
     ? await db.select().from(generationRun).where(eq(generationRun.id, proj.currentRunId)).limit(1)
@@ -152,12 +154,13 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const draftPagesReady = parsedDraftPages?.success === true && persistedPages.length > 0;
   const publishedHubs = proj.publishedHubId
     ? await db
-        .select({ subdomain: hub.subdomain })
+        .select({ subdomain: hub.subdomain, theme: hub.theme })
         .from(hub)
         .where(eq(hub.id, proj.publishedHubId))
         .limit(1)
     : [];
   const publishedSubdomain = publishedHubs[0]?.subdomain;
+  const publishedTemplate = getHubTemplate(publishedHubs[0]?.theme ?? selectedTemplate.id);
 
   return (
     <main className="min-h-screen bg-paper-studio">
@@ -286,14 +289,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 <div>
                   <p className="text-body-sm font-medium text-ink">Ready to publish a local preview</p>
                   <p className="text-caption text-ink-4">
-                    This creates a public read-only hub from the current draft pages.
+                    This creates a public read-only hub using {selectedTemplate.name}.
                   </p>
                 </div>
                 <button
                   type="submit"
                   className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
                 >
-                  Publish local preview hub
+                  Publish preview hub with {selectedTemplate.name}
                 </button>
               </div>
             </form>
@@ -304,7 +307,9 @@ export default async function ProjectPage({ params }: { params: { id: string } }
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-body-sm font-medium text-ink">Published preview hub</p>
-                  <p className="font-mono text-caption text-ink-4">/h/{publishedSubdomain}</p>
+                  <p className="text-caption text-ink-4">
+                    {publishedTemplate.name} / <span className="font-mono">/h/{publishedSubdomain}</span>
+                  </p>
                 </div>
                 <Link
                   href={`/h/${publishedSubdomain}`}
@@ -388,6 +393,10 @@ export default async function ProjectPage({ params }: { params: { id: string } }
               <div className="flex gap-3">
                 <dt className="w-28 shrink-0 text-ink-4">Depth</dt>
                 <dd className="text-ink capitalize">{String(proj.config.length_preset ?? 'standard')}</dd>
+              </div>
+              <div className="flex gap-3">
+                <dt className="w-28 shrink-0 text-ink-4">Template</dt>
+                <dd className="text-ink">{selectedTemplate.name}</dd>
               </div>
               <div className="flex gap-3">
                 <dt className="w-28 shrink-0 text-ink-4">Chat</dt>

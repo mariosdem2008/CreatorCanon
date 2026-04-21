@@ -14,6 +14,7 @@ export async function loadHubManifest(subdomain: string) {
     .select({
       id: hub.id,
       subdomain: hub.subdomain,
+      theme: hub.theme,
       liveReleaseId: hub.liveReleaseId,
       deletedAt: hub.deletedAt,
     })

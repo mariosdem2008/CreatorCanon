@@ -98,11 +98,13 @@ async function run() {
   assert(pages.length > 0, 'Expected draft page rows to exist.');
 
   const projects = await db
-    .select({ id: project.id, currentRunId: project.currentRunId })
+    .select({ id: project.id, currentRunId: project.currentRunId, config: project.config })
     .from(project)
     .where(and(eq(project.id, PROJECT_ID), eq(project.currentRunId, RUN_ID)))
     .limit(1);
   assert(projects[0], 'Expected seeded project to point at the smoke run.');
+  const presentationPreset = (projects[0].config as { presentation_preset?: unknown } | null)?.presentation_preset;
+  assert(presentationPreset === 'midnight', `Expected local smoke preset midnight, got ${String(presentationPreset)}.`);
 
   const publishResult = await publishRunAsHub({
     workspaceId: WORKSPACE_ID,
@@ -122,6 +124,7 @@ async function run() {
     .select({
       id: hub.id,
       subdomain: hub.subdomain,
+      theme: hub.theme,
       liveReleaseId: hub.liveReleaseId,
     })
     .from(hub)
@@ -129,6 +132,7 @@ async function run() {
     .limit(1);
   assert(hubs[0], 'Expected published hub to exist.');
   assert(hubs[0].subdomain === 'local-smoke-knowledge-hub', `Unexpected smoke hub subdomain ${hubs[0].subdomain}.`);
+  assert(hubs[0].theme === 'midnight', `Expected smoke hub theme midnight, got ${hubs[0].theme}.`);
   assert(hubs[0].liveReleaseId === publishResult.releaseId, 'Expected hub live release to match publish result.');
 
   const releases = await db

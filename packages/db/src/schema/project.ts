@@ -96,7 +96,7 @@ export const project = pgTable(
       tone?: string;
       length_preset?: 'short' | 'standard' | 'deep';
       chat_enabled?: boolean;
-      presentation_preset?: 'reference' | 'playbook' | 'guided';
+      presentation_preset?: 'paper' | 'midnight' | 'field' | 'reference' | 'playbook' | 'guided';
       [k: string]: unknown;
     }>(),
     /** FK added post-migration to avoid cyclic import with `run`. */

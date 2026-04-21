@@ -6,6 +6,7 @@ import { estimateRunPriceCents, formatUsdCents } from '@creatorcanon/core';
 import { eq, getDb, inArray } from '@creatorcanon/db';
 import { video, workspaceMember } from '@creatorcanon/db/schema';
 
+import { HUB_TEMPLATE_OPTIONS } from '@/components/hub/templates';
 import { createProject } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -162,6 +163,38 @@ export default async function ConfigurePage({
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Presentation preset */}
+          <div>
+            <label className="mb-1.5 block text-body-sm font-medium text-ink">
+              Hub template
+            </label>
+            <div className="grid gap-3 md:grid-cols-3">
+              {HUB_TEMPLATE_OPTIONS.map((template) => (
+                <label
+                  key={template.id}
+                  className={`flex min-h-[160px] cursor-pointer flex-col rounded-lg border p-4 text-body-sm transition ${template.configureClassName}`}
+                >
+                  <input
+                    type="radio"
+                    name="presentation_preset"
+                    value={template.id}
+                    defaultChecked={template.id === 'paper'}
+                    className="sr-only"
+                  />
+                  <span className="text-caption uppercase tracking-widest opacity-70">
+                    {template.previewLabel}
+                  </span>
+                  <span className="mt-3 text-body-md font-medium">{template.name}</span>
+                  <span className="mt-2 leading-6 opacity-75">{template.tagline}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-caption text-ink-4">
+              This controls the public hub layout after publishing. You can keep the generated
+              content contract identical while changing the reader experience.
+            </p>
           </div>
 
           {/* Chat toggle */}

@@ -680,7 +680,7 @@ async function seedAlphaData(): Promise<{ userEmail: string; resolvedUserId: str
         tone: 'technical',
         length_preset: 'standard',
         chat_enabled: false,
-        presentation_preset: 'reference',
+        presentation_preset: 'paper',
       },
       currentRunId: RUN_ID,
       createdAt: now,

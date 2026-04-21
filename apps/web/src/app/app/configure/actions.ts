@@ -14,6 +14,8 @@ import {
 } from '@creatorcanon/db/schema';
 import { PIPELINE_VERSION, estimateRunPriceCents } from '@creatorcanon/core';
 
+const PRESENTATION_PRESETS = new Set(['paper', 'midnight', 'field']);
+
 export async function createProject(formData: FormData): Promise<{ error: string }> {
   const session = await auth();
   if (!session?.user?.id) return { error: 'Not authenticated' };
@@ -36,6 +38,10 @@ export async function createProject(formData: FormData): Promise<{ error: string
   const audience = (formData.get('audience') as string | null)?.trim() ?? '';
   const tone = (formData.get('tone') as string | null) ?? 'conversational';
   const lengthPreset = (formData.get('length_preset') as string | null) ?? 'standard';
+  const presentationPresetRaw = (formData.get('presentation_preset') as string | null) ?? 'paper';
+  const presentationPreset = PRESENTATION_PRESETS.has(presentationPresetRaw)
+    ? (presentationPresetRaw as 'paper' | 'midnight' | 'field')
+    : 'paper';
   const chatEnabled = formData.get('chat_enabled') === 'true';
   const idsRaw = (formData.get('video_ids') as string | null) ?? '';
   const videoIds = idsRaw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -83,11 +89,20 @@ export async function createProject(formData: FormData): Promise<{ error: string
       tone,
       length_preset: lengthPreset as 'short' | 'standard' | 'deep',
       chat_enabled: chatEnabled,
+      presentation_preset: presentationPreset,
     },
   });
 
   const runId = crypto.randomUUID();
-  const configHash = await hashConfig({ title, audience, tone, lengthPreset, chatEnabled, videoIds });
+  const configHash = await hashConfig({
+    title,
+    audience,
+    tone,
+    lengthPreset,
+    presentationPreset,
+    chatEnabled,
+    videoIds,
+  });
   const priceCents = estimateRunPriceCents(totalDurationSeconds);
   await db.insert(generationRun).values({
     id: runId,

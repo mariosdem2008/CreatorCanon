@@ -12,6 +12,7 @@ import {
   workspaceMember,
 } from '@creatorcanon/db/schema';
 import { EvidenceChips, type SourceReferenceView } from '@/components/hub/EvidenceChips';
+import { getHubTemplate } from '@/components/hub/templates';
 import { publishCurrentRun } from '../publish';
 
 export const dynamic = 'force-dynamic';
@@ -56,6 +57,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
 
   const proj = projects[0];
   if (!proj || proj.workspaceId !== workspaceId) redirect('/app');
+  const selectedTemplate = getHubTemplate(proj.config?.presentation_preset);
 
   const runs = proj.currentRunId
     ? await db.select().from(generationRun).where(eq(generationRun.id, proj.currentRunId)).limit(1)
@@ -94,12 +96,13 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
   const versionMap = new Map(versions.map((version) => [version.id, version]));
   const publishedHubs = proj.publishedHubId
     ? await db
-        .select({ subdomain: hub.subdomain })
+        .select({ subdomain: hub.subdomain, theme: hub.theme })
         .from(hub)
         .where(eq(hub.id, proj.publishedHubId))
         .limit(1)
     : [];
   const publishedSubdomain = publishedHubs[0]?.subdomain;
+  const publishedTemplate = getHubTemplate(publishedHubs[0]?.theme ?? selectedTemplate.id);
   const canPublish = run?.status === 'awaiting_review' && pages.length > 0;
 
   return (
@@ -145,13 +148,24 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
               ? `Status: ${run.status}. Draft pages appear here after the pipeline persists them.`
               : 'No generation run was found for this project yet.'}
           </p>
+          <p className="mt-2 text-body-sm text-ink-4">
+            Selected template: <span className="font-medium text-ink">{selectedTemplate.name}</span> - {selectedTemplate.tagline}
+          </p>
+          {publishedSubdomain && (
+            <p className="mt-2 text-body-sm text-ink-4">
+              Published with <span className="font-medium text-ink">{publishedTemplate.name}</span> at{' '}
+              <Link href={`/h/${publishedSubdomain}`} className="font-mono text-ink underline">
+                /h/{publishedSubdomain}
+              </Link>
+            </p>
+          )}
           {canPublish && (
             <form action={publishCurrentRun.bind(null, params.id)} className="mt-4">
               <button
                 type="submit"
                 className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
               >
-                Publish local preview hub
+                Publish with {selectedTemplate.name}
               </button>
             </form>
           )}
@@ -209,7 +223,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                       <p className="mt-2 text-body-sm leading-6 text-ink-2">
                         {content.body ?? 'No section body was generated.'}
                       </p>
-                      <EvidenceChips refs={content.sourceRefs} />
+                      <EvidenceChips refs={content.sourceRefs} variant={selectedTemplate.evidenceVariant} />
                     </section>
                   );
                 }) : (
