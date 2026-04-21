@@ -39,6 +39,17 @@ function blankOptionalToUndefined(raw: NodeJS.ProcessEnv) {
   );
 }
 
+function formatError(error: unknown, fallback: string): string {
+  if (error instanceof AggregateError) {
+    const messages = error.errors
+      .map((item) => item instanceof Error ? item.message : String(item))
+      .filter(Boolean);
+    return messages.length > 0 ? messages.join('; ') : fallback;
+  }
+  if (error instanceof Error) return error.message || fallback;
+  return String(error || fallback);
+}
+
 async function main() {
   loadDefaultEnvFiles();
   const isLocalSmokeMode =
@@ -130,7 +141,7 @@ async function main() {
       record(
         'database:connectivity',
         'fail',
-        error instanceof Error ? error.message : 'Database connection failed.',
+        formatError(error, 'Database connection failed.'),
       );
     }
 
@@ -146,7 +157,7 @@ async function main() {
       record(
         'artifacts:list',
         'fail',
-        error instanceof Error ? error.message : 'Artifact storage check failed.',
+        formatError(error, 'Artifact storage check failed.'),
       );
     }
 
@@ -161,7 +172,7 @@ async function main() {
         record(
           'stripe:api',
           'fail',
-          error instanceof Error ? error.message : 'Stripe API check failed.',
+          formatError(error, 'Stripe API check failed.'),
         );
       }
     }

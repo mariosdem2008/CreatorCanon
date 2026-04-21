@@ -19,6 +19,7 @@
     "env:doctor": "tsx ./src/env-doctor.ts",
     "smoke:alpha": "tsx ./src/smoke-alpha.ts",
     "smoke:local": "tsx ./src/smoke-local.ts",
+    "run:alpha:e2e": "tsx ./src/run-alpha-e2e.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {

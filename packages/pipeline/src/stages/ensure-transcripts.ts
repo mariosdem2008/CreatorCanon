@@ -83,6 +83,77 @@ async function downloadVtt(
   return text;
 }
 
+/**
+ * Strategy 3: Parse the YouTube watch page for `ytInitialPlayerResponse` and
+ * extract caption track base URLs from the `captionTracks` array.
+ * This is the most reliable approach for modern YouTube videos whose ASR
+ * captions are not served through the unofficial timedtext API.
+ */
+async function fetchVttViaWatchPage(youtubeVideoId: string): Promise<{ vtt: string; lang: string } | null> {
+  const watchUrl = `https://www.youtube.com/watch?v=${youtubeVideoId}&hl=en`;
+  let html: string;
+  try {
+    const res = await fetch(watchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return null;
+    html = await res.text();
+  } catch {
+    return null;
+  }
+
+  // Extract ytInitialPlayerResponse JSON from the page
+  const match = html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\})(?:;\s*(?:var|const|let)\s|;\s*<\/script>)/s);
+  if (!match?.[1]) return null;
+
+  let playerResponse: unknown;
+  try {
+    playerResponse = JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+
+  // Navigate into captionTracks
+  const captions = (playerResponse as Record<string, unknown>)?.captions;
+  if (!captions || typeof captions !== 'object') return null;
+  const renderer = (captions as Record<string, unknown>)?.playerCaptionsTracklistRenderer;
+  if (!renderer || typeof renderer !== 'object') return null;
+  const tracks = (renderer as Record<string, unknown>)?.captionTracks;
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
+
+  type CaptionTrack = { baseUrl?: string; languageCode?: string; kind?: string; name?: { simpleText?: string } };
+  const typedTracks = tracks as CaptionTrack[];
+
+  // Pick best: prefer manual English, then ASR English, then any manual, then first
+  const pick =
+    typedTracks.find((t) => t.languageCode === 'en' && t.kind !== 'asr') ??
+    typedTracks.find((t) => t.languageCode === 'en') ??
+    typedTracks.find((t) => t.kind !== 'asr') ??
+    typedTracks[0];
+
+  if (!pick?.baseUrl) return null;
+
+  // Convert to VTT format by appending fmt=vtt
+  const vttUrl = `${pick.baseUrl}&fmt=vtt`;
+  try {
+    const res = await fetch(vttUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text.trim().startsWith('WEBVTT')) return null;
+    return { vtt: text, lang: pick.languageCode ?? 'en' };
+  } catch {
+    return null;
+  }
+}
+
 function countWords(vttContent: string): number {
   const lines = vttContent.split('\n');
   const textLines = lines.filter(
@@ -149,6 +220,7 @@ export async function ensureTranscripts(
     const provider: TranscriptResult['provider'] = 'youtube_timedtext';
 
     try {
+      // Strategy 1: Use the track-list API to discover available tracks.
       const tracks = await listTimedtextTracks(vid.youtubeVideoId);
       const best = pickBestTrack(tracks);
       if (best) {
@@ -157,8 +229,40 @@ export async function ensureTranscripts(
         if (!vttContent) {
           skipReason = `Caption track was found (${best.lang}), but timedtext download did not return usable VTT.`;
         }
-      } else {
-        skipReason = 'No public YouTube caption tracks were found for this video.';
+      }
+
+      // Strategy 2 (fallback): The track-list API returns empty for many newer videos whose
+      // captions are served through YouTube's ASR pipeline. Try direct VTT endpoints instead.
+      if (!vttContent) {
+        // 2a — Manual/translated English captions
+        vttContent = await downloadVtt(vid.youtubeVideoId, 'en', 'standard', '');
+        if (vttContent) {
+          chosenLang = 'en';
+        }
+      }
+      if (!vttContent) {
+        // 2b — Auto-generated ASR English captions
+        vttContent = await downloadVtt(vid.youtubeVideoId, 'en', 'asr', '');
+        if (vttContent) {
+          chosenLang = 'en';
+        }
+      }
+
+      // Strategy 3 (final fallback): Parse ytInitialPlayerResponse from the watch page.
+      // Modern YouTube serves ASR captions at signed baseUrls that aren't exposed by
+      // the timedtext API — only discoverable via the watch page's player response JSON.
+      if (!vttContent) {
+        const watchResult = await fetchVttViaWatchPage(vid.youtubeVideoId);
+        if (watchResult) {
+          vttContent = watchResult.vtt;
+          chosenLang = watchResult.lang;
+        }
+      }
+
+      if (!vttContent) {
+        skipReason = tracks.length > 0
+          ? `Caption track was found (${tracks.map((t) => t.lang).join(', ')}), but all VTT downloads returned empty content (tried timedtext API, direct ASR, and watch-page ytInitialPlayerResponse).`
+          : 'No public YouTube caption tracks were found for this video (timedtext list API, direct ASR fallback, and watch-page ytInitialPlayerResponse all returned empty).';
       }
     } catch (error) {
       skipReason = error instanceof Error

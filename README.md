@@ -50,6 +50,16 @@ runs migrations, verifies R2 put/get/delete, creates a Stripe test Checkout
 session, runs the selected generation run if it is not already published,
 publishes the hub, and verifies the release manifest includes source refs.
 
+For an operator-owned seeded demo that avoids Google login, use:
+
+```powershell
+$env:ALPHA_E2E_CONFIRM="true"
+pnpm alpha:e2e
+```
+
+`alpha:e2e` writes fixed alpha seed rows and artifacts. It refuses to run
+against a non-local database or R2 bucket unless `ALPHA_E2E_CONFIRM=true`.
+
 ## Scripts
 
 | Command             | What it does                                     |
@@ -65,6 +75,7 @@ publishes the hub, and verifies the release manifest includes source refs.
 | `pnpm smoke:local`  | Deterministic local end-to-end smoke             |
 | `pnpm env:doctor`   | Read-only alpha environment readiness check      |
 | `pnpm smoke:alpha`  | Real-service alpha smoke for a selected run      |
+| `pnpm alpha:e2e`    | Seeded alpha demo against explicit target env    |
 | `pnpm format`       | Formats the workspace                            |
 
 ## Environment
