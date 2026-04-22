@@ -19,6 +19,7 @@
     "env:doctor": "tsx ./src/env-doctor.ts",
     "smoke:alpha": "tsx ./src/smoke-alpha.ts",
     "smoke:browser:local": "tsx ./src/smoke-browser-local.ts",
+    "smoke:audio-fixtures": "tsx ./src/smoke-audio-fixtures.ts",
     "smoke:local": "tsx ./src/smoke-local.ts",
     "seed:audio-fixtures": "tsx ./src/seed-audio-fixtures.ts",
     "run:alpha:e2e": "tsx ./src/run-alpha-e2e.ts",

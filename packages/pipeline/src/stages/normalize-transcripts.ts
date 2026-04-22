@@ -1,4 +1,4 @@
-import { eq, getDb } from '@creatorcanon/db';
+import { and, eq, getDb } from '@creatorcanon/db';
 import { normalizedTranscriptVersion, transcriptAsset } from '@creatorcanon/db/schema';
 import { createR2Client, artifactKey } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
@@ -127,7 +127,11 @@ export async function normalizeTranscripts(
     const assetRows = await db
       .select({ id: transcriptAsset.id })
       .from(transcriptAsset)
-      .where(eq(transcriptAsset.videoId, transcript.videoId))
+      .where(and(
+        eq(transcriptAsset.videoId, transcript.videoId),
+        eq(transcriptAsset.r2Key, transcript.r2Key),
+        eq(transcriptAsset.isCanonical, true),
+      ))
       .limit(1);
 
     const assetId = assetRows[0]?.id;

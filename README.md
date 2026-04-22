@@ -48,6 +48,8 @@ To prove the transcription fallback without scraping YouTube audio, place short
 `pnpm dev:seed:audio-fixtures`. By default, sorted files map to
 `local-smoke-video-1..3`; optionally add `.local/audio-fixtures/manifest.json`
 with `videoId`, `filename`, and optional `durationSeconds` fields.
+Then run `pnpm smoke:audio-fixtures` to force one audio-backed video through
+transcription, normalization, segmentation, and source-ready transcript storage.
 
 ## Private-Alpha Smoke
 
@@ -90,6 +92,7 @@ against a non-local database or R2 bucket unless `ALPHA_E2E_CONFIRM=true`.
 | `pnpm smoke:browser:local` | Deterministic local browser smoke for MVP routes |
 | `pnpm smoke:all:local` | Resets DB, runs local pipeline smoke, then browser smoke |
 | `pnpm dev:seed:audio-fixtures` | Seeds local `.m4a` fixtures as reusable audio assets |
+| `pnpm smoke:audio-fixtures` | Verifies audio fixture transcription reaches segments |
 | `pnpm env:doctor`   | Read-only alpha environment readiness check      |
 | `pnpm smoke:alpha`  | Real-service alpha smoke for a selected run      |
 | `pnpm alpha:e2e`    | Seeded alpha demo against explicit target env    |

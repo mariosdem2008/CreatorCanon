@@ -50,6 +50,31 @@ function formatError(error: unknown, fallback: string): string {
   return String(error || fallback);
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  opts: { attempts: number; baseDelayMs: number },
+): Promise<{ value: T; attemptsUsed: number }> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= opts.attempts; attempt++) {
+    try {
+      return { value: await operation(), attemptsUsed: attempt };
+    } catch (error) {
+      lastError = error;
+      await closeDb().catch(() => undefined);
+      if (attempt < opts.attempts) {
+        await wait(opts.baseDelayMs * attempt);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 async function main() {
   loadDefaultEnvFiles();
   const isLocalSmokeMode =
@@ -134,9 +159,20 @@ async function main() {
 
   if (serverParsed.success) {
     try {
-      const db = getDb(serverParsed.data.DATABASE_URL);
-      await db.execute(sql`select 1`);
-      record('database:connectivity', 'pass', 'Database connection succeeded.');
+      const result = await withRetry(
+        async () => {
+          const db = getDb(serverParsed.data.DATABASE_URL);
+          await db.execute(sql`select 1`);
+        },
+        { attempts: 3, baseDelayMs: 1000 },
+      );
+      record(
+        'database:connectivity',
+        'pass',
+        result.attemptsUsed > 1
+          ? `Database connection succeeded after ${result.attemptsUsed} attempts.`
+          : 'Database connection succeeded.',
+      );
     } catch (error) {
       record(
         'database:connectivity',
