@@ -43,6 +43,12 @@ under ignored `.local/browser-smoke/`. It verifies the creator app, project
 review/pages, admin run rescue routes, the public hub, the public page, and all
 three hub templates by switching only the seeded local hub theme.
 
+To prove the transcription fallback without scraping YouTube audio, place short
+`.m4a` files under `.local/audio-fixtures/` and run
+`pnpm dev:seed:audio-fixtures`. By default, sorted files map to
+`local-smoke-video-1..3`; optionally add `.local/audio-fixtures/manifest.json`
+with `videoId`, `filename`, and optional `durationSeconds` fields.
+
 ## Private-Alpha Smoke
 
 Use this after real test/preview env keys are configured:
@@ -83,6 +89,7 @@ against a non-local database or R2 bucket unless `ALPHA_E2E_CONFIRM=true`.
 | `pnpm smoke:local`  | Deterministic local end-to-end smoke             |
 | `pnpm smoke:browser:local` | Deterministic local browser smoke for MVP routes |
 | `pnpm smoke:all:local` | Resets DB, runs local pipeline smoke, then browser smoke |
+| `pnpm dev:seed:audio-fixtures` | Seeds local `.m4a` fixtures as reusable audio assets |
 | `pnpm env:doctor`   | Read-only alpha environment readiness check      |
 | `pnpm smoke:alpha`  | Real-service alpha smoke for a selected run      |
 | `pnpm alpha:e2e`    | Seeded alpha demo against explicit target env    |

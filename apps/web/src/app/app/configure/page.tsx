@@ -45,6 +45,7 @@ function sourceCoverageCopy(coverage: SourceCoverageSummary) {
 function readinessLabel(label: SourceCoverageSummary['videos'][number]['readinessLabel']): string {
   if (label === 'source_ready') return 'Source ready';
   if (label === 'auto_captions') return 'Auto captions';
+  if (label === 'needs_transcription') return 'Needs transcription';
   if (label === 'limited_source') return 'Limited source';
   return 'Needs transcript check';
 }
@@ -82,7 +83,8 @@ export default async function ConfigurePage({
   const sourceCoverage = await getSourceCoverage({ workspaceId: members[0].workspaceId, videoIds });
   const coverageCopy = sourceCoverageCopy(sourceCoverage);
   const hasUnknownVideos = sourceCoverage.unknownCount > 0;
-  const requiresLimitedSourceConfirmation = sourceCoverage.readyCount === 0;
+  const coveredCount = sourceCoverage.readyCount + sourceCoverage.transcribableCount;
+  const requiresLimitedSourceConfirmation = coveredCount === 0;
   const showSourceRequiredError = searchParams?.error === 'source_required';
 
   return (
@@ -149,6 +151,9 @@ export default async function ConfigurePage({
               <div className="mt-3 flex flex-wrap gap-2 text-caption">
                 <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
                   {sourceCoverage.readyCount} ready
+                </span>
+                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
+                  {sourceCoverage.transcribableCount} needs transcription
                 </span>
                 <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
                   {sourceCoverage.unknownCount} unchecked

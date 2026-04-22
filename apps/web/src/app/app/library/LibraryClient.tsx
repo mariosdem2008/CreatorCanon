@@ -25,6 +25,7 @@ export interface VideoRow {
   thumbnailUrl: string | null;
   captionStatus: 'available' | 'auto_only' | 'none' | 'unknown';
   hasCanonicalTranscript: boolean;
+  hasAudioAsset: boolean;
   categories: string[];
 }
 
@@ -61,9 +62,11 @@ function estimatePrice(totalSeconds: number): string {
 function CaptionChip({
   status,
   hasCanonicalTranscript,
+  hasAudioAsset,
 }: {
   status: VideoRow['captionStatus'];
   hasCanonicalTranscript: boolean;
+  hasAudioAsset: boolean;
 }) {
   if (hasCanonicalTranscript || status === 'available') {
     return (
@@ -76,6 +79,13 @@ function CaptionChip({
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-medium text-amber-ink">
         Auto captions
+      </span>
+    );
+  }
+  if (hasAudioAsset) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-medium text-amber-ink">
+        Needs transcription
       </span>
     );
   }
@@ -400,7 +410,11 @@ export default function LibraryClient({
                       {v.title ?? 'Untitled'}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <CaptionChip status={v.captionStatus} hasCanonicalTranscript={v.hasCanonicalTranscript} />
+                      <CaptionChip
+                        status={v.captionStatus}
+                        hasCanonicalTranscript={v.hasCanonicalTranscript}
+                        hasAudioAsset={v.hasAudioAsset}
+                      />
                       {v.categories[0] && (
                         <span className="inline-flex items-center rounded-full bg-paper-3 px-2 py-0.5 text-[10px] text-ink-3">
                           {v.categories[0]}
@@ -482,7 +496,11 @@ export default function LibraryClient({
                     )}
                   </div>
                   <div className="mt-1">
-                    <CaptionChip status={v.captionStatus} hasCanonicalTranscript={v.hasCanonicalTranscript} />
+                    <CaptionChip
+                      status={v.captionStatus}
+                      hasCanonicalTranscript={v.hasCanonicalTranscript}
+                      hasAudioAsset={v.hasAudioAsset}
+                    />
                   </div>
                 </button>
               );

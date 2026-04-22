@@ -1,5 +1,5 @@
 import { and, eq, getDb, inArray } from '@creatorcanon/db';
-import { transcriptAsset, video } from '@creatorcanon/db/schema';
+import { mediaAsset, transcriptAsset, video } from '@creatorcanon/db/schema';
 
 import { ensureTranscripts } from './stages/ensure-transcripts';
 
@@ -7,6 +7,7 @@ export type EstimatedSourceQuality = 'strong' | 'partial' | 'limited';
 export type SourceReadinessLabel =
   | 'source_ready'
   | 'auto_captions'
+  | 'needs_transcription'
   | 'needs_transcript_check'
   | 'limited_source';
 
@@ -16,12 +17,14 @@ export interface SourceCoverageVideo {
   title: string | null;
   captionStatus: 'available' | 'auto_only' | 'none' | 'unknown';
   hasCanonicalTranscript: boolean;
+  hasAudioAsset: boolean;
   readinessLabel: SourceReadinessLabel;
 }
 
 export interface SourceCoverageSummary {
   selectedCount: number;
   readyCount: number;
+  transcribableCount: number;
   unknownCount: number;
   unavailableCount: number;
   estimatedSourceQuality: EstimatedSourceQuality;
@@ -31,9 +34,11 @@ export interface SourceCoverageSummary {
 function readinessFor(input: {
   captionStatus: SourceCoverageVideo['captionStatus'];
   hasCanonicalTranscript: boolean;
+  hasAudioAsset: boolean;
 }): SourceReadinessLabel {
   if (input.hasCanonicalTranscript || input.captionStatus === 'available') return 'source_ready';
   if (input.captionStatus === 'auto_only') return 'auto_captions';
+  if (input.hasAudioAsset) return 'needs_transcription';
   if (input.captionStatus === 'none') return 'limited_source';
   return 'needs_transcript_check';
 }
@@ -42,8 +47,9 @@ function isReady(label: SourceReadinessLabel): boolean {
   return label === 'source_ready' || label === 'auto_captions';
 }
 
-function qualityFor(selectedCount: number, readyCount: number): EstimatedSourceQuality {
-  if (selectedCount === 0 || readyCount === 0) return 'limited';
+function qualityFor(selectedCount: number, readyCount: number, transcribableCount: number): EstimatedSourceQuality {
+  const coveredCount = readyCount + transcribableCount;
+  if (selectedCount === 0 || coveredCount === 0) return 'limited';
   if (readyCount === selectedCount) return 'strong';
   return 'partial';
 }
@@ -57,6 +63,7 @@ export async function getSourceCoverage(input: {
     return {
       selectedCount: 0,
       readyCount: 0,
+      transcribableCount: 0,
       unknownCount: 0,
       unavailableCount: 0,
       estimatedSourceQuality: 'limited',
@@ -79,6 +86,7 @@ export async function getSourceCoverage(input: {
     return {
       selectedCount: 0,
       readyCount: 0,
+      transcribableCount: 0,
       unknownCount: 0,
       unavailableCount: 0,
       estimatedSourceQuality: 'limited',
@@ -97,15 +105,29 @@ export async function getSourceCoverage(input: {
       ),
     );
 
+  const audioRows = await db
+    .select({ videoId: mediaAsset.videoId })
+    .from(mediaAsset)
+    .where(
+      and(
+        eq(mediaAsset.workspaceId, input.workspaceId),
+        eq(mediaAsset.type, 'audio_m4a'),
+        inArray(mediaAsset.videoId, videoRows.map((row) => row.id)),
+      ),
+    );
+
   const canonicalVideoIds = new Set(transcriptRows.map((row) => row.videoId));
+  const audioVideoIds = new Set(audioRows.map((row) => row.videoId));
   const videos = ids
     .map((id) => videoRows.find((row) => row.id === id))
     .filter((row): row is NonNullable<typeof row> => row != null)
     .map<SourceCoverageVideo>((row) => {
       const hasCanonicalTranscript = canonicalVideoIds.has(row.id);
+      const hasAudioAsset = audioVideoIds.has(row.id);
       const readinessLabel = readinessFor({
         captionStatus: row.captionStatus,
         hasCanonicalTranscript,
+        hasAudioAsset,
       });
       return {
         videoId: row.id,
@@ -113,20 +135,23 @@ export async function getSourceCoverage(input: {
         title: row.title,
         captionStatus: row.captionStatus,
         hasCanonicalTranscript,
+        hasAudioAsset,
         readinessLabel,
       };
     });
 
   const readyCount = videos.filter((row) => isReady(row.readinessLabel)).length;
+  const transcribableCount = videos.filter((row) => row.readinessLabel === 'needs_transcription').length;
   const unknownCount = videos.filter((row) => row.readinessLabel === 'needs_transcript_check').length;
   const unavailableCount = videos.filter((row) => row.readinessLabel === 'limited_source').length;
 
   return {
     selectedCount: videos.length,
     readyCount,
+    transcribableCount,
     unknownCount,
     unavailableCount,
-    estimatedSourceQuality: qualityFor(videos.length, readyCount),
+    estimatedSourceQuality: qualityFor(videos.length, readyCount, transcribableCount),
     videos,
   };
 }

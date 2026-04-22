@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@creatorcanon/auth';
 import { and, desc, eq, getDb, inArray } from '@creatorcanon/db';
-import { channel, transcriptAsset, video, workspaceMember } from '@creatorcanon/db/schema';
+import { channel, mediaAsset, transcriptAsset, video, workspaceMember } from '@creatorcanon/db/schema';
 
 import LibraryClient, { type VideoRow, type ChannelRow } from './LibraryClient';
 
@@ -64,6 +64,19 @@ export default async function LibraryPage() {
         )
     : [];
   const canonicalVideoIds = new Set(canonicalTranscripts.map((row) => row.videoId));
+  const audioAssets = videos.length > 0
+    ? await db
+        .select({ videoId: mediaAsset.videoId })
+        .from(mediaAsset)
+        .where(
+          and(
+            eq(mediaAsset.workspaceId, workspaceId),
+            eq(mediaAsset.type, 'audio_m4a'),
+            inArray(mediaAsset.videoId, videos.map((v) => v.id)),
+          ),
+        )
+    : [];
+  const audioVideoIds = new Set(audioAssets.map((row) => row.videoId));
 
   const channelRow: ChannelRow = {
     id: ch.id,
@@ -85,6 +98,7 @@ export default async function LibraryPage() {
     thumbnailUrl: v.thumbnails?.medium ?? v.thumbnails?.small ?? null,
     captionStatus: v.captionStatus,
     hasCanonicalTranscript: canonicalVideoIds.has(v.id),
+    hasAudioAsset: audioVideoIds.has(v.id),
     categories: v.categories ?? [],
   }));
 

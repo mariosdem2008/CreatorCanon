@@ -58,7 +58,7 @@ export async function createProject(formData: FormData): Promise<{ error: string
 
   const sourceCoverage = await getSourceCoverage({ workspaceId, videoIds });
   const allowLimitedSource = formData.get('allow_limited_source') === 'true';
-  if (sourceCoverage.readyCount === 0 && !allowLimitedSource) {
+  if (sourceCoverage.readyCount + sourceCoverage.transcribableCount === 0 && !allowLimitedSource) {
     redirect(`/app/configure?ids=${encodeURIComponent(videoIds.join(','))}&error=source_required`);
   }
 
@@ -100,6 +100,7 @@ export async function createProject(formData: FormData): Promise<{ error: string
       source_coverage: {
         selectedCount: sourceCoverage.selectedCount,
         readyCount: sourceCoverage.readyCount,
+        transcribableCount: sourceCoverage.transcribableCount,
         unknownCount: sourceCoverage.unknownCount,
         unavailableCount: sourceCoverage.unavailableCount,
         estimatedSourceQuality: sourceCoverage.estimatedSourceQuality,

@@ -1,6 +1,6 @@
 import { and, eq, getDb } from '@creatorcanon/db';
-import { transcriptAsset, video } from '@creatorcanon/db/schema';
-import { createR2Client, transcriptKey } from '@creatorcanon/adapters';
+import { mediaAsset, transcriptAsset, video } from '@creatorcanon/db/schema';
+import { createOpenAIClient, createR2Client, transcriptKey, type Transcript } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
 
@@ -14,7 +14,7 @@ export interface TranscriptResult {
   videoId: string;
   youtubeVideoId: string;
   r2Key: string;
-  provider: 'youtube_timedtext' | 'whisper' | 'existing';
+  provider: 'youtube_timedtext' | 'gpt-4o-mini-transcribe' | 'existing';
   wordCount: number;
   language: string;
   skipped: boolean;
@@ -167,6 +167,43 @@ function countWords(vttContent: string): number {
   return textLines.join(' ').split(/\s+/).filter(Boolean).length;
 }
 
+function formatTimestamp(ms: number): string {
+  const safeMs = Math.max(0, Math.round(ms));
+  const hours = Math.floor(safeMs / 3_600_000);
+  const minutes = Math.floor((safeMs % 3_600_000) / 60_000);
+  const seconds = Math.floor((safeMs % 60_000) / 1000);
+  const millis = safeMs % 1000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+}
+
+function transcriptToVtt(transcript: Transcript): string {
+  const segments = transcript.segments?.filter((segment) => segment.text.trim()) ?? [];
+  if (segments.length > 0) {
+    return [
+      'WEBVTT',
+      '',
+      ...segments.flatMap((segment, index) => [
+        String(index + 1),
+        `${formatTimestamp(segment.startMs)} --> ${formatTimestamp(Math.max(segment.endMs, segment.startMs + 1000))}`,
+        segment.text.trim(),
+        '',
+      ]),
+    ].join('\n');
+  }
+
+  const text = transcript.text.trim();
+  if (!text) return 'WEBVTT\n';
+  const durationMs = Math.max(30_000, Math.round((transcript.durationSeconds ?? 60) * 1000));
+  return [
+    'WEBVTT',
+    '',
+    '1',
+    `00:00:00.000 --> ${formatTimestamp(durationMs)}`,
+    text,
+    '',
+  ].join('\n');
+}
+
 function pickBestTrack(
   tracks: Array<{ lang: string; name: string; kind: string }>,
 ): { lang: string; name: string; kind: string } | null {
@@ -186,6 +223,7 @@ export async function ensureTranscripts(
   const env = parseServerEnv(process.env);
   const db = getDb();
   const r2 = createR2Client(env);
+  const openai = createOpenAIClient(env);
 
   const results: TranscriptResult[] = [];
 
@@ -219,7 +257,7 @@ export async function ensureTranscripts(
     let chosenLang = 'en';
     let isAutoCaption = false;
     let skipReason = 'No captions available';
-    const provider: TranscriptResult['provider'] = 'youtube_timedtext';
+    let provider: TranscriptResult['provider'] = 'youtube_timedtext';
 
     try {
       // Strategy 1: Use the track-list API to discover available tracks.
@@ -277,6 +315,38 @@ export async function ensureTranscripts(
     }
 
     if (!vttContent) {
+      const audioRows = await db
+        .select({ r2Key: mediaAsset.r2Key })
+        .from(mediaAsset)
+        .where(and(
+          eq(mediaAsset.workspaceId, input.workspaceId),
+          eq(mediaAsset.videoId, vid.id),
+          eq(mediaAsset.type, 'audio_m4a'),
+        ))
+        .limit(1);
+
+      const audioR2Key = audioRows[0]?.r2Key;
+      if (audioR2Key) {
+        try {
+          const audioObject = await r2.getObject(audioR2Key);
+          const transcript = await openai.transcribe({
+            bytes: audioObject.body,
+            filename: `${vid.id}.m4a`,
+            language: 'en',
+          });
+          vttContent = transcriptToVtt(transcript);
+          chosenLang = transcript.language ?? 'en';
+          provider = 'gpt-4o-mini-transcribe';
+          skipReason = '';
+        } catch (error) {
+          skipReason = error instanceof Error
+            ? `Audio transcription failed: ${error.message}`
+            : 'Audio transcription failed for an unknown reason.';
+        }
+      }
+    }
+
+    if (!vttContent) {
       await db.update(video).set({ captionStatus: 'none' }).where(eq(video.id, vid.id));
       results.push({
         videoId: vid.id,
@@ -309,7 +379,7 @@ export async function ensureTranscripts(
       id: crypto.randomUUID(),
       workspaceId: input.workspaceId,
       videoId: vid.id,
-      provider: 'youtube_captions',
+      provider: provider === 'gpt-4o-mini-transcribe' ? 'gpt-4o-mini-transcribe' : 'youtube_captions',
       language: chosenLang,
       r2Key,
       wordCount,
