@@ -6,7 +6,7 @@ import { parseServerEnv } from '@creatorcanon/core';
 import { closeDb, getDb } from '@creatorcanon/db';
 import { mediaAsset } from '@creatorcanon/db/schema';
 
-import { loadDefaultEnvFiles } from './env-files';
+import { loadDefaultEnvFiles, repoRoot } from './env-files';
 
 const DEFAULT_WORKSPACE_ID = 'local-smoke-workspace';
 const DEFAULT_VIDEO_IDS = [
@@ -19,10 +19,6 @@ interface FixtureEntry {
   videoId: string;
   filename: string;
   durationSeconds?: number;
-}
-
-function repoRoot(): string {
-  return path.resolve(process.cwd(), '../..');
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -72,12 +68,26 @@ async function discoverFixtures(fixtureDir: string): Promise<FixtureEntry[]> {
 }
 
 async function main() {
+  const explicitEnv = {
+    artifactStorage: process.env.ARTIFACT_STORAGE,
+    localArtifactDir: process.env.LOCAL_ARTIFACT_DIR,
+    databaseUrl: process.env.DATABASE_URL,
+  };
+
   loadDefaultEnvFiles();
+
+  if (explicitEnv.artifactStorage) process.env.ARTIFACT_STORAGE = explicitEnv.artifactStorage;
+  if (explicitEnv.localArtifactDir) process.env.LOCAL_ARTIFACT_DIR = explicitEnv.localArtifactDir;
+  if (explicitEnv.databaseUrl) process.env.DATABASE_URL = explicitEnv.databaseUrl;
+
   process.env.ARTIFACT_STORAGE ??= 'local';
   process.env.LOCAL_ARTIFACT_DIR ??= '.local/artifacts';
+  if (process.env.ARTIFACT_STORAGE === 'local' && !path.isAbsolute(process.env.LOCAL_ARTIFACT_DIR)) {
+    process.env.LOCAL_ARTIFACT_DIR = path.resolve(repoRoot, process.env.LOCAL_ARTIFACT_DIR);
+  }
 
   const workspaceId = process.env.AUDIO_FIXTURE_WORKSPACE_ID ?? DEFAULT_WORKSPACE_ID;
-  const fixtureDir = path.resolve(repoRoot(), process.env.AUDIO_FIXTURE_DIR ?? '.local/audio-fixtures');
+  const fixtureDir = path.resolve(repoRoot, process.env.AUDIO_FIXTURE_DIR ?? '.local/audio-fixtures');
   const fixtures = await discoverFixtures(fixtureDir);
 
   if (fixtures.length === 0) {

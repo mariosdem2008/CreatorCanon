@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { and, eq, getDb } from '@creatorcanon/db';
 import { closeDb } from '@creatorcanon/db/client';
 import {
@@ -10,7 +12,7 @@ import {
   video,
 } from '@creatorcanon/db/schema';
 
-import { loadDefaultEnvFiles } from './env-files';
+import { loadDefaultEnvFiles, repoRoot } from './env-files';
 import { ensureTranscripts } from './stages/ensure-transcripts';
 import { normalizeTranscripts } from './stages/normalize-transcripts';
 import { segmentTranscripts } from './stages/segment-transcripts';
@@ -23,9 +25,23 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function main() {
+  const explicitEnv = {
+    artifactStorage: process.env.ARTIFACT_STORAGE,
+    localArtifactDir: process.env.LOCAL_ARTIFACT_DIR,
+    databaseUrl: process.env.DATABASE_URL,
+  };
+
   loadDefaultEnvFiles();
+
+  if (explicitEnv.artifactStorage) process.env.ARTIFACT_STORAGE = explicitEnv.artifactStorage;
+  if (explicitEnv.localArtifactDir) process.env.LOCAL_ARTIFACT_DIR = explicitEnv.localArtifactDir;
+  if (explicitEnv.databaseUrl) process.env.DATABASE_URL = explicitEnv.databaseUrl;
+
   process.env.ARTIFACT_STORAGE ??= 'local';
   process.env.LOCAL_ARTIFACT_DIR ??= '.local/artifacts';
+  if (process.env.ARTIFACT_STORAGE === 'local' && !path.isAbsolute(process.env.LOCAL_ARTIFACT_DIR)) {
+    process.env.LOCAL_ARTIFACT_DIR = path.resolve(repoRoot, process.env.LOCAL_ARTIFACT_DIR);
+  }
 
   const isLocalMode = process.env.ARTIFACT_STORAGE === 'local';
   if (!isLocalMode && process.env.AUDIO_FIXTURE_SMOKE_CONFIRM !== 'true') {
