@@ -1,5 +1,5 @@
 import { and, eq, getDb } from '@creatorcanon/db';
-import { transcriptAsset } from '@creatorcanon/db/schema';
+import { transcriptAsset, video } from '@creatorcanon/db/schema';
 import { createR2Client, transcriptKey } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
@@ -89,7 +89,7 @@ async function downloadVtt(
  * This is the most reliable approach for modern YouTube videos whose ASR
  * captions are not served through the unofficial timedtext API.
  */
-async function fetchVttViaWatchPage(youtubeVideoId: string): Promise<{ vtt: string; lang: string } | null> {
+async function fetchVttViaWatchPage(youtubeVideoId: string): Promise<{ vtt: string; lang: string; isAuto: boolean } | null> {
   const watchUrl = `https://www.youtube.com/watch?v=${youtubeVideoId}&hl=en`;
   let html: string;
   try {
@@ -148,7 +148,7 @@ async function fetchVttViaWatchPage(youtubeVideoId: string): Promise<{ vtt: stri
     if (!res.ok) return null;
     const text = await res.text();
     if (!text.trim().startsWith('WEBVTT')) return null;
-    return { vtt: text, lang: pick.languageCode ?? 'en' };
+    return { vtt: text, lang: pick.languageCode ?? 'en', isAuto: pick.kind === 'asr' };
   } catch {
     return null;
   }
@@ -211,11 +211,13 @@ export async function ensureTranscripts(
         language: existing[0].language ?? 'en',
         skipped: false,
       });
+      await db.update(video).set({ captionStatus: 'available' }).where(eq(video.id, vid.id));
       continue;
     }
 
     let vttContent: string | null = null;
     let chosenLang = 'en';
+    let isAutoCaption = false;
     let skipReason = 'No captions available';
     const provider: TranscriptResult['provider'] = 'youtube_timedtext';
 
@@ -226,6 +228,7 @@ export async function ensureTranscripts(
       if (best) {
         vttContent = await downloadVtt(vid.youtubeVideoId, best.lang, best.kind, best.name);
         chosenLang = best.lang;
+        isAutoCaption = best.kind === 'asr';
         if (!vttContent) {
           skipReason = `Caption track was found (${best.lang}), but timedtext download did not return usable VTT.`;
         }
@@ -238,6 +241,7 @@ export async function ensureTranscripts(
         vttContent = await downloadVtt(vid.youtubeVideoId, 'en', 'standard', '');
         if (vttContent) {
           chosenLang = 'en';
+          isAutoCaption = false;
         }
       }
       if (!vttContent) {
@@ -245,6 +249,7 @@ export async function ensureTranscripts(
         vttContent = await downloadVtt(vid.youtubeVideoId, 'en', 'asr', '');
         if (vttContent) {
           chosenLang = 'en';
+          isAutoCaption = true;
         }
       }
 
@@ -256,6 +261,7 @@ export async function ensureTranscripts(
         if (watchResult) {
           vttContent = watchResult.vtt;
           chosenLang = watchResult.lang;
+          isAutoCaption = watchResult.isAuto;
         }
       }
 
@@ -271,6 +277,7 @@ export async function ensureTranscripts(
     }
 
     if (!vttContent) {
+      await db.update(video).set({ captionStatus: 'none' }).where(eq(video.id, vid.id));
       results.push({
         videoId: vid.id,
         youtubeVideoId: vid.youtubeVideoId,
@@ -308,6 +315,10 @@ export async function ensureTranscripts(
       wordCount,
       isCanonical: true,
     }).onConflictDoNothing();
+    await db
+      .update(video)
+      .set({ captionStatus: isAutoCaption ? 'auto_only' : 'available' })
+      .where(eq(video.id, vid.id));
 
     results.push({
       videoId: vid.id,

@@ -5,9 +5,10 @@ import { auth } from '@creatorcanon/auth';
 import { estimateRunPriceCents, formatUsdCents } from '@creatorcanon/core';
 import { eq, getDb, inArray } from '@creatorcanon/db';
 import { video, workspaceMember } from '@creatorcanon/db/schema';
+import { getSourceCoverage, type SourceCoverageSummary } from '@creatorcanon/pipeline';
 
 import { HUB_TEMPLATE_OPTIONS } from '@/components/hub/templates';
-import { createProject } from './actions';
+import { checkSourceCoverage, createProject } from './actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Configure Hub' };
@@ -19,10 +20,39 @@ function fmtDuration(seconds: number): string {
   return `${m}m`;
 }
 
+function sourceCoverageCopy(coverage: SourceCoverageSummary) {
+  if (coverage.estimatedSourceQuality === 'strong') {
+    return {
+      title: 'Source coverage looks strong',
+      body: 'Every selected video has confirmed transcript support, so generated sections can be grounded with source moments.',
+      className: 'border-sage/30 bg-sage/5 text-sage',
+    };
+  }
+  if (coverage.estimatedSourceQuality === 'partial') {
+    return {
+      title: 'Partial source coverage',
+      body: 'Some selected videos have transcript support and some do not. The hub can be generated, but a few sections may show limited-source labels.',
+      className: 'border-amber/40 bg-amber-wash text-amber-ink',
+    };
+  }
+  return {
+    title: 'Limited source coverage',
+    body: 'None of the selected videos have confirmed captions yet. Choose videos with captions, check transcript support, or explicitly continue with a limited-source hub.',
+    className: 'border-rule-dark bg-paper-3 text-ink-3',
+  };
+}
+
+function readinessLabel(label: SourceCoverageSummary['videos'][number]['readinessLabel']): string {
+  if (label === 'source_ready') return 'Source ready';
+  if (label === 'auto_captions') return 'Auto captions';
+  if (label === 'limited_source') return 'Limited source';
+  return 'Needs transcript check';
+}
+
 export default async function ConfigurePage({
   searchParams,
 }: {
-  searchParams?: { ids?: string };
+  searchParams?: { ids?: string; error?: string };
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect('/sign-in');
@@ -49,6 +79,11 @@ export default async function ConfigurePage({
 
   const totalSeconds = selectedVideos.reduce((acc, v) => acc + (v.durationSeconds ?? 0), 0);
   const price = formatUsdCents(estimateRunPriceCents(totalSeconds));
+  const sourceCoverage = await getSourceCoverage({ workspaceId: members[0].workspaceId, videoIds });
+  const coverageCopy = sourceCoverageCopy(sourceCoverage);
+  const hasUnknownVideos = sourceCoverage.unknownCount > 0;
+  const requiresLimitedSourceConfirmation = sourceCoverage.readyCount === 0;
+  const showSourceRequiredError = searchParams?.error === 'source_required';
 
   return (
     <main className="min-h-screen bg-paper-studio">
@@ -92,6 +127,64 @@ export default async function ConfigurePage({
               </li>
             )}
           </ul>
+        </div>
+
+        {showSourceRequiredError && (
+          <div className="mb-8 rounded-lg border border-amber/40 bg-amber-wash px-5 py-4 text-amber-ink">
+            <p className="text-body-sm font-medium">Source confirmation required</p>
+            <p className="mt-1 text-body-sm">
+              These videos do not have confirmed transcript support yet. Choose captioned videos,
+              check transcript support, or explicitly confirm that you want to continue with a
+              limited-source hub.
+            </p>
+          </div>
+        )}
+
+        {/* Source coverage */}
+        <div className={`mb-8 rounded-lg border p-5 ${coverageCopy.className}`}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-body-md font-medium">{coverageCopy.title}</p>
+              <p className="mt-1 max-w-[560px] text-body-sm opacity-80">{coverageCopy.body}</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-caption">
+                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
+                  {sourceCoverage.readyCount} ready
+                </span>
+                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
+                  {sourceCoverage.unknownCount} unchecked
+                </span>
+                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
+                  {sourceCoverage.unavailableCount} limited
+                </span>
+              </div>
+            </div>
+            {hasUnknownVideos && (
+              <form action={checkSourceCoverage}>
+                <input type="hidden" name="video_ids" value={videoIds.join(',')} />
+                <button
+                  type="submit"
+                  className="inline-flex h-9 whitespace-nowrap items-center rounded-md border border-rule bg-paper px-3 text-body-sm font-medium text-ink transition hover:bg-paper-2"
+                >
+                  Check transcript support
+                </button>
+              </form>
+            )}
+          </div>
+          <div className="mt-4 space-y-2">
+            {sourceCoverage.videos.slice(0, 5).map((row) => (
+              <div key={row.videoId} className="flex items-center justify-between gap-3 rounded-md bg-paper/70 px-3 py-2">
+                <span className="truncate text-body-sm text-ink">{row.title ?? 'Untitled'}</span>
+                <span className="shrink-0 rounded-full border border-rule bg-paper px-2 py-0.5 text-caption text-ink-3">
+                  {readinessLabel(row.readinessLabel)}
+                </span>
+              </div>
+            ))}
+            {sourceCoverage.videos.length > 5 && (
+              <p className="text-caption opacity-70">
+                + {sourceCoverage.videos.length - 5} more selected videos
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Config form */}
@@ -218,12 +311,32 @@ export default async function ConfigurePage({
                 {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''}
                 {totalSeconds > 0 && ` · ${fmtDuration(totalSeconds)}`}
               </p>
+              {requiresLimitedSourceConfirmation && (
+                <label className="mt-3 flex max-w-md items-start gap-2 text-body-sm text-ink-3">
+                  <input
+                    type="checkbox"
+                    name="allow_limited_source"
+                    value="true"
+                    required
+                    className="mt-1"
+                  />
+                  <span>
+                    I understand this hub may publish with limited source support because no
+                    selected videos have confirmed captions.
+                  </span>
+                </label>
+              )}
             </div>
+            {requiresLimitedSourceConfirmation && (
+              <Link href="/app/library" className="text-body-sm text-ink-3 underline">
+                Choose videos with captions
+              </Link>
+            )}
             <button
               type="submit"
               className="inline-flex h-10 items-center gap-2 rounded-md bg-ink px-6 text-body-sm font-medium text-paper transition hover:opacity-90"
             >
-              ✦ Continue to payment
+              {requiresLimitedSourceConfirmation ? 'Continue with limited-source hub' : 'Continue to payment'}
             </button>
           </div>
         </form>

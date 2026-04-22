@@ -24,6 +24,7 @@ export interface VideoRow {
   viewCount: number | null;
   thumbnailUrl: string | null;
   captionStatus: 'available' | 'auto_only' | 'none' | 'unknown';
+  hasCanonicalTranscript: boolean;
   categories: string[];
 }
 
@@ -57,29 +58,39 @@ function estimatePrice(totalSeconds: number): string {
   return '$299';
 }
 
-function CaptionChip({ status }: { status: VideoRow['captionStatus'] }) {
-  if (status === 'available') {
+function CaptionChip({
+  status,
+  hasCanonicalTranscript,
+}: {
+  status: VideoRow['captionStatus'];
+  hasCanonicalTranscript: boolean;
+}) {
+  if (hasCanonicalTranscript || status === 'available') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-sage/10 px-2 py-0.5 text-[10px] font-medium text-sage">
-        Captions
+        Source ready
       </span>
     );
   }
   if (status === 'auto_only') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-medium text-amber-ink">
-        Auto
+        Auto captions
       </span>
     );
   }
   if (status === 'none') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-0.5 text-[10px] font-medium text-ink-4">
-        Needs STT
+        Limited source
       </span>
     );
   }
-  return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-0.5 text-[10px] font-medium text-ink-4">
+      Needs transcript check
+    </span>
+  );
 }
 
 function VideoThumbnail({ url, title }: { url: string | null; title: string | null }) {
@@ -389,7 +400,7 @@ export default function LibraryClient({
                       {v.title ?? 'Untitled'}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <CaptionChip status={v.captionStatus} />
+                      <CaptionChip status={v.captionStatus} hasCanonicalTranscript={v.hasCanonicalTranscript} />
                       {v.categories[0] && (
                         <span className="inline-flex items-center rounded-full bg-paper-3 px-2 py-0.5 text-[10px] text-ink-3">
                           {v.categories[0]}
@@ -471,7 +482,7 @@ export default function LibraryClient({
                     )}
                   </div>
                   <div className="mt-1">
-                    <CaptionChip status={v.captionStatus} />
+                    <CaptionChip status={v.captionStatus} hasCanonicalTranscript={v.hasCanonicalTranscript} />
                   </div>
                 </button>
               );

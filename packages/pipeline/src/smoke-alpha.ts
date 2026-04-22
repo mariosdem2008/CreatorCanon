@@ -1,6 +1,6 @@
 import { createR2Client } from '@creatorcanon/adapters';
 import { createStripeClient } from '@creatorcanon/adapters/stripe';
-import { and, asc, closeDb, eq, getDb } from '@creatorcanon/db';
+import { and, asc, closeDb, eq, getDb, inArray } from '@creatorcanon/db';
 import {
   generationRun,
   generationStageRun,
@@ -200,6 +200,7 @@ async function verifyPublishedManifest(input: {
           .where(and(
             eq(transcriptAsset.workspaceId, input.workspaceId),
             eq(transcriptAsset.isCanonical, true),
+            inArray(transcriptAsset.videoId, selectedIds),
           ))
       : [];
     const transcriptsForSelected = transcriptRows.length;

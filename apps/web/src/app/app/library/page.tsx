@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 
 import { auth } from '@creatorcanon/auth';
-import { desc, eq, getDb } from '@creatorcanon/db';
-import { channel, video, workspaceMember } from '@creatorcanon/db/schema';
+import { and, desc, eq, getDb, inArray } from '@creatorcanon/db';
+import { channel, transcriptAsset, video, workspaceMember } from '@creatorcanon/db/schema';
 
 import LibraryClient, { type VideoRow, type ChannelRow } from './LibraryClient';
 
@@ -51,6 +51,20 @@ export default async function LibraryPage() {
     .orderBy(desc(video.publishedAt))
     .limit(1000);
 
+  const canonicalTranscripts = videos.length > 0
+    ? await db
+        .select({ videoId: transcriptAsset.videoId })
+        .from(transcriptAsset)
+        .where(
+          and(
+            eq(transcriptAsset.workspaceId, workspaceId),
+            eq(transcriptAsset.isCanonical, true),
+            inArray(transcriptAsset.videoId, videos.map((v) => v.id)),
+          ),
+        )
+    : [];
+  const canonicalVideoIds = new Set(canonicalTranscripts.map((row) => row.videoId));
+
   const channelRow: ChannelRow = {
     id: ch.id,
     title: ch.title,
@@ -70,6 +84,7 @@ export default async function LibraryPage() {
     viewCount: v.viewCount,
     thumbnailUrl: v.thumbnails?.medium ?? v.thumbnails?.small ?? null,
     captionStatus: v.captionStatus,
+    hasCanonicalTranscript: canonicalVideoIds.has(v.id),
     categories: v.categories ?? [],
   }));
 

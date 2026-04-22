@@ -13,6 +13,7 @@ import {
   workspaceMember,
 } from '@creatorcanon/db/schema';
 import { PIPELINE_VERSION, estimateRunPriceCents } from '@creatorcanon/core';
+import { getSourceCoverage, preflightSourceCoverage } from '@creatorcanon/pipeline';
 
 const PRESENTATION_PRESETS = new Set(['paper', 'midnight', 'field']);
 
@@ -55,6 +56,12 @@ export async function createProject(formData: FormData): Promise<{ error: string
 
   if (selectedVideos.length === 0) return { error: 'No valid videos found' };
 
+  const sourceCoverage = await getSourceCoverage({ workspaceId, videoIds });
+  const allowLimitedSource = formData.get('allow_limited_source') === 'true';
+  if (sourceCoverage.readyCount === 0 && !allowLimitedSource) {
+    redirect(`/app/configure?ids=${encodeURIComponent(videoIds.join(','))}&error=source_required`);
+  }
+
   const totalDurationSeconds = selectedVideos.reduce(
     (acc, v) => acc + (v.durationSeconds ?? 0),
     0,
@@ -90,6 +97,14 @@ export async function createProject(formData: FormData): Promise<{ error: string
       length_preset: lengthPreset as 'short' | 'standard' | 'deep',
       chat_enabled: chatEnabled,
       presentation_preset: presentationPreset,
+      source_coverage: {
+        selectedCount: sourceCoverage.selectedCount,
+        readyCount: sourceCoverage.readyCount,
+        unknownCount: sourceCoverage.unknownCount,
+        unavailableCount: sourceCoverage.unavailableCount,
+        estimatedSourceQuality: sourceCoverage.estimatedSourceQuality,
+        allow_limited_source: allowLimitedSource,
+      },
     },
   });
 
@@ -119,6 +134,28 @@ export async function createProject(formData: FormData): Promise<{ error: string
   await db.update(project).set({ currentRunId: runId }).where(eq(project.id, projectId));
 
   redirect(`/app/checkout?projectId=${projectId}`);
+}
+
+export async function checkSourceCoverage(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) redirect('/sign-in');
+
+  const idsRaw = (formData.get('video_ids') as string | null) ?? '';
+  const videoIds = idsRaw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (videoIds.length === 0) redirect('/app/library');
+
+  const db = getDb();
+  const members = await db
+    .select({ workspaceId: workspaceMember.workspaceId })
+    .from(workspaceMember)
+    .where(eq(workspaceMember.userId, session.user.id))
+    .limit(1);
+
+  const workspaceId = members[0]?.workspaceId;
+  if (!workspaceId) redirect('/app');
+
+  await preflightSourceCoverage({ workspaceId, videoIds });
+  redirect(`/app/configure?ids=${encodeURIComponent(videoIds.join(','))}`);
 }
 
 async function hashConfig(config: Record<string, unknown>): Promise<string> {
