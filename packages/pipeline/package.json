@@ -24,6 +24,7 @@
     "smoke:local": "tsx ./src/smoke-local.ts",
     "seed:audio-fixtures": "tsx ./src/seed-audio-fixtures.ts",
     "seed:alpha-audio-videos": "tsx ./src/seed-alpha-audio-videos.ts",
+    "refresh:alpha-caption-status": "tsx ./src/refresh-alpha-caption-status.ts",
     "run:alpha:e2e": "tsx ./src/run-alpha-e2e.ts",
     "clean": "rm -rf dist .turbo"
   },
