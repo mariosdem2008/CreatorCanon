@@ -28,12 +28,18 @@ export const authConfig = {
           prompt: 'consent',
           access_type: 'offline',
           response_type: 'code',
+          // `youtube.force-ssl` is required to call captions.download (via the
+          // video-owner's OAuth token); `youtube.readonly` remains for the
+          // lighter captions.list / videos.list reads. Having both requested
+          // means a single consent pass covers everything the pipeline needs
+          // to produce canonical transcripts from an owner's own videos.
           scope: [
-          'openid',
-          'email',
-          'profile',
-          'https://www.googleapis.com/auth/youtube.readonly',
-        ].join(' '),
+            'openid',
+            'email',
+            'profile',
+            'https://www.googleapis.com/auth/youtube.readonly',
+            'https://www.googleapis.com/auth/youtube.force-ssl',
+          ].join(' '),
         },
       },
       // Keep false: with multiple providers it would enable account-takeover

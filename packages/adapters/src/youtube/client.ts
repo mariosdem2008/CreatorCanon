@@ -76,6 +76,13 @@ export interface VideoDetails {
   categoryId?: string;
   defaultLanguage?: string;
   topicIds?: string[];
+  /**
+   * `contentDetails.caption` from videos.list. 'true' means the video has at
+   * least one caption track (manual-uploaded or auto-generated). 'false' means
+   * no captions are enabled. Callers use this as a cheap first-pass caption
+   * status; distinguishing manual vs auto requires a follow-up captions.list.
+   */
+  captionEnabled?: boolean;
 }
 
 export interface YouTubeClient {
@@ -98,14 +105,6 @@ function parseDuration(iso: string): number {
   return (parseInt(m[1] ?? '0', 10) * 3600)
     + (parseInt(m[2] ?? '0', 10) * 60)
     + parseInt(m[3] ?? '0', 10);
-}
-
-function notImplemented(op: string): CanonError {
-  return new CanonError({
-    code: 'not_implemented',
-    category: 'internal',
-    message: `YouTubeClient.${op} is not implemented yet.`,
-  });
 }
 
 /**
@@ -210,6 +209,17 @@ export const createYouTubeClient = (oauth2Tokens: YouTubeOAuthTokens): YouTubeCl
         const durationIso = detail?.durationIso8601;
         const durationSec = durationIso ? parseDuration(durationIso) : undefined;
 
+        // `contentDetails.caption` is a cheap boolean — 'true' when any track
+        // is enabled (manual OR auto). We promote to 'available' on true and
+        // 'none' on false. Distinguishing manual vs auto ('auto_only') needs
+        // a follow-up captions.list call; callers that care can enrich later.
+        const captionStatus: 'available' | 'none' | 'unknown' =
+          detail?.captionEnabled === true
+            ? 'available'
+            : detail?.captionEnabled === false
+              ? 'none'
+              : 'unknown';
+
         return [{
           id: videoId,
           title: detail?.title ?? item.snippet?.title ?? '',
@@ -220,7 +230,7 @@ export const createYouTubeClient = (oauth2Tokens: YouTubeOAuthTokens): YouTubeCl
           privacyStatus: item.snippet?.title ? 'public' : 'unknown',
           isShort: durationSec !== undefined && durationSec <= 60,
           isLivestream: false,
-          captionStatus: 'unknown' as const,
+          captionStatus,
         }];
       });
 
@@ -251,7 +261,24 @@ export const createYouTubeClient = (oauth2Tokens: YouTubeOAuthTokens): YouTubeCl
 
     async downloadCaption(captionId: string): Promise<string> {
       z.string().min(1).parse(captionId);
-      throw notImplemented('downloadCaption');
+
+      // `captions.download` requires `youtube.force-ssl` scope and returns a
+      // raw caption-format stream (default: sbv). We ask for vtt to match the
+      // rest of the pipeline. Only works for videos the OAuth'd user owns.
+      const response = (await raw.captions.download(
+        { id: captionId, tfmt: 'vtt' },
+        { responseType: 'text' },
+      )) as { data: string | Buffer | unknown };
+
+      const body = response.data;
+      if (typeof body === 'string') return body;
+      if (body instanceof Buffer) return body.toString('utf8');
+      if (body instanceof Uint8Array) return Buffer.from(body).toString('utf8');
+      throw new CanonError({
+        code: 'unexpected_payload',
+        category: 'provider_upstream',
+        message: 'YouTube captions.download returned an unexpected body type.',
+      });
     },
 
     async getVideoDetails(ids: string[]): Promise<VideoDetails[]> {
@@ -279,6 +306,7 @@ export const createYouTubeClient = (oauth2Tokens: YouTubeOAuthTokens): YouTubeCl
         categoryId: item.snippet?.categoryId ?? undefined,
         defaultLanguage: item.snippet?.defaultLanguage ?? undefined,
         topicIds: item.topicDetails?.topicIds ?? undefined,
+        captionEnabled: item.contentDetails?.caption === 'true',
       }));
     },
   };

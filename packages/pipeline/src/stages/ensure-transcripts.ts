@@ -1,8 +1,82 @@
 import { and, eq, getDb } from '@creatorcanon/db';
-import { mediaAsset, transcriptAsset, video } from '@creatorcanon/db/schema';
-import { createOpenAIClient, createR2Client, transcriptKey, type Transcript } from '@creatorcanon/adapters';
+import { account, mediaAsset, transcriptAsset, video, workspace } from '@creatorcanon/db/schema';
+import {
+  createOpenAIClient,
+  createR2Client,
+  createYouTubeClient,
+  transcriptKey,
+  type Transcript,
+} from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
+
+const FORCE_SSL_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
+
+/**
+ * Strategy 0: use the workspace owner's stored Google OAuth token to call
+ * YouTube Data API `captions.list` + `captions.download`. Works only for
+ * videos the authenticated owner has access to (practically: their own
+ * channel) and only when the access token carries the `youtube.force-ssl`
+ * scope. Returns null on any failure so callers can fall through to the
+ * public-endpoint strategies.
+ */
+async function fetchOwnerCaptions(input: {
+  workspaceId: string;
+  youtubeVideoId: string;
+}): Promise<{ vtt: string; lang: string; isAuto: boolean } | null> {
+  const db = getDb();
+
+  const ownerRows = await db
+    .select({
+      accessToken: account.access_token,
+      refreshToken: account.refresh_token,
+      expiresAt: account.expires_at,
+      scope: account.scope,
+    })
+    .from(account)
+    .innerJoin(workspace, eq(workspace.ownerUserId, account.userId))
+    .where(and(eq(workspace.id, input.workspaceId), eq(account.provider, 'google')))
+    .limit(1);
+
+  const owner = ownerRows[0];
+  if (!owner?.accessToken) return null;
+  if (!owner.scope?.includes(FORCE_SSL_SCOPE)) return null;
+
+  const client = createYouTubeClient({
+    accessToken: owner.accessToken,
+    refreshToken: owner.refreshToken ?? undefined,
+    expiresAt: owner.expiresAt ? owner.expiresAt * 1000 : undefined,
+    scope: owner.scope,
+  });
+
+  let tracks;
+  try {
+    tracks = await client.getCaptions(input.youtubeVideoId);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(tracks) || tracks.length === 0) return null;
+
+  const usable = tracks.filter((t) => !t.isDraft);
+  if (usable.length === 0) return null;
+
+  const pick =
+    usable.find((t) => t.language === 'en' && !t.isAuto) ??
+    usable.find((t) => t.language === 'en') ??
+    usable.find((t) => !t.isAuto) ??
+    usable[0];
+  if (!pick?.id) return null;
+
+  let vtt: string;
+  try {
+    vtt = await client.downloadCaption(pick.id);
+  } catch {
+    return null;
+  }
+  if (!vtt || !vtt.trim().startsWith('WEBVTT')) return null;
+
+  return { vtt, lang: pick.language || 'en', isAuto: pick.isAuto === true };
+}
 
 export interface EnsureTranscriptsInput {
   runId: string;
@@ -260,15 +334,32 @@ export async function ensureTranscripts(
     let provider: TranscriptResult['provider'] = 'youtube_timedtext';
 
     try {
+      // Strategy 0: Owner-OAuth captions.list + captions.download.
+      // Only succeeds for videos the workspace owner authenticated with the
+      // `youtube.force-ssl` scope. Bypasses YouTube's 2024 public-endpoint
+      // po_token gate for captioned videos on the owner's own channel.
+      const owned = await fetchOwnerCaptions({
+        workspaceId: input.workspaceId,
+        youtubeVideoId: vid.youtubeVideoId,
+      });
+      if (owned) {
+        vttContent = owned.vtt;
+        chosenLang = owned.lang;
+        isAutoCaption = owned.isAuto;
+      }
+
       // Strategy 1: Use the track-list API to discover available tracks.
-      const tracks = await listTimedtextTracks(vid.youtubeVideoId);
-      const best = pickBestTrack(tracks);
-      if (best) {
-        vttContent = await downloadVtt(vid.youtubeVideoId, best.lang, best.kind, best.name);
-        chosenLang = best.lang;
-        isAutoCaption = best.kind === 'asr';
-        if (!vttContent) {
-          skipReason = `Caption track was found (${best.lang}), but timedtext download did not return usable VTT.`;
+      let tracks: Array<{ lang: string; name: string; kind: string }> = [];
+      if (!vttContent) {
+        tracks = await listTimedtextTracks(vid.youtubeVideoId);
+        const best = pickBestTrack(tracks);
+        if (best) {
+          vttContent = await downloadVtt(vid.youtubeVideoId, best.lang, best.kind, best.name);
+          chosenLang = best.lang;
+          isAutoCaption = best.kind === 'asr';
+          if (!vttContent) {
+            skipReason = `Caption track was found (${best.lang}), but timedtext download did not return usable VTT.`;
+          }
         }
       }
 
