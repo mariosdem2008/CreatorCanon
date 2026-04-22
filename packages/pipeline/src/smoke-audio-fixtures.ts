@@ -1,8 +1,10 @@
 import { and, eq, getDb } from '@creatorcanon/db';
 import { closeDb } from '@creatorcanon/db/client';
 import {
+  generationRun,
   mediaAsset,
   normalizedTranscriptVersion,
+  project,
   segment,
   transcriptAsset,
   video,
@@ -49,6 +51,33 @@ async function main() {
 
   const target = rows[0];
   assert(target, 'No audio_m4a fixture media_asset row found. Run pnpm dev:seed:audio-fixtures first.');
+
+  // The smoke uses a dedicated run id so it doesn't collide with the local-smoke run.
+  // segment.run_id / transcript_asset.run_id / normalized_transcript_version.run_id are
+  // all FKs to generation_run.id, so we ensure a row exists before calling the stages.
+  const existingProjects = await db
+    .select({ id: project.id, videoSetId: project.videoSetId })
+    .from(project)
+    .where(eq(project.workspaceId, WORKSPACE_ID))
+    .limit(1);
+  const hostProject = existingProjects[0];
+  assert(
+    hostProject?.videoSetId,
+    'No project with a video_set_id was found for the audio fixture workspace. Run pnpm dev:seed first.',
+  );
+
+  await db
+    .insert(generationRun)
+    .values({
+      id: RUN_ID,
+      workspaceId: WORKSPACE_ID,
+      projectId: hostProject.id,
+      videoSetId: hostProject.videoSetId,
+      pipelineVersion: 'v1.0.0',
+      configHash: 'audio-fixture-smoke',
+      status: 'queued',
+    })
+    .onConflictDoNothing();
 
   await db
     .update(transcriptAsset)
