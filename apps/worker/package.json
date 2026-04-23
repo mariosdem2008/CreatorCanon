@@ -9,6 +9,7 @@
     "start": "node --import tsx/esm src/dev-server.ts",
     "trigger:dev": "trigger dev",
     "trigger:deploy": "trigger deploy",
+    "smoke:trigger-dispatch": "tsx ./src/smoke-trigger-dispatch.ts",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo 'worker: no tests yet'",

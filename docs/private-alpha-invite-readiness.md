@@ -51,14 +51,29 @@ The rescue command refuses unpaid runs, writes audit rows, retries stale running
 stage rows through the shared idempotent harness, and leaves publish/review to
 the normal creator/admin flow.
 
+Before using rescue, prefer proving or retrying the durable Trigger worker path:
+
+```powershell
+$env:ALPHA_TRIGGER_RUN_ID="<paid-queued-or-failed-run-id>"
+pnpm smoke:trigger-dispatch
+Remove-Item Env:ALPHA_TRIGGER_RUN_ID
+```
+
+This dispatches the existing paid run to the `run-pipeline` Trigger task and
+waits for `awaiting_review`. It does not publish. If this fails because the
+Trigger task is missing, deploy `@creatorcanon/worker` before inviting external
+creators.
+
 ## Admin Rescue
 
 Use `/admin/runs/<run-id>` before touching SQL:
 
 - Check whether Stripe delivered and processed `checkout.session.completed`.
 - Check whether the run has a `pi_...` payment intent.
-- Re-dispatch a paid queued/failed run if worker dispatch stalled.
-- Use `pnpm rescue:alpha-run` if hosted in-process dispatch stalls inside Vercel.
+- Re-dispatch a paid queued/failed run with `pnpm smoke:trigger-dispatch` if
+  worker dispatch stalled.
+- Use `pnpm rescue:alpha-run` only if Trigger is unavailable and a private-alpha
+  paid run needs emergency completion.
 - Rerun from a failed stage when stage output needs rebuilding.
 - Publish current draft only when draft pages exist.
 

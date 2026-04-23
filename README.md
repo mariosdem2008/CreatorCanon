@@ -105,6 +105,7 @@ source-positive hub publishing.
 | `pnpm smoke:audio-fixtures` | Verifies audio fixture transcription reaches segments |
 | `pnpm inspect:alpha-run` | Read-only operator diagnostics for one alpha run |
 | `pnpm rescue:alpha-run` | Audited operator rescue for one paid stuck alpha run |
+| `pnpm smoke:trigger-dispatch` | Dispatches one paid queued alpha run through Trigger and waits for draft readiness |
 | `pnpm env:doctor`   | Read-only alpha environment readiness check      |
 | `pnpm smoke:alpha`  | Real-service alpha smoke for a selected run      |
 | `pnpm alpha:e2e`    | Seeded alpha demo against explicit target env    |
@@ -127,6 +128,8 @@ Required private-alpha/test mode values:
 - `STRIPE_SECRET_KEY=sk_test_...` and `STRIPE_WEBHOOK_SECRET=whsec_...`.
 - `TRIGGER_SECRET_KEY` for worker dispatch, with local fallback still available
   when Trigger dispatch fails.
+- `TRIGGER_PROJECT_ID` for Trigger worker deploys. The worker config refuses to
+  deploy against the placeholder project id.
 - `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_HUB_ROOT_DOMAIN`.
 
 Production uses the same keys, but Stripe must move from test mode to live mode
@@ -135,7 +138,10 @@ only after the private-alpha smoke passes.
 ## Deployment
 
 - Web deploys to Vercel from `apps/web`.
-- Worker deploys to Railway from `apps/worker`.
-- Trigger.dev remains the production-oriented async runner; the shared pipeline
-  runner is also used by local fallback and smoke checks.
+- Worker deploys through Trigger.dev from `apps/worker`. Use
+  `pnpm --filter @creatorcanon/worker trigger:deploy` after setting
+  `TRIGGER_PROJECT_ID` and logging in with the Trigger CLI.
+- Trigger.dev is the production async runner. Vercel in-process dispatch remains
+  a local/emergency mode only because hosted serverless functions can truncate
+  long pipeline runs.
 - Hosted private-alpha readiness is tracked in `docs/hosted-alpha-readiness.md`.

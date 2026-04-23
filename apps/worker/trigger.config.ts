@@ -1,15 +1,12 @@
 import { defineConfig } from '@trigger.dev/sdk/v3';
 
-/**
- * Trigger.dev v3 project config.
- *
- * NOTE: `project` below is a placeholder slug. Replace `proj_creatorcanon`
- * with the real project ID from the Trigger.dev dashboard after the founder
- * creates the project (https://cloud.trigger.dev). The CLI will also write
- * this value on `trigger.dev init` if run against a real account.
- */
+const project = process.env.TRIGGER_PROJECT_ID;
+if (!project) {
+  throw new Error('Set TRIGGER_PROJECT_ID to the real Trigger.dev project id before running trigger dev/deploy.');
+}
+
 export default defineConfig({
-  project: 'proj_creatorcanon',
+  project,
   logLevel: 'info',
   // Task code lives alongside src/dev-server.ts — the CLI auto-discovers
   // every `task()` export under the dirs listed here.

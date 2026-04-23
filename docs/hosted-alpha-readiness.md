@@ -17,10 +17,18 @@ not to add product scope.
 
 ### Worker / Trigger
 
-- Trigger remains the preferred hosted async runner.
+- Trigger is the hosted async runner for paid generation runs. Vercel
+  in-process dispatch is not production-safe because serverless functions can
+  truncate long pipeline execution.
+- Set `TRIGGER_PROJECT_ID` to the real Trigger project id before running
+  `trigger dev` or `trigger deploy`. The worker config intentionally refuses to
+  use the old placeholder project id.
 - The worker must have the same provider envs as the web app for pipeline access:
   Neon/Postgres, R2, OpenAI, Google/YouTube where needed, and Trigger secrets.
-- App-side fallback should remain available for alpha recovery, but hosted alpha
+- `PIPELINE_DISPATCH_MODE=trigger` should be enabled on Vercel only after the
+  `run-pipeline` task is visible in Trigger and a paid queued run completes via
+  `pnpm smoke:trigger-dispatch`.
+- App-side rescue remains available for alpha recovery, but hosted alpha
   readiness treats a missing `TRIGGER_SECRET_KEY` as a blocker.
 
 ### Provider Consoles
@@ -46,7 +54,8 @@ pipeline code executes:
 - YouTube: `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET`.
 - AI: `OPENAI_API_KEY`, `GEMINI_API_KEY`.
 - Billing: `STRIPE_SECRET_KEY=sk_test_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`.
-- Runner: `TRIGGER_SECRET_KEY`, optional `TRIGGER_API_URL`.
+- Runner: `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID`, optional
+  `TRIGGER_API_URL`, and `PIPELINE_DISPATCH_MODE=trigger` after worker proof.
 - Observability if used: Sentry/PostHog keys.
 
 Do not set `DEV_AUTH_BYPASS_ENABLED=true` or `DEV_AUTH_BYPASS_EMAIL` in hosted
@@ -87,6 +96,31 @@ $env:ALPHA_SMOKE_RUN_ID="ae73b5f9-ce56-476a-b4b1-5738c25139a9"
 pnpm smoke:alpha
 Remove-Item Env:ALPHA_SMOKE_RUN_ID
 ```
+
+Deploy and verify the worker before relying on hosted payment dispatch:
+
+```powershell
+$env:TRIGGER_PROJECT_ID="<real-trigger-project-id>"
+pnpm --filter @creatorcanon/worker exec trigger whoami
+pnpm --filter @creatorcanon/worker trigger:deploy
+
+$env:ALPHA_TRIGGER_RUN_ID="<paid-queued-run-id>"
+pnpm smoke:trigger-dispatch
+Remove-Item Env:ALPHA_TRIGGER_RUN_ID
+```
+
+`smoke:trigger-dispatch` refuses unpaid runs, triggers the `run-pipeline` task,
+polls the database until `awaiting_review` or failure, and never publishes. Use
+`pnpm smoke:alpha` or the creator UI after the worker has completed the run.
+
+If `trigger whoami` says login is required, run:
+
+```powershell
+pnpm --filter @creatorcanon/worker exec trigger login --profile default
+```
+
+Do not set hosted `PIPELINE_DISPATCH_MODE=trigger` until the deploy and smoke
+both pass.
 
 ## Hosted Browser Proof
 
