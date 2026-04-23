@@ -36,7 +36,7 @@ const STEPS: Step[] = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="border-b border-rule bg-paper">
+    <section id="how-it-works" className="border-b border-rule bg-paper" aria-label="How CreatorCanon works">
       <div className="mx-auto max-w-[1140px] px-6 py-24">
         <div className="max-w-[760px]">
           <div className="text-eyebrow uppercase text-ink-4">How it works</div>

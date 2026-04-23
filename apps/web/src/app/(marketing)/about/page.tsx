@@ -3,9 +3,20 @@ import type { Metadata } from 'next';
 import { CTA } from '@/components/marketing/CTA';
 
 export const metadata: Metadata = {
-  title: 'About',
+  title: 'About — CreatorCanon',
   description:
     'CreatorCanon is a studio for turning business teaching archives into structured, cited knowledge products.',
+  openGraph: {
+    title: 'About — CreatorCanon',
+    description:
+      'A studio for turning business teaching archives into structured, cited knowledge products. Editorial discipline from citation integrity to unpublish.',
+    url: 'https://www.creatorcanon.com/about',
+  },
+  twitter: {
+    title: 'About — CreatorCanon',
+    description:
+      'A studio for turning business teaching archives into structured, cited knowledge products.',
+  },
 };
 
 const PRINCIPLES = [

@@ -21,7 +21,7 @@ export function FAQItem({ q, a, defaultOpen = false }: FAQItemProps) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-6 py-5 text-left transition-colors hover:bg-paper-2"
+        className="flex w-full items-center justify-between gap-6 py-5 text-left transition-colors hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber rounded"
       >
         <span className="text-heading-md text-ink">{q}</span>
         <Icon

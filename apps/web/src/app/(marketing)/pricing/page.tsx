@@ -5,9 +5,20 @@ import { FAQItem } from '@/components/marketing/FAQItem';
 import { PricingTable } from '@/components/marketing/PricingTable';
 
 export const metadata: Metadata = {
-  title: 'Pricing',
+  title: 'Pricing — CreatorCanon',
   description:
     'Starter, Pro, and Concierge tiers for turning a YouTube archive into a hosted knowledge hub.',
+  openGraph: {
+    title: 'Pricing — CreatorCanon',
+    description:
+      'Starter (€29), Pro (€149), and Concierge (€349+) tiers. Pay for structure, publish a business product.',
+    url: 'https://www.creatorcanon.com/pricing',
+  },
+  twitter: {
+    title: 'Pricing — CreatorCanon',
+    description:
+      'Starter (€29), Pro (€149), and Concierge (€349+) tiers. Pay for structure, publish a business product.',
+  },
 };
 
 const PRICING_FAQS = [

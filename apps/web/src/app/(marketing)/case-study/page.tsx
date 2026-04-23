@@ -7,9 +7,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
-  title: 'Case study',
+  title: 'Case study — CreatorCanon',
   description:
     'How a business creator archive becomes a structured, sellable education product on CreatorCanon.',
+  openGraph: {
+    title: 'Case study — CreatorCanon',
+    description:
+      'How a focused archive of 9 videos becomes a 3-track framework hub with citations, playbooks, and premium member access.',
+    url: 'https://www.creatorcanon.com/case-study',
+  },
+  twitter: {
+    title: 'Case study — CreatorCanon',
+    description:
+      'How a focused archive of 9 videos becomes a 3-track framework hub with citations, playbooks, and premium member access.',
+  },
 };
 
 const ROWS: Array<[string, string, string]> = [

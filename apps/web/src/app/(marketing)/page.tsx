@@ -11,6 +11,17 @@ export const metadata: Metadata = {
   title: 'CreatorCanon — turn your videos into a premium business knowledge system',
   description:
     'CreatorCanon helps business creators turn repeat lessons, frameworks, and operating advice into a source-linked hub their audience can pay to use.',
+  openGraph: {
+    title: 'CreatorCanon — turn your videos into a premium business knowledge system',
+    description:
+      'Turn your YouTube archive into a structured, source-linked knowledge hub with playbooks, grounded answers, and member paywall.',
+    url: 'https://www.creatorcanon.com',
+  },
+  twitter: {
+    title: 'CreatorCanon — turn your videos into a premium business knowledge system',
+    description:
+      'Turn your YouTube archive into a structured, source-linked knowledge hub with playbooks, grounded answers, and member paywall.',
+  },
 };
 
 const PROOFS = [

@@ -4,9 +4,20 @@ import { CTA } from '@/components/marketing/CTA';
 import { FAQItem } from '@/components/marketing/FAQItem';
 
 export const metadata: Metadata = {
-  title: 'FAQ',
+  title: 'FAQ — CreatorCanon',
   description:
     'Common questions about CreatorCanon — what it is, how it works, and who owns what.',
+  openGraph: {
+    title: 'FAQ — CreatorCanon',
+    description:
+      'Questions about CreatorCanon: what the product does, how generation works, citation integrity, ownership, and how to exit.',
+    url: 'https://www.creatorcanon.com/faq',
+  },
+  twitter: {
+    title: 'FAQ — CreatorCanon',
+    description:
+      'Questions about CreatorCanon: what the product does, how generation works, citation integrity, ownership, and how to exit.',
+  },
 };
 
 const GROUPS: Array<{

@@ -3,13 +3,22 @@ import type { Metadata } from 'next';
 import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
-  title: 'Privacy policy',
+  title: 'Privacy policy — CreatorCanon',
   description: 'CreatorCanon privacy policy — placeholder pending full legal copy.',
+  openGraph: {
+    title: 'Privacy policy — CreatorCanon',
+    description: 'How CreatorCanon handles your data: OAuth tokens, transcript retention, GDPR rights, and analytics.',
+    url: 'https://www.creatorcanon.com/privacy',
+  },
+  twitter: {
+    title: 'Privacy policy — CreatorCanon',
+    description: 'How CreatorCanon handles your data: OAuth tokens, transcript retention, GDPR rights, and analytics.',
+  },
 };
 
 export default function PrivacyPage() {
   return (
-    <section className="bg-paper">
+    <section className="border-b border-rule bg-paper" aria-label="Privacy policy">
       <div className="mx-auto max-w-[720px] px-6 py-20">
         <Badge variant="default">Placeholder</Badge>
         <h1 className="mt-5 font-serif text-display-lg text-ink">Privacy policy</h1>

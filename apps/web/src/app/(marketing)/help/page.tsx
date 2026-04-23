@@ -7,8 +7,17 @@ import { FAQItem } from '@/components/marketing/FAQItem';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
-  title: 'Help',
+  title: 'Help — CreatorCanon',
   description: 'Quickstart guides, frequently asked questions, and how to reach the CreatorCanon team.',
+  openGraph: {
+    title: 'Help — CreatorCanon',
+    description: 'Quickstart guides, FAQs, and how to reach the team. From YouTube connect to published hub in under ten minutes.',
+    url: 'https://www.creatorcanon.com/help',
+  },
+  twitter: {
+    title: 'Help — CreatorCanon',
+    description: 'Quickstart guides, FAQs, and how to reach the team.',
+  },
 };
 
 interface QuickCard {

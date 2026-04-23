@@ -3,13 +3,22 @@ import type { Metadata } from 'next';
 import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
-  title: 'Terms of service',
+  title: 'Terms of service — CreatorCanon',
   description: 'CreatorCanon terms of service — placeholder pending full legal copy.',
+  openGraph: {
+    title: 'Terms of service — CreatorCanon',
+    description: 'Terms covering account usage, creator-owned content, payment policy, AI output disclaimers, and YouTube API compliance.',
+    url: 'https://www.creatorcanon.com/terms',
+  },
+  twitter: {
+    title: 'Terms of service — CreatorCanon',
+    description: 'Terms covering account usage, creator-owned content, payment policy, AI output disclaimers, and YouTube API compliance.',
+  },
 };
 
 export default function TermsPage() {
   return (
-    <section className="bg-paper">
+    <section className="border-b border-rule bg-paper" aria-label="Terms of service">
       <div className="mx-auto max-w-[720px] px-6 py-20">
         <Badge variant="default">Placeholder</Badge>
         <h1 className="mt-5 font-serif text-display-lg text-ink">Terms of service</h1>
