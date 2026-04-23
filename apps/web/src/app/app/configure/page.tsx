@@ -102,7 +102,7 @@ export default async function ConfigurePage({
   return (
     <main className="min-h-screen bg-paper-studio">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-8 py-5">
+      <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div>
           <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
             Creator Studio
@@ -111,14 +111,15 @@ export default async function ConfigurePage({
         </div>
         <Link
           href="/app/library"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+          aria-label="Back to library"
         >
           <span aria-hidden="true">←</span>
-          Back to library
+          <span className="hidden sm:inline">Back to library</span>
         </Link>
       </div>
 
-      <div className="mx-auto max-w-[720px] px-8 py-10">
+      <div className="mx-auto max-w-[720px] px-4 py-6 sm:px-8 sm:py-10">
         {/* Selection summary */}
         <div className="mb-8 overflow-hidden rounded-xl border border-rule bg-paper">
           <div className="border-b border-rule bg-paper-2 px-5 py-3">
@@ -261,14 +262,14 @@ export default async function ConfigurePage({
             />
           </div>
 
-          {/* Tone — segmented control */}
+          {/* Tone — segmented control — wraps on narrow */}
           <div className="space-y-2">
             <p className="text-body-sm font-semibold text-ink" id="tone-label">Tone</p>
-            <div className="flex gap-2" role="radiogroup" aria-labelledby="tone-label">
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="tone-label">
               {(['conversational', 'professional', 'academic'] as const).map((t) => (
                 <label
                   key={t}
-                  className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-rule bg-paper px-3 py-2.5 text-body-sm text-ink-3 transition hover:bg-paper-2 has-[:checked]:border-amber has-[:checked]:bg-amber/8 has-[:checked]:text-ink has-[:checked]:font-medium"
+                  className="flex min-w-[100px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-rule bg-paper px-3 py-2.5 text-body-sm text-ink-3 transition hover:bg-paper-2 has-[:checked]:border-amber has-[:checked]:bg-amber/8 has-[:checked]:font-medium has-[:checked]:text-ink"
                 >
                   <input type="radio" name="tone" value={t} defaultChecked={t === 'conversational'} className="sr-only" />
                   <span className="capitalize">{t}</span>
@@ -277,10 +278,10 @@ export default async function ConfigurePage({
             </div>
           </div>
 
-          {/* Hub depth — segmented control */}
+          {/* Hub depth — segmented control — wraps on narrow */}
           <div className="space-y-2">
             <p className="text-body-sm font-semibold text-ink" id="depth-label">Hub depth</p>
-            <div className="flex gap-2" role="radiogroup" aria-labelledby="depth-label">
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="depth-label">
               {([
                 { key: 'short', label: 'Concise', desc: 'Key ideas only' },
                 { key: 'standard', label: 'Standard', desc: 'Balanced depth' },
@@ -288,7 +289,7 @@ export default async function ConfigurePage({
               ] as const).map(({ key, label, desc }) => (
                 <label
                   key={key}
-                  className="flex flex-1 cursor-pointer flex-col rounded-lg border border-rule bg-paper px-3 py-3 transition hover:bg-paper-2 has-[:checked]:border-amber has-[:checked]:bg-amber/8"
+                  className="flex min-w-[100px] flex-1 cursor-pointer flex-col rounded-lg border border-rule bg-paper px-3 py-3 transition hover:bg-paper-2 has-[:checked]:border-amber has-[:checked]:bg-amber/8"
                 >
                   <input type="radio" name="length_preset" value={key} defaultChecked={key === 'standard'} className="sr-only" />
                   <span className="text-body-sm font-semibold text-ink">{label}</span>
@@ -301,7 +302,7 @@ export default async function ConfigurePage({
           {/* Hub template */}
           <div className="space-y-2">
             <p className="text-body-sm font-semibold text-ink" id="template-label">Hub template</p>
-            <div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-labelledby="template-label">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="radiogroup" aria-labelledby="template-label">
               {HUB_TEMPLATE_OPTIONS.map((template) => (
                 <label
                   key={template.id}
@@ -382,9 +383,9 @@ export default async function ConfigurePage({
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-4 border-t border-rule pt-4">
+              <div className="flex flex-col gap-3 border-t border-rule pt-4 sm:flex-row sm:items-center sm:justify-between">
                 {requiresLimitedSourceConfirmation ? (
-                  <Link href="/app/library" className="text-body-sm text-ink-4 underline hover:text-ink">
+                  <Link href="/app/library" className="text-body-sm text-ink-4 underline underline-offset-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded">
                     Choose videos with captions
                   </Link>
                 ) : (
@@ -397,7 +398,7 @@ export default async function ConfigurePage({
                 )}
                 <button
                   type="submit"
-                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-ink px-6 text-body-sm font-semibold text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                  className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-ink px-6 text-body-sm font-semibold text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 sm:w-auto sm:justify-start"
                 >
                   {requiresLimitedSourceConfirmation ? 'Continue with limited-source hub' : 'Continue to payment'}
                   <span aria-hidden="true">→</span>

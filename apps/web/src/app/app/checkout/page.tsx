@@ -13,6 +13,7 @@ import {
 } from '@creatorcanon/db/schema';
 
 import { startCheckout } from './actions';
+import { CheckoutSubmitButton } from './CheckoutSubmitButton';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Checkout' };
@@ -92,7 +93,7 @@ export default async function CheckoutPage({
   return (
     <main className="min-h-screen bg-paper-studio">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-8 py-5">
+      <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div>
           <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
             Creator Studio
@@ -101,27 +102,37 @@ export default async function CheckoutPage({
         </div>
         <Link
           href={`/app/projects/${projectId}`}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+          aria-label="Back to project status"
         >
           <span aria-hidden="true">←</span>
-          Project status
+          <span className="hidden sm:inline">Project status</span>
         </Link>
       </div>
 
-      <div className="mx-auto max-w-[520px] space-y-6 px-8 py-10">
+      <div className="mx-auto max-w-[520px] space-y-6 px-4 py-8 sm:px-8 sm:py-10">
         {/* Canceled state */}
         {searchParams?.canceled === '1' && (
-          <div className="rounded-xl border border-rule bg-paper px-5 py-4" role="alert">
-            <p className="text-body-sm font-medium text-ink">Checkout was canceled</p>
-            <p className="mt-1 text-body-sm text-ink-3">
-              Your run is still saved and waiting for payment. Come back whenever you&apos;re ready.
-            </p>
+          <div
+            className="flex items-start gap-2.5 rounded-xl border border-rule bg-paper px-4 py-4"
+            role="alert"
+          >
+            <svg className="mt-0.5 h-4 w-4 shrink-0 text-ink-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M8 5v4M8 10.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <div>
+              <p className="text-body-sm font-medium text-ink">Checkout was canceled</p>
+              <p className="mt-1 text-caption text-ink-3 leading-relaxed">
+                Your run is still saved and waiting for payment. Come back whenever you&apos;re ready.
+              </p>
+            </div>
           </div>
         )}
 
         {/* Payment received state */}
         {paymentProcessing && (
-          <div className="rounded-xl border border-sage/30 bg-sage/8 px-5 py-4" role="status">
+          <div className="rounded-xl border border-sage/30 bg-sage/8 px-4 py-4" role="status" aria-live="polite">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-sage" aria-hidden="true" />
               <p className="text-body-sm font-semibold text-sage">Payment received</p>
@@ -135,12 +146,12 @@ export default async function CheckoutPage({
 
         {/* Receipt card */}
         <div className="overflow-hidden rounded-xl border border-rule bg-paper shadow-1">
-          {/* Receipt header */}
-          <div className="border-b border-rule bg-paper-2 px-6 py-4">
-            <div className="flex items-center justify-between gap-4">
+          {/* Receipt header — stacks price below title on very narrow */}
+          <div className="border-b border-rule bg-paper-2 px-5 py-4 sm:px-6">
+            <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-eyebrow uppercase tracking-widest text-ink-4">Hub project</p>
-                <h2 className="mt-1 font-serif text-heading-md text-ink truncate">{proj.title}</h2>
+                <h2 className="mt-1 font-serif text-heading-md text-ink line-clamp-2">{proj.title}</h2>
               </div>
               <div className="shrink-0 text-right">
                 <p className="font-serif text-heading-lg text-ink">
@@ -152,29 +163,29 @@ export default async function CheckoutPage({
           </div>
 
           {/* Line items */}
-          <div className="divide-y divide-rule px-6">
-            <div className="flex items-center justify-between py-3 text-body-sm">
+          <div className="divide-y divide-rule px-5 sm:px-6">
+            <div className="flex items-center justify-between gap-4 py-3 text-body-sm">
               <span className="text-ink-3">Videos included</span>
-              <span className="font-medium text-ink">
+              <span className="font-medium text-ink shrink-0">
                 {videoCount} video{videoCount === 1 ? '' : 's'}
               </span>
             </div>
-            <div className="flex items-center justify-between py-3 text-body-sm">
+            <div className="flex items-center justify-between gap-4 py-3 text-body-sm">
               <span className="text-ink-3">Source audio</span>
-              <span className="font-medium text-ink">{fmtDuration(run.selectedDurationSeconds)}</span>
+              <span className="font-medium text-ink shrink-0">{fmtDuration(run.selectedDurationSeconds)}</span>
             </div>
-            <div className="flex items-center justify-between py-3 text-body-sm">
+            <div className="flex items-center justify-between gap-4 py-3 text-body-sm">
               <span className="text-ink-3">Expected delivery</span>
-              <span className="font-medium text-ink">Draft ready in ~4 minutes</span>
+              <span className="font-medium text-ink shrink-0">~4 minutes</span>
             </div>
-            <div className="flex items-center justify-between py-3 text-body-sm">
+            <div className="flex items-center justify-between gap-4 py-3 text-body-sm">
               <span className="text-ink-3">Pipeline</span>
-              <span className="font-mono text-caption text-ink-4">{run.pipelineVersion}</span>
+              <span className="font-mono text-caption text-ink-4 shrink-0">{run.pipelineVersion}</span>
             </div>
           </div>
 
           {/* Trust copy + pay button */}
-          <div className="border-t border-rule-dark bg-paper-2 px-6 py-5">
+          <div className="border-t border-rule-dark bg-paper-2 px-5 py-5 sm:px-6">
             <form action={startCheckout} className="space-y-4">
               <input type="hidden" name="project_id" value={projectId} />
 
@@ -185,14 +196,9 @@ export default async function CheckoutPage({
                 </p>
               </div>
 
-              <button
-                type="submit"
-                className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-lg bg-ink px-6 text-body-sm font-semibold text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-              >
-                Pay to queue run
-              </button>
+              <CheckoutSubmitButton />
 
-              <div className="flex items-center justify-center gap-4 text-caption text-ink-4">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-caption text-ink-4">
                 <div className="flex items-center gap-1.5">
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                     <rect x="1" y="4" width="10" height="7" rx="1" stroke="currentColor" strokeWidth="1.2" />
@@ -200,7 +206,7 @@ export default async function CheckoutPage({
                   </svg>
                   Secure Stripe checkout
                 </div>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="hidden sm:inline">·</span>
                 <span>No subscription — one-time payment</span>
               </div>
             </form>

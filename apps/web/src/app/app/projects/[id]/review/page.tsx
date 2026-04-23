@@ -82,7 +82,7 @@ export default async function ProjectReviewPage({ params }: { params: { id: stri
   return (
     <main className="min-h-screen bg-paper-studio">
       {/* Top bar */}
-      <div className="border-b border-rule-dark bg-paper px-8 py-5">
+      <div className="border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div className="mx-auto flex max-w-[880px] items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
@@ -93,17 +93,18 @@ export default async function ProjectReviewPage({ params }: { params: { id: stri
           <Link
             href={`/app/projects/${params.id}`}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+            aria-label="Back to run status"
           >
             <span aria-hidden="true">←</span>
-            Run status
+            <span className="hidden sm:inline">Run status</span>
           </Link>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[880px] space-y-6 px-8 py-10">
+      <div className="mx-auto max-w-[880px] space-y-6 px-4 py-6 sm:px-8 sm:py-10">
         {/* Run status row */}
         <div className="overflow-hidden rounded-xl border border-rule bg-paper">
-          <div className="flex items-center justify-between gap-4 px-6 py-5">
+          <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5">
             <div>
               <h2 className="text-body-sm font-semibold text-ink">Current run</h2>
               <p className="mt-1 text-body-sm text-ink-4">

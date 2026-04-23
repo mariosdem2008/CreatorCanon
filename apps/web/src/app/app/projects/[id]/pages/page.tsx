@@ -159,31 +159,33 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
   return (
     <main className="min-h-screen bg-paper-studio">
       {/* Top bar */}
-      <div className="border-b border-rule-dark bg-paper px-8 py-5">
-        <div className="mx-auto flex max-w-[920px] items-center justify-between gap-4">
+      <div className="border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
+        <div className="mx-auto flex max-w-[920px] items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
               Draft Pages
             </div>
             <h1 className="font-serif text-heading-lg text-ink truncate">{proj.title}</h1>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Link
               href={`/app/projects/${params.id}`}
+              aria-label="Back to run status"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
             >
-              Run status
+              <span className="hidden sm:inline">Run status</span>
+              <span className="sm:hidden" aria-hidden="true">←</span>
             </Link>
             <Link
               href={`/app/projects/${params.id}/review`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+              className="hidden h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 sm:inline-flex"
             >
               Review draft
             </Link>
             {publishedSubdomain && (
               <Link
                 href={`/h/${publishedSubdomain}`}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                className="hidden h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 sm:inline-flex"
               >
                 Public hub
               </Link>
@@ -192,13 +194,13 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
         </div>
       </div>
 
-      <div className="mx-auto max-w-[920px] space-y-6 px-8 py-10">
+      <div className="mx-auto max-w-[920px] space-y-6 px-4 py-6 sm:px-8 sm:py-10">
         {/* Run summary */}
         <div className="overflow-hidden rounded-xl border border-rule bg-paper">
-          <div className="border-b border-rule bg-paper-2 px-6 py-4">
+          <div className="border-b border-rule bg-paper-2 px-4 py-4 sm:px-6">
             <h2 className="text-body-sm font-semibold text-ink">Run overview</h2>
           </div>
-          <div className="px-6 py-4 space-y-2">
+          <div className="space-y-2 px-4 py-4 sm:px-6">
             <p className="text-body-sm text-ink-4">
               {run
                 ? `Status: ${run.status}. Edit and approve generated draft pages before publishing.`
@@ -248,7 +250,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
           </div>
 
           {canPublish && (
-            <div className="border-t border-rule px-6 py-4">
+            <div className="border-t border-rule px-4 py-4 sm:px-6">
               <form action={publishCurrentRun.bind(null, params.id)} className="space-y-3">
                 {canPublishAwaitingReview && !allPagesApproved && (
                   <div className="rounded-lg border border-amber/30 bg-amber-wash px-4 py-3">
@@ -259,7 +261,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                 )}
                 <button
                   type="submit"
-                  className="inline-flex h-9 items-center rounded-lg bg-ink px-5 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                  className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-ink px-5 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 sm:w-auto sm:justify-start"
                 >
                   {publishButtonLabel}
                 </button>
@@ -305,7 +307,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
           return (
             <article key={item.id} className="overflow-hidden rounded-xl border border-rule bg-paper">
               {/* Page header */}
-              <div className="flex items-start justify-between gap-4 border-b border-rule bg-paper-2 px-6 py-5">
+              <div className="flex items-start justify-between gap-3 border-b border-rule bg-paper-2 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
                 <div className="min-w-0">
                   <p className="text-eyebrow uppercase tracking-widest text-ink-4">
                     Page {item.position + 1}
@@ -334,7 +336,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
 
               {/* Edit forms */}
               {version && (
-                <div className="grid gap-5 border-b border-rule px-6 py-5 md:grid-cols-2">
+                <div className="grid gap-5 border-b border-rule px-4 py-4 sm:px-6 sm:py-5 md:grid-cols-2">
                   <form action={updatePageTitle.bind(null, params.id, item.id)} className="space-y-2">
                     <label
                       className="block text-body-sm font-semibold text-ink"
@@ -385,7 +387,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                 {sections.length > 0 ? sections.map((section) => {
                   const content = section.content as SectionContent;
                   return (
-                    <section key={section.id} className="px-6 py-5">
+                    <section key={section.id} className="px-4 py-4 sm:px-6 sm:py-5">
                       <form
                         action={updateSectionBlock.bind(null, params.id, item.id, section.id)}
                         className="space-y-4"
@@ -439,7 +441,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
               </div>
 
               {/* Approve row */}
-              <div className="flex flex-wrap items-center gap-3 border-t border-rule-dark bg-paper-2 px-6 py-4">
+              <div className="flex flex-wrap items-center gap-3 border-t border-rule-dark bg-paper-2 px-4 py-4 sm:px-6">
                 <form action={markPageReviewed.bind(null, params.id, item.id)}>
                   <button
                     type="submit"

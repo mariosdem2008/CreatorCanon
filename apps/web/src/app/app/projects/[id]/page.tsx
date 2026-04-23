@@ -171,7 +171,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   return (
     <main className="min-h-screen bg-paper-studio">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-8 py-5">
+      <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
           <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
             Creator Studio
@@ -183,17 +183,18 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           <Link
             href="/app"
             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+            aria-label="Back to Dashboard"
           >
             <span aria-hidden="true">←</span>
-            Dashboard
+            <span className="hidden sm:inline">Dashboard</span>
           </Link>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[720px] space-y-5 px-8 py-10">
+      <div className="mx-auto max-w-[720px] space-y-5 px-4 py-6 sm:px-8 sm:py-10">
         {/* Status card */}
         <div className="overflow-hidden rounded-xl border border-rule bg-paper">
-          <div className="flex items-center justify-between border-b border-rule bg-paper-2 px-6 py-4">
+          <div className="flex items-center justify-between border-b border-rule bg-paper-2 px-4 py-4 sm:px-6">
             <h2 className="text-body-sm font-semibold text-ink">Generation run</h2>
             {run && (
               <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-caption font-medium ${RUN_STATUS_BADGE[runStatus] ?? 'bg-paper-3 text-ink-4 border-rule'}`}>
@@ -202,19 +203,19 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             )}
           </div>
 
-          {/* Run stats */}
+          {/* Run stats — compact on mobile */}
           <div className="grid grid-cols-3 divide-x divide-rule border-b border-rule">
-            <div className="px-6 py-4">
+            <div className="px-3 py-4 sm:px-6">
               <p className="text-eyebrow uppercase tracking-widest text-ink-4">Videos</p>
               <p className="mt-2 font-serif text-heading-md text-ink">{videoCount}</p>
             </div>
-            <div className="px-6 py-4">
+            <div className="px-3 py-4 sm:px-6">
               <p className="text-eyebrow uppercase tracking-widest text-ink-4">Pipeline</p>
-              <p className="mt-2 font-mono text-body-sm text-ink">{run?.pipelineVersion ?? (
+              <p className="mt-2 font-mono text-[11px] text-ink break-all sm:text-body-sm">{run?.pipelineVersion ?? (
                 <span className="text-ink-5">—</span>
               )}</p>
             </div>
-            <div className="px-6 py-4">
+            <div className="px-3 py-4 sm:px-6">
               <p className="text-eyebrow uppercase tracking-widest text-ink-4">Status</p>
               <p className={`mt-2 text-body-sm font-medium ${runStatus ? (RUN_STATUS_BADGE[runStatus]?.includes('sage') ? 'text-sage' : RUN_STATUS_BADGE[runStatus]?.includes('amber') ? 'text-amber-ink' : RUN_STATUS_BADGE[runStatus]?.includes('rose') ? 'text-rose' : 'text-ink-4') : 'text-ink-5'}`}>
                 {run ? (RUN_STATUS_LABEL[runStatus] ?? runStatus) : (
@@ -225,7 +226,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           </div>
 
           {/* Status messages */}
-          <div className="px-6 py-4 space-y-3">
+          <div className="space-y-3 px-4 py-4 sm:px-6">
             {run?.status === 'queued' && (
               <div className="rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
                 <p className="text-body-sm text-ink-3">
@@ -245,7 +246,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             )}
 
             {run?.status === 'awaiting_payment' && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-body-sm font-semibold text-ink">Payment required</p>
                   <p className="mt-0.5 text-caption text-ink-4">
@@ -254,7 +255,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 </div>
                 <Link
                   href={`/app/checkout?projectId=${params.id}`}
-                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
                 >
                   Complete payment
                 </Link>
@@ -291,7 +292,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             )}
 
             {draftPagesReady && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-body-sm font-semibold text-ink">Draft pages ready</p>
                   <p className="mt-0.5 text-caption text-ink-4">
@@ -300,7 +301,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 </div>
                 <Link
                   href={`/app/projects/${params.id}/pages`}
-                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
                 >
                   Open draft pages
                 </Link>
@@ -309,7 +310,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
             {draftPagesReady && run?.status === 'awaiting_review' && (
               <form action={publishCurrentRun.bind(null, params.id)}>
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
+                <div className="flex flex-col gap-3 rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-body-sm font-semibold text-ink">Ready to publish a preview</p>
                     <p className="mt-0.5 text-caption text-ink-4">
@@ -318,7 +319,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                   </div>
                   <button
                     type="submit"
-                    className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
                   >
                     Publish preview
                   </button>
@@ -327,7 +328,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             )}
 
             {publishedSubdomain && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-body-sm font-semibold text-ink">Published preview hub</p>
                   <p className="mt-0.5 text-caption text-ink-4">
@@ -336,7 +337,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 </div>
                 <Link
                   href={`/h/${publishedSubdomain}`}
-                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
                 >
                   Open hub
                 </Link>
@@ -344,7 +345,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             )}
 
             {reviewReady && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-body-sm font-semibold text-ink">Review draft ready</p>
                   <p className="mt-0.5 text-caption text-ink-4">
@@ -353,7 +354,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 </div>
                 <Link
                   href={`/app/projects/${params.id}/review`}
-                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
                 >
                   Open review
                 </Link>
@@ -402,16 +403,29 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         </div>
 
         {/* Stage progress */}
+        {run && ACTIVE_RUN_STATUSES.has(run.status) && stageRuns.length === 0 && (
+          /* First-run state: queued/running but pipeline hasn't emitted stages yet */
+          <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+            <div className="border-b border-rule bg-paper-2 px-4 py-4 sm:px-6">
+              <h2 className="text-body-sm font-semibold text-ink">Pipeline stages</h2>
+            </div>
+            <div className="flex items-center gap-3 px-4 py-6 sm:px-6">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber animate-pulse" aria-hidden="true" />
+              <p className="text-body-sm text-ink-3">Waiting for pipeline to start — stages will appear here once the worker begins.</p>
+            </div>
+          </div>
+        )}
+
         {stageRuns.length > 0 && (
           <div className="overflow-hidden rounded-xl border border-rule bg-paper">
-            <div className="border-b border-rule bg-paper-2 px-6 py-4">
+            <div className="border-b border-rule bg-paper-2 px-4 py-4 sm:px-6">
               <h2 className="text-body-sm font-semibold text-ink">Pipeline stages</h2>
             </div>
             <ul className="divide-y divide-rule px-0">
               {stageRuns.map((sr) => {
                 const status = sr.status as StageStatus;
                 return (
-                  <li key={sr.id} className="flex items-center gap-3 px-6 py-3">
+                  <li key={sr.id} className="flex items-center gap-3 px-4 py-3 sm:px-6">
                     <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status] ?? 'bg-rule'}`} aria-hidden="true" />
                     <span className="flex-1 text-body-sm text-ink">
                       {STAGE_LABELS[sr.stageName] ?? sr.stageName}
@@ -431,30 +445,30 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         {/* Config summary */}
         {proj.config && (
           <div className="overflow-hidden rounded-xl border border-rule bg-paper">
-            <div className="border-b border-rule bg-paper-2 px-6 py-4">
+            <div className="border-b border-rule bg-paper-2 px-4 py-4 sm:px-6">
               <h2 className="text-body-sm font-semibold text-ink">Configuration</h2>
             </div>
-            <dl className="divide-y divide-rule px-6">
+            <dl className="divide-y divide-rule px-4 sm:px-6">
               {proj.config.audience && (
                 <div className="flex gap-4 py-3 text-body-sm">
-                  <dt className="w-28 shrink-0 text-ink-4">Audience</dt>
+                  <dt className="w-24 shrink-0 text-ink-4 sm:w-28">Audience</dt>
                   <dd className="text-ink">{proj.config.audience as string}</dd>
                 </div>
               )}
               <div className="flex gap-4 py-3 text-body-sm">
-                <dt className="w-28 shrink-0 text-ink-4">Tone</dt>
+                <dt className="w-24 shrink-0 text-ink-4 sm:w-28">Tone</dt>
                 <dd className="capitalize text-ink">{proj.config.tone as string ?? 'Conversational'}</dd>
               </div>
               <div className="flex gap-4 py-3 text-body-sm">
-                <dt className="w-28 shrink-0 text-ink-4">Depth</dt>
+                <dt className="w-24 shrink-0 text-ink-4 sm:w-28">Depth</dt>
                 <dd className="capitalize text-ink">{String(proj.config.length_preset ?? 'standard')}</dd>
               </div>
               <div className="flex gap-4 py-3 text-body-sm">
-                <dt className="w-28 shrink-0 text-ink-4">Template</dt>
+                <dt className="w-24 shrink-0 text-ink-4 sm:w-28">Template</dt>
                 <dd className="text-ink">{selectedTemplate.name}</dd>
               </div>
               <div className="flex gap-4 py-3 text-body-sm">
-                <dt className="w-28 shrink-0 text-ink-4">Chat</dt>
+                <dt className="w-24 shrink-0 text-ink-4 sm:w-28">Chat</dt>
                 <dd className="text-ink">{proj.config.chat_enabled ? 'Enabled' : 'Disabled'}</dd>
               </div>
             </dl>

@@ -87,3 +87,9 @@
     animation: shimmer 1.8s ease-in-out infinite;
   }
 }
+
+/* Shimmer keyframe — referenced by .shimmer-bg utility and Tailwind animate-shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

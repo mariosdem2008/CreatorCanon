@@ -219,38 +219,46 @@ export default function LibraryClient({
   return (
     <div className="min-h-screen bg-paper-studio">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-8 py-5">
-        <div>
-          <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
-            Creator Studio
+      <div className="border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
+              Creator Studio
+            </div>
+            <h1 className="font-serif text-heading-lg text-ink">Source library</h1>
           </div>
-          <h1 className="font-serif text-heading-lg text-ink">Source library</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/app"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-          >
-            <span aria-hidden="true">←</span>
-            Dashboard
-          </Link>
-          <button
-            disabled={selected.size === 0}
-            onClick={() => {
-              const ids = [...selected].join(',');
-              router.push(`/app/configure?ids=${ids}`);
-            }}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-          >
-            Build hub from {selected.size > 0 ? selected.size : '…'} videos
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/app"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+              aria-label="Back to Dashboard"
+            >
+              <span aria-hidden="true">←</span>
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+            <button
+              disabled={selected.size === 0}
+              onClick={() => {
+                const ids = [...selected].join(',');
+                router.push(`/app/configure?ids=${ids}`);
+              }}
+              aria-disabled={selected.size === 0}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+            >
+              <span className="hidden sm:inline">Build hub from </span>
+              {selected.size > 0 ? selected.size : '…'}
+              <span className="hidden sm:inline"> videos</span>
+              <span className="sm:hidden"> selected</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1320px] px-8 py-7">
-        {/* Filter bar */}
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <div className="relative w-72">
+      <div className="mx-auto max-w-[1320px] px-4 py-5 sm:px-8 sm:py-7">
+        {/* Filter bar — stacks on mobile */}
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          {/* Search — full width on mobile */}
+          <div className="relative w-full sm:w-72">
             <svg
               className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-4"
               viewBox="0 0 16 16" fill="none" aria-hidden="true"
@@ -268,60 +276,63 @@ export default function LibraryClient({
             />
           </div>
 
-          {/* Duration segmented control */}
-          <div
-            className="flex items-center gap-0.5 rounded-lg border border-rule bg-paper p-0.5"
-            role="group"
-            aria-label="Filter by duration"
-          >
-            {durationLabels.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setDurationFilter(key)}
-                aria-pressed={durationFilter === key}
-                className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                  durationFilter === key
-                    ? 'bg-ink text-paper shadow-sm'
-                    : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Controls row — duration + spacer + view mode */}
+          <div className="flex items-center gap-3">
+            {/* Duration segmented control */}
+            <div
+              className="flex items-center gap-0.5 rounded-lg border border-rule bg-paper p-0.5"
+              role="group"
+              aria-label="Filter by duration"
+            >
+              {durationLabels.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setDurationFilter(key)}
+                  aria-pressed={durationFilter === key}
+                  className={`rounded-md px-2 py-1.5 text-[12px] font-medium transition sm:px-3 ${
+                    durationFilter === key
+                      ? 'bg-ink text-paper shadow-sm'
+                      : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-          <div className="flex-1" />
+            <div className="flex-1" />
 
-          {/* View mode segmented control */}
-          <div
-            className="flex items-center gap-0.5 rounded-lg border border-rule bg-paper p-0.5"
-            role="group"
-            aria-label="View mode"
-          >
-            {(['list', 'grid'] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                aria-pressed={view === v}
-                aria-label={v === 'list' ? 'List view' : 'Grid view'}
-                className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                  view === v ? 'bg-ink text-paper shadow-sm' : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
-                }`}
-              >
-                {v === 'list' ? (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                    <path d="M2 4h10M2 7h10M2 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                    <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                    <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                    <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                    <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                  </svg>
-                )}
-              </button>
-            ))}
+            {/* View mode segmented control */}
+            <div
+              className="flex items-center gap-0.5 rounded-lg border border-rule bg-paper p-0.5"
+              role="group"
+              aria-label="View mode"
+            >
+              {(['list', 'grid'] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  aria-label={v === 'list' ? 'List view' : 'Grid view'}
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
+                    view === v ? 'bg-ink text-paper shadow-sm' : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
+                  }`}
+                >
+                  {v === 'list' ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <path d="M2 4h10M2 7h10M2 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                      <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                      <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                      <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -353,7 +364,54 @@ export default function LibraryClient({
         {/* Selection summary panel */}
         {selected.size > 0 && (
           <div className="mb-5 overflow-hidden rounded-xl border border-amber/30 bg-paper shadow-1">
-            <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_auto] items-center gap-5 px-6 py-5">
+            {/* Mobile: compact summary header + action buttons */}
+            <div className="flex items-center justify-between gap-3 px-4 py-3 sm:hidden border-b border-amber/20">
+              <div className="flex items-center gap-2">
+                <span className="text-amber text-[14px]" aria-hidden="true">✦</span>
+                <span className="text-body-sm font-semibold text-ink">
+                  {selected.size} video{selected.size !== 1 ? 's' : ''} · {estimatePrice(totalSelectedSeconds)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelected(new Set())}
+                  aria-label="Clear selection"
+                  className="inline-flex h-8 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => {
+                    const ids = [...selected].join(',');
+                    router.push(`/app/configure?ids=${ids}`);
+                  }}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg bg-ink px-3 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                >
+                  Build hub
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+            {/* Mobile: stats row */}
+            <div className="grid grid-cols-3 divide-x divide-amber/20 px-0 sm:hidden">
+              <div className="px-3 py-3">
+                <p className="text-eyebrow uppercase tracking-widest text-ink-4">Scope</p>
+                <p className="mt-1 font-serif text-heading-md text-ink">
+                  {totalSelectedHours >= 1 ? `${totalSelectedHours.toFixed(1)}h` : `${Math.round(totalSelectedSeconds / 60)}m`}
+                </p>
+              </div>
+              <div className="px-3 py-3">
+                <p className="text-eyebrow uppercase tracking-widest text-ink-4">Output</p>
+                <p className="mt-1 font-serif text-heading-md text-ink">~{expectedLessons}</p>
+              </div>
+              <div className="px-3 py-3">
+                <p className="text-eyebrow uppercase tracking-widest text-ink-4">Time</p>
+                <p className="mt-1 font-serif text-heading-md text-ink">~4 min</p>
+              </div>
+            </div>
+
+            {/* Desktop: full grid */}
+            <div className="hidden sm:grid grid-cols-[1.5fr_1fr_1fr_1fr_auto] items-center gap-5 px-6 py-5">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-amber text-[14px]" aria-hidden="true">✦</span>
@@ -391,6 +449,7 @@ export default function LibraryClient({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelected(new Set())}
+                  aria-label="Clear selection"
                   className="inline-flex h-9 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                 >
                   Clear
@@ -413,8 +472,8 @@ export default function LibraryClient({
         {/* List view */}
         {view === 'list' && videos.length > 0 && (
           <div className="overflow-hidden rounded-xl border border-rule bg-paper">
-            {/* Header row */}
-            <div className="grid grid-cols-[40px_112px_1fr_104px_96px_72px] items-center gap-3 border-b border-rule bg-paper-2 px-4 py-3">
+            {/* Header row — on mobile only show checkbox + title columns */}
+            <div className="grid grid-cols-[40px_1fr] items-center gap-3 border-b border-rule bg-paper-2 px-4 py-3 sm:grid-cols-[40px_80px_1fr_96px_88px_68px]">
               <div className="flex items-center">
                 <button
                   onClick={toggleAll}
@@ -424,11 +483,11 @@ export default function LibraryClient({
                   <CheckboxIcon checked={allFilteredSelected} />
                 </button>
               </div>
-              <div className="text-eyebrow uppercase tracking-widest text-ink-4">Thumb</div>
+              <div className="hidden text-eyebrow uppercase tracking-widest text-ink-4 sm:block">Thumb</div>
               <div className="text-eyebrow uppercase tracking-widest text-ink-4">Title</div>
-              <div className="text-right text-eyebrow uppercase tracking-widest text-ink-4">Views</div>
-              <div className="text-eyebrow uppercase tracking-widest text-ink-4">Date</div>
-              <div className="text-eyebrow uppercase tracking-widest text-ink-4">Length</div>
+              <div className="hidden text-right text-eyebrow uppercase tracking-widest text-ink-4 sm:block">Views</div>
+              <div className="hidden text-eyebrow uppercase tracking-widest text-ink-4 sm:block">Date</div>
+              <div className="hidden text-eyebrow uppercase tracking-widest text-ink-4 sm:block">Length</div>
             </div>
 
             {/* No-results within filter */}
@@ -437,7 +496,7 @@ export default function LibraryClient({
                 <p className="text-body-sm text-ink-3">No videos match your filter.</p>
                 <button
                   onClick={() => { setQuery(''); setDurationFilter('all'); }}
-                  className="mt-2 text-body-sm text-ink-4 underline hover:text-ink"
+                  className="mt-2 text-body-sm text-ink-4 underline hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
                 >
                   Clear filters
                 </button>
@@ -452,16 +511,18 @@ export default function LibraryClient({
                   onClick={() => toggle(v.id)}
                   aria-pressed={sel}
                   aria-label={`${sel ? 'Deselect' : 'Select'} ${v.title ?? 'video'}`}
-                  className={`grid w-full grid-cols-[40px_112px_1fr_104px_96px_72px] items-center gap-3 border-b border-rule px-4 py-3 text-left transition last:border-0 hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber ${
+                  className={`grid w-full grid-cols-[40px_1fr] items-center gap-3 border-b border-rule px-4 py-3 text-left transition last:border-0 hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber sm:grid-cols-[40px_80px_1fr_96px_88px_68px] ${
                     sel ? 'bg-amber-wash/40' : ''
                   }`}
                 >
                   <div className="flex items-center">
                     <CheckboxIcon checked={sel} />
                   </div>
-                  <VideoThumbnail url={v.thumbnailUrl} title={v.title} />
+                  <div className="hidden sm:block">
+                    <VideoThumbnail url={v.thumbnailUrl} title={v.title} />
+                  </div>
                   <div className="min-w-0">
-                    <div className="mb-1.5 font-serif text-[15px] leading-snug text-ink line-clamp-2">
+                    <div className="mb-1 font-serif text-[14px] leading-snug text-ink line-clamp-2 sm:mb-1.5 sm:text-[15px]">
                       {v.title ?? 'Untitled'}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -470,24 +531,30 @@ export default function LibraryClient({
                         hasCanonicalTranscript={v.hasCanonicalTranscript}
                         hasAudioAsset={v.hasAudioAsset}
                       />
+                      {/* On mobile, show duration inline with the chip */}
+                      {v.durationSeconds != null && (
+                        <span className="font-mono text-[11px] text-ink-4 sm:hidden">
+                          {fmtDuration(v.durationSeconds)}
+                        </span>
+                      )}
                       {v.categories[0] && (
-                        <span className="inline-flex items-center rounded-full bg-paper-3 px-2 py-0.5 text-[10px] text-ink-3">
+                        <span className="hidden sm:inline-flex items-center rounded-full bg-paper-3 px-2 py-0.5 text-[10px] text-ink-3">
                           {v.categories[0]}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="text-right font-mono text-[12px] text-ink-3">
+                  <div className="hidden text-right font-mono text-[12px] text-ink-3 sm:block">
                     {v.viewCount != null ? fmtViews(v.viewCount) : (
                       <span className="text-ink-5">—</span>
                     )}
                   </div>
-                  <div className="text-[12px] text-ink-4">
+                  <div className="hidden text-[12px] text-ink-4 sm:block">
                     {v.publishedAt ? fmtDate(v.publishedAt) : (
                       <span className="text-ink-5">—</span>
                     )}
                   </div>
-                  <div className="font-mono text-[12px] text-ink-3">
+                  <div className="hidden font-mono text-[12px] text-ink-3 sm:block">
                     {v.durationSeconds != null ? fmtDuration(v.durationSeconds) : (
                       <span className="text-ink-5">—</span>
                     )}

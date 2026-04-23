@@ -7,7 +7,7 @@ import { Logo } from '@creatorcanon/ui';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Sign in',
+  title: 'Sign in — CreatorCanon',
 };
 
 export default async function SignInPage({
@@ -27,6 +27,8 @@ export default async function SignInPage({
       : '/app';
 
   if (session?.user) redirect(callbackUrl);
+
+  const hasError = searchParams?.error != null;
 
   async function signInWithGoogle() {
     'use server';
@@ -50,63 +52,96 @@ export default async function SignInPage({
   }
 
   return (
-    <div className="flex flex-col items-center gap-10 text-center">
-      <Logo />
+    <div className="flex flex-col items-center gap-8 text-center">
+      {/* Logo */}
+      <div aria-hidden="true">
+        <Logo />
+      </div>
 
-      <div className="space-y-3">
+      {/* Heading */}
+      <div className="space-y-2">
         <h1 className="font-serif text-heading-lg text-ink">
           Sign in to CreatorCanon
         </h1>
-        <p className="text-body-md text-ink-3">
+        <p className="text-body-sm text-ink-3 leading-relaxed">
           Use the Google account that owns your YouTube channel.
         </p>
       </div>
 
-      {searchParams?.error != null && (
-        <p className="text-body-sm text-[var(--rose)]" role="alert">
-          Something went wrong. Please try again.
+      {/* Alpha-only access notice */}
+      <div className="w-full rounded-xl border border-rule bg-paper-2 px-4 py-3 text-left">
+        <p className="text-body-sm font-semibold text-ink">Alpha access required</p>
+        <p className="mt-1 text-caption text-ink-4 leading-relaxed">
+          CreatorCanon is invite-only. Your Google account must be on the allowlist to sign in.
+          If you received an invite, use that exact account.
         </p>
+      </div>
+
+      {/* Auth error */}
+      {hasError && (
+        <div
+          className="flex w-full items-start gap-2.5 rounded-xl border border-rose/30 bg-rose/8 px-4 py-3 text-left"
+          role="alert"
+          aria-live="polite"
+        >
+          <svg
+            className="mt-0.5 h-4 w-4 shrink-0 text-rose"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <div>
+            <p className="text-body-sm font-semibold text-rose">Sign-in failed</p>
+            <p className="mt-0.5 text-caption text-rose/80 leading-relaxed">
+              Your account may not have alpha access, or the sign-in was canceled. Try again or contact the team.
+            </p>
+          </div>
+        </div>
       )}
 
+      {/* Google sign-in */}
       <form action={signInWithGoogle} className="w-full">
-        <button
-          type="submit"
-          className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-rule-strong bg-paper-2 px-4 text-body-md font-medium text-ink transition hover:bg-paper-3"
-        >
-          <GoogleG />
-          Continue with Google
-        </button>
+        <GoogleSignInButton />
       </form>
 
+      {/* Dev bypass */}
       {devBypassEnabled && (
-        <form action={signInWithDevUser} className="w-full">
+        <form action={signInWithDevUser} className="w-full space-y-2">
           <button
             type="submit"
-            className="flex h-11 w-full items-center justify-center gap-3 rounded-md border border-dashed border-rule-strong bg-paper px-4 text-body-md font-medium text-ink transition hover:bg-paper-2"
+            className="flex h-10 w-full items-center justify-center gap-2.5 rounded-xl border border-dashed border-rule-strong bg-paper px-4 text-body-sm font-medium text-ink transition hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
           >
             Continue as local dev user
           </button>
-          <p className="mt-2 text-caption text-ink-4">
-            Dev-only bypass for {devBypassEmail || 'configured local user'}.
-          </p>
-          <p className="mt-2 text-caption">
+          <p className="text-caption text-ink-4">
+            Dev bypass for {devBypassEmail || 'configured local user'}.{' '}
             <a
               href="/api/dev/reset-auth"
-              className="text-ink-4 underline-offset-4 hover:text-ink hover:underline"
+              className="underline underline-offset-2 hover:text-ink-3"
             >
-              Reset local session
+              Reset session
             </a>
           </p>
         </form>
       )}
 
-      <p className="text-caption text-ink-4">
+      {/* Legal */}
+      <p className="text-caption text-ink-5">
         By continuing you agree to our{' '}
-        <a href="/terms" className="underline">
+        <a
+          href="/terms"
+          className="underline underline-offset-2 hover:text-ink-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+        >
           Terms
         </a>{' '}
         and{' '}
-        <a href="/privacy" className="underline">
+        <a
+          href="/privacy"
+          className="underline underline-offset-2 hover:text-ink-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+        >
           Privacy Policy
         </a>
         .
@@ -115,9 +150,22 @@ export default async function SignInPage({
   );
 }
 
+function GoogleSignInButton() {
+  return (
+    <button
+      type="submit"
+      className="group flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-rule-strong bg-paper px-4 text-body-sm font-medium text-ink shadow-1 transition hover:bg-paper-2 hover:shadow-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 active:scale-[0.99]"
+      aria-label="Sign in with Google"
+    >
+      <GoogleG />
+      <span>Continue with Google</span>
+    </button>
+  );
+}
+
 function GoogleG() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
       <path
         d="M17.64 9.2c0-.64-.06-1.25-.17-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92a8.8 8.8 0 0 0 2.68-6.62z"
         fill="#4285F4"
