@@ -248,6 +248,19 @@ async function main() {
   }
   record('trigger:local-fallback', 'pass', 'Shared pipeline runner is available for local fallback.');
 
+  const reviewSynth = process.env.PIPELINE_REVIEW_SYNTH ?? 'deterministic';
+  const draftSynth = process.env.PIPELINE_DRAFT_SYNTH ?? 'deterministic';
+  record(
+    'pipeline:review-synth',
+    'pass',
+    `synthesize_v0_review is running in ${reviewSynth} mode.`,
+  );
+  record(
+    'pipeline:draft-synth',
+    'pass',
+    `draft_pages_v0 is running in ${draftSynth} mode.`,
+  );
+
   if (serverParsed.success) {
     try {
       const result = await withRetry(
