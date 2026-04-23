@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 
 import type {
@@ -54,6 +57,9 @@ const styles = {
       'bg-ink text-paper transition-opacity duration-150 hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber',
     navLink:
       'transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-amber',
+    // R2 — hover adds underline offset for nav items (not just color shift)
+    navLinkUnderline:
+      'transition-colors duration-150 hover:text-ink hover:underline hover:underline-offset-4 hover:decoration-[currentColor] focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-amber',
     card: 'border-rule bg-paper transition-all duration-150 hover:shadow-1 hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber',
     // Status badges
     supportStrong: 'border-sage/30 bg-sage/10 text-sage',
@@ -63,6 +69,8 @@ const styles = {
     // Sidebar nav active
     navActive: 'bg-paper-2 text-ink',
     navIdle: 'text-ink-4 hover:text-ink hover:bg-paper-2',
+    // R2 — source card active/visited state
+    cardActive: 'border-rule bg-paper-2 ring-1 ring-amber/30',
   },
   midnight: {
     page: 'bg-[#070b10] text-[#eef5ef]',
@@ -76,12 +84,18 @@ const styles = {
       'bg-[#c8ef60] text-[#07100d] font-semibold transition-opacity duration-150 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c8ef60]',
     navLink:
       'transition-colors duration-150 hover:text-[#eef5ef] focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-[#c8ef60]',
+    // R2 — nav links get underline on hover too
+    navLinkUnderline:
+      'transition-colors duration-150 hover:text-[#eef5ef] hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-[#c8ef60]',
     card: 'border-[#263240] bg-[#0f151c] transition-all duration-150 hover:border-[#3a4f5e] hover:bg-[#131b24] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c8ef60]',
     supportStrong: 'border-[#c8ef60]/25 bg-[#c8ef60]/8 text-[#c8ef60]',
     supportLimited: 'border-[#f0b350]/25 bg-[#f0b350]/8 text-[#f0b350]',
     rule: 'border-[#263240]',
-    navActive: 'bg-[#0f151c] text-[#eef5ef] border-[#263240]',
+    // R2 — active nav item gets 2px left accent line
+    navActive: 'bg-[#0f151c] text-[#eef5ef] border-[#263240] border-l-2 border-l-[#c8ef60]',
     navIdle: 'text-[#7e9188] border-transparent hover:text-[#eef5ef] hover:bg-[#0a1016]',
+    // R2 — source card active state
+    cardActive: 'border-[#3a4f5e] bg-[#131b24] ring-1 ring-[#c8ef60]/30',
   },
   field: {
     page: 'bg-[#f2e8cf] text-[#2f271b]',
@@ -94,12 +108,17 @@ const styles = {
       'bg-[#2f271b] text-[#fdf7e8] transition-opacity duration-150 hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7a4e22]',
     navLink:
       'transition-colors duration-150 hover:text-[#2f271b] focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-[#7a4e22]',
+    // R2 — nav links get underline on hover
+    navLinkUnderline:
+      'transition-colors duration-150 hover:text-[#2f271b] hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:underline focus-visible:underline-offset-4 focus-visible:decoration-[#7a4e22]',
     card: 'border-[#c9b990] bg-[#fdf7e8] transition-all duration-150 hover:shadow-[0_4px_16px_rgba(47,39,27,0.08)] hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#7a4e22]',
     supportStrong: 'border-[#5a8a68]/30 bg-[#5a8a68]/8 text-[#3f6b4e]',
     supportLimited: 'border-[#7a4e22]/25 bg-[#7a4e22]/8 text-[#7a4e22]',
     rule: 'border-[#c9b990]',
     navActive: 'bg-[#f5e9cc] text-[#2f271b] border-[#c9b990]',
     navIdle: 'text-[#6e5f45] border-transparent hover:text-[#2f271b] hover:bg-[#f5e9cc]',
+    // R2 — source card active state
+    cardActive: 'border-[#c9b990] bg-[#f5e9cc] ring-1 ring-[#7a4e22]/25',
   },
 } satisfies Record<TemplateVariant, Record<string, string>>;
 
@@ -166,6 +185,7 @@ export function SupportLabel({
   );
 }
 
+// R2: SourceMomentCard with active/visited micro-interaction
 export function SourceMomentCard({
   source,
   variant,
@@ -174,15 +194,23 @@ export function SourceMomentCard({
   variant: TemplateVariant;
 }) {
   const cls = styles[variant];
+  const [activated, setActivated] = useState(false);
+
+  const handleActivate = () => setActivated(true);
+
   return (
-    <div className={`rounded-lg border p-4 ${cls.soft}`}>
+    <div
+      className={`rounded-lg border p-4 transition-all duration-200 ${activated ? cls.cardActive : cls.soft}`}
+    >
       <div className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.accent}`}>
         {formatTime(source.startMs)}–{formatTime(source.endMs)}
       </div>
-      <div className="mt-1.5 text-[13px] font-medium leading-snug">
+      {/* R2: text-balance on card title for better line-breaking */}
+      <div className="mt-1.5 text-[13px] font-medium leading-snug [text-wrap:balance]">
         {source.title ?? 'Source video'}
       </div>
-      <p className={`mt-2 text-[12px] leading-[1.6] ${cls.body}`}>
+      {/* R2: line-clamp for density safety — prevents very long quotes overflowing */}
+      <p className={`mt-2 line-clamp-4 text-[12px] leading-[1.6] ${cls.body}`}>
         &ldquo;{source.quote}&rdquo;
       </p>
       {source.url && (
@@ -191,16 +219,27 @@ export function SourceMomentCard({
           target="_blank"
           rel="noreferrer"
           aria-label={`Open source: ${source.title ?? 'Source video'}`}
+          onClick={handleActivate}
           className={`mt-2.5 inline-flex text-[12px] font-medium underline-offset-3 hover:underline ${cls.accent} transition-opacity duration-150 hover:opacity-80`}
         >
           Open source ↗
         </a>
       )}
+      {/* R2: visual cue when activated (no URL) */}
+      {!source.url && activated && (
+        <div className={`mt-2.5 text-[11px] ${cls.muted}`} aria-live="polite">
+          No link available
+        </div>
+      )}
     </div>
   );
 }
 
-// Source rail — right column on detail pages
+// ---------------------------------------------------------------------------
+// R2: SourceRail — with "show more" at 10+ items + mobile inline affordance
+// ---------------------------------------------------------------------------
+const SOURCE_RAIL_INITIAL = 10;
+
 export function SourceRail({
   refs,
   variant,
@@ -209,6 +248,7 @@ export function SourceRail({
   variant: TemplateVariant;
 }) {
   const cls = styles[variant];
+  const [expanded, setExpanded] = useState(false);
 
   if (refs.length === 0) {
     return (
@@ -225,16 +265,41 @@ export function SourceRail({
     );
   }
 
+  const visible = expanded ? refs : refs.slice(0, SOURCE_RAIL_INITIAL);
+  const hasMore = refs.length > SOURCE_RAIL_INITIAL;
+
   return (
-    <aside aria-label={`Source moments (${refs.length})`} className="space-y-3">
-      <div className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.muted}`}>
+    <aside aria-label={`Source moments (${refs.length})`}>
+      <div className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.muted} mb-3`}>
         Source moments / {refs.length}
       </div>
-      <div className="space-y-2.5">
-        {refs.slice(0, 6).map((ref) => (
+      {/* R2: on mobile this is inline below content; on lg it's a sticky aside column */}
+      <div
+        className="space-y-2.5 max-h-[60vh] overflow-y-auto lg:max-h-none lg:overflow-y-visible pr-0.5"
+        aria-label="Source moment cards"
+      >
+        {visible.map((ref) => (
           <SourceMomentCard key={ref.segmentId} source={ref} variant={variant} />
         ))}
       </div>
+      {hasMore && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className={`mt-3 w-full rounded-md border px-3 py-2 text-[12px] font-medium transition-opacity duration-150 hover:opacity-80 ${cls.soft} ${cls.muted}`}
+        >
+          Show {refs.length - SOURCE_RAIL_INITIAL} more source moments
+        </button>
+      )}
+      {hasMore && expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className={`mt-3 w-full rounded-md border px-3 py-2 text-[12px] font-medium transition-opacity duration-150 hover:opacity-80 ${cls.soft} ${cls.muted}`}
+        >
+          Show fewer
+        </button>
+      )}
     </aside>
   );
 }
@@ -262,8 +327,9 @@ export function PageIndexItem({
       <div className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.muted}`}>
         No.&thinsp;{(page.position + 1).toString().padStart(2, '0')} &middot; {readMinutes(page)}&thinsp;min read
       </div>
+      {/* R2: text-balance on titles to avoid orphan words at 3+ lines */}
       <h3
-        className={`mt-2 ${
+        className={`mt-2 [text-wrap:balance] ${
           compact
             ? 'text-[14px] font-semibold leading-snug'
             : 'font-serif text-[17px] leading-[1.3]'
@@ -272,7 +338,8 @@ export function PageIndexItem({
         {page.title}
       </h3>
       {!compact && page.summary && (
-        <p className={`mt-2 max-w-prose text-[13px] leading-[1.65] ${cls.body}`}>
+        // R2: line-clamp for long summaries in dense lists
+        <p className={`mt-2 line-clamp-3 max-w-prose text-[13px] leading-[1.65] ${cls.body}`}>
           {page.summary}
         </p>
       )}
@@ -307,6 +374,38 @@ export function TemplateEmptyState({
 }
 
 // ---------------------------------------------------------------------------
+// R2: Mobile menu toggle — shared across themes that have sidebar navs
+// ---------------------------------------------------------------------------
+function MobileMenuToggle({
+  open,
+  onToggle,
+  label,
+  cls,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  cls: (typeof styles)[TemplateVariant];
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={label}
+      onClick={onToggle}
+      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-[13px] font-medium transition-opacity duration-150 hover:opacity-80 lg:hidden ${cls.soft} ${cls.muted}`}
+    >
+      <span className="block w-4 space-y-[3px]" aria-hidden="true">
+        <span className={`block h-px w-full bg-current transition-transform duration-200 ${open ? 'translate-y-[4px] rotate-45' : ''}`} />
+        <span className={`block h-px w-full bg-current transition-opacity duration-200 ${open ? 'opacity-0' : ''}`} />
+        <span className={`block h-px w-full bg-current transition-transform duration-200 ${open ? '-translate-y-[4px] -rotate-45' : ''}`} />
+      </span>
+      {open ? 'Close menu' : 'Pages'}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Editorial Atlas — paper theme
 // ---------------------------------------------------------------------------
 function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
@@ -319,39 +418,41 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
-      {/* Top nav bar */}
-      <header className={`sticky top-0 z-10 border-b px-6 py-3.5 backdrop-blur-sm ${cls.panel}`}>
-        <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-4">
+      {/* Top nav bar — R2: hamburger on mobile, wrap-safe flex */}
+      <header className={`sticky top-0 z-10 border-b px-4 py-3.5 backdrop-blur-sm sm:px-6 ${cls.panel}`}>
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-3">
           <Link
             href={`/h/${manifest.subdomain}`}
-            className={`font-serif text-[18px] tracking-[-0.02em] ${cls.navLink}`}
+            className={`shrink-0 font-serif text-[18px] tracking-[-0.02em] ${cls.navLink}`}
             aria-label={`${manifest.title} — home`}
           >
             Creator<span className={cls.accent}>Canon</span>
           </Link>
-          <nav aria-label="Hub navigation" className={`hidden gap-8 text-[13px] md:flex ${cls.muted}`}>
-            <a href="#start" className={cls.navLink}>Start here</a>
-            <a href="#atlas" className={cls.navLink}>The atlas</a>
+          {/* R2: nav links hidden below md — no hamburger needed here since it's a simple header nav, not sidebar */}
+          <nav aria-label="Hub navigation" className={`hidden gap-6 text-[13px] md:flex ${cls.muted}`}>
+            <a href="#start" className={cls.navLinkUnderline}>Start here</a>
+            <a href="#atlas" className={cls.navLinkUnderline}>The atlas</a>
           </nav>
-          <span className={`font-mono text-[11px] tabular-nums ${cls.muted}`} aria-label="Release ID">
+          <span className={`hidden font-mono text-[11px] tabular-nums sm:block ${cls.muted}`} aria-label="Release ID">
             {manifest.releaseId.slice(0, 8)}
           </span>
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="mx-auto max-w-[1180px] px-6 pt-16 pb-12 md:pt-20 md:pb-16">
+      {/* Hero — R2: responsive text scale */}
+      <section className="mx-auto max-w-[1180px] px-4 pt-10 pb-8 sm:px-6 md:pt-16 md:pb-12 lg:pt-20 lg:pb-16">
         <div className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${cls.muted}`}>
           Editorial Atlas
         </div>
-        <h1 className="mt-4 max-w-[820px] font-serif text-[42px] leading-[1.04] tracking-[-0.03em] md:text-[68px]">
+        {/* R2: text-balance + responsive font size — avoids 3-line wrap at 375px */}
+        <h1 className="mt-4 max-w-[820px] [text-wrap:balance] font-serif text-[36px] leading-[1.06] tracking-[-0.03em] sm:text-[48px] md:text-[60px] lg:text-[68px]">
           {manifest.title}
         </h1>
-        <p className={`mt-5 max-w-[640px] text-[16px] leading-[1.7] ${cls.body}`}>
+        <p className={`mt-5 max-w-[640px] text-[15px] leading-[1.7] sm:text-[16px] ${cls.body}`}>
           {overview.summary ?? 'A source-linked subject atlas generated from the creator archive.'}
         </p>
-        {/* Stats strip */}
-        <dl className={`mt-10 grid gap-px border-y ${cls.rule}`}>
+        {/* Stats strip — R2: 2-col on mobile, 4-col on md */}
+        <dl className={`mt-8 grid gap-px border-y md:mt-10 ${cls.rule}`}>
           <div className={`grid grid-cols-2 gap-px md:grid-cols-4 ${cls.rule}`}>
             {[
               { label: 'Pages', value: manifest.pages.length },
@@ -366,14 +467,11 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
                 }) ?? 'Live',
               },
             ].map(({ label, value }) => (
-              <div
-                key={label}
-                className={`px-5 py-4 bg-paper`}
-              >
+              <div key={label} className="bg-paper px-4 py-3 sm:px-5 sm:py-4">
                 <dt className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}>
                   {label}
                 </dt>
-                <dd className="mt-1.5 text-[22px] font-serif leading-none tracking-tight">
+                <dd className="mt-1.5 text-[20px] font-serif leading-none tracking-tight sm:text-[22px]">
                   {value}
                 </dd>
               </div>
@@ -385,11 +483,12 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
       {/* Start here */}
       <section
         id="start"
-        className="mx-auto max-w-[1180px] px-6 pb-12"
+        className="mx-auto max-w-[1180px] px-4 pb-10 sm:px-6 sm:pb-12"
         aria-labelledby="start-heading"
       >
-        <div className={`rounded-xl border p-6 md:p-8 ${cls.panel}`}>
-          <div className={`grid gap-6 md:grid-cols-[160px_1fr]`}>
+        <div className={`rounded-xl border p-5 sm:p-6 md:p-8 ${cls.panel}`}>
+          {/* R2: single-col on mobile, 2-col grid on md */}
+          <div className="grid gap-5 md:grid-cols-[160px_1fr]">
             <div>
               <div
                 id="start-heading"
@@ -399,7 +498,8 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
               </div>
             </div>
             <div>
-              <h2 className="font-serif text-[22px] leading-[1.25] tracking-[-0.01em]">
+              {/* R2: text-balance heading */}
+              <h2 className="[text-wrap:balance] font-serif text-[20px] leading-[1.25] tracking-[-0.01em] sm:text-[22px]">
                 {overview.title}
               </h2>
               <p className={`mt-3 max-w-[640px] text-[14px] leading-[1.75] ${cls.body}`}>
@@ -419,7 +519,7 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
       {/* Atlas index */}
       <section
         id="atlas"
-        className="mx-auto max-w-[1180px] px-6 pb-20"
+        className="mx-auto max-w-[1180px] px-4 pb-16 sm:px-6 sm:pb-20"
         aria-labelledby="atlas-heading"
       >
         <h2
@@ -428,6 +528,7 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
         >
           The atlas
         </h2>
+        {/* R2: single-col always on home (not grid) — fits dense lists */}
         <div className="space-y-2.5">
           {manifest.pages.map((page) => (
             <PageIndexItem key={page.slug} manifest={manifest} page={page} variant="paper" />
@@ -442,37 +543,70 @@ function EditorialAtlasDetail({ manifest, page }: HubDetailProps) {
   const cls = styles.paper;
   const refs = pageSourceRefs(page);
   const sections = sectionBlocks(page);
+  // R2: collapsible TOC on mobile
+  const [tocOpen, setTocOpen] = useState(false);
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
       {/* Nav */}
-      <header className={`sticky top-0 z-10 border-b px-6 py-3.5 backdrop-blur-sm ${cls.panel}`}>
+      <header className={`sticky top-0 z-10 border-b px-4 py-3.5 backdrop-blur-sm sm:px-6 ${cls.panel}`}>
         <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-4">
           <Link
             href={`/h/${manifest.subdomain}`}
-            className={`text-[13px] ${cls.muted} ${cls.navLink}`}
+            className={`shrink-0 text-[13px] ${cls.muted} ${cls.navLinkUnderline}`}
             aria-label="Back to atlas index"
           >
             ← Back to atlas
           </Link>
-          <span className={`hidden font-mono text-[11px] md:block ${cls.muted}`}>
+          <span className={`hidden font-mono text-[11px] md:block ${cls.muted} truncate`}>
             {manifest.title}
           </span>
         </div>
       </header>
 
-      {/* Three-column layout */}
-      <div className="mx-auto grid max-w-[1180px] gap-10 px-6 py-10 lg:grid-cols-[160px_1fr_260px]">
+      {/* R2: mobile TOC toggle — renders above content on mobile */}
+      {sections.length > 2 && (
+        <div className="mx-auto max-w-[1180px] px-4 pt-4 sm:px-6 lg:hidden">
+          <button
+            type="button"
+            aria-expanded={tocOpen}
+            onClick={() => setTocOpen(!tocOpen)}
+            className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-[12px] font-medium ${cls.soft} ${cls.muted}`}
+          >
+            <span>Table of contents</span>
+            <span aria-hidden="true">{tocOpen ? '▲' : '▼'}</span>
+          </button>
+          {tocOpen && (
+            <div className={`mt-1 rounded-lg border px-4 py-3 ${cls.soft}`}>
+              <ol className="space-y-1">
+                {sections.map((block, i) => {
+                  const content = sectionContent(block);
+                  return (
+                    <li key={block.id} className={`text-[12px] leading-5 ${cls.muted}`}>
+                      <span className={`mr-1.5 font-mono text-[10px] ${cls.accent}`}>{(i + 1).toString().padStart(2, '0')}</span>
+                      <span className="line-clamp-1">{content.heading}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
 
-        {/* Left: page nav / TOC stub */}
-        <aside className={`hidden lg:block`} aria-label="Page position">
+      {/* Three-column layout — R2: no left col below lg, source rail below main on mobile */}
+      <div className="mx-auto grid max-w-[1180px] gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[160px_1fr_260px] lg:gap-10">
+
+        {/* Left: TOC — only visible on lg */}
+        <aside className="hidden lg:block" aria-label="Page position">
           <div
             className={`sticky top-20 text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}
           >
             <div>Lesson {(page.position + 1).toString().padStart(2, '0')}</div>
             <div className={`mt-2 w-8 border-t ${cls.rule}`} />
-            <div className="mt-3 space-y-1">
-              {sections.slice(0, 8).map((block) => {
+            {/* R2: TOC itself scrollable when 10+ sections */}
+            <div className="mt-3 max-h-[calc(100vh-160px)] space-y-1 overflow-y-auto">
+              {sections.map((block, i) => {
                 const content = sectionContent(block);
                 return (
                   <div
@@ -480,6 +614,7 @@ function EditorialAtlasDetail({ manifest, page }: HubDetailProps) {
                     className={`truncate text-[11px] leading-5 ${cls.muted}`}
                     title={content.heading}
                   >
+                    <span className={`mr-1 font-mono text-[10px] opacity-60`}>{(i + 1).toString().padStart(2, '0')}</span>
                     {content.heading}
                   </div>
                 );
@@ -489,15 +624,16 @@ function EditorialAtlasDetail({ manifest, page }: HubDetailProps) {
         </aside>
 
         {/* Centre: article body */}
-        <main>
+        <main className="min-w-0">
           <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
             Lesson No.&thinsp;{(page.position + 1).toString().padStart(2, '0')}
           </div>
-          <h1 className="mt-3 font-serif text-[38px] leading-[1.06] tracking-[-0.025em] md:text-[54px]">
+          {/* R2: responsive heading scale + text-balance */}
+          <h1 className="mt-3 [text-wrap:balance] font-serif text-[34px] leading-[1.06] tracking-[-0.025em] sm:text-[44px] md:text-[54px]">
             {page.title}
           </h1>
           {page.summary && (
-            <p className={`mt-4 font-serif text-[18px] italic leading-[1.6] ${cls.body}`}>
+            <p className={`mt-4 font-serif text-[17px] italic leading-[1.6] sm:text-[18px] ${cls.body}`}>
               {page.summary}
             </p>
           )}
@@ -513,7 +649,8 @@ function EditorialAtlasDetail({ manifest, page }: HubDetailProps) {
                 const content = sectionContent(block);
                 return (
                   <section key={block.id}>
-                    <h2 className="font-serif text-[20px] leading-[1.3] tracking-[-0.01em]">
+                    {/* R2: text-balance on section headings */}
+                    <h2 className="[text-wrap:balance] font-serif text-[20px] leading-[1.3] tracking-[-0.01em]">
                       {content.heading ?? 'Untitled section'}
                     </h2>
                     <p
@@ -538,8 +675,10 @@ function EditorialAtlasDetail({ manifest, page }: HubDetailProps) {
           </div>
         </main>
 
-        {/* Right: source rail */}
-        <SourceRail refs={refs} variant="paper" />
+        {/* Right: source rail — R2: on mobile renders below main via DOM order */}
+        <div className="lg:min-w-0">
+          <SourceRail refs={refs} variant="paper" />
+        </div>
       </div>
     </div>
   );
@@ -555,15 +694,30 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
     (sum, p) => sum + pageSourceRefs(p).length,
     0,
   );
+  // R2: mobile sidebar toggle
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
-      <div className="mx-auto grid max-w-[1280px] gap-5 px-4 py-5 md:grid-cols-[256px_1fr]">
+      {/* R2: mobile top bar (visible < md) */}
+      <div className={`sticky top-0 z-10 flex items-center justify-between border-b px-4 py-3 md:hidden ${cls.panel}`}>
+        <span className={`font-serif text-[15px] tracking-tight truncate`}>{manifest.title}</span>
+        <MobileMenuToggle
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          label="Toggle page navigation"
+          cls={cls}
+        />
+      </div>
 
-        {/* Left sidebar — sticky nav */}
+      <div className="mx-auto grid max-w-[1280px] gap-4 px-3 py-4 sm:gap-5 sm:px-4 sm:py-5 md:grid-cols-[256px_1fr]">
+
+        {/* Left sidebar — sticky nav. R2: hidden on mobile unless toggled */}
         <nav
           aria-label="Playbook navigation"
-          className={`rounded-2xl border p-5 md:sticky md:top-5 md:h-[calc(100vh-40px)] md:overflow-y-auto ${cls.panel}`}
+          className={`rounded-2xl border p-4 sm:p-5 md:sticky md:top-5 md:h-[calc(100vh-40px)] md:overflow-y-auto ${cls.panel} ${
+            sidebarOpen ? 'block' : 'hidden md:block'
+          }`}
         >
           <div
             className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}
@@ -571,7 +725,7 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
           >
             Playbook OS
           </div>
-          <h1 className="mt-3 font-serif text-[18px] leading-[1.3] tracking-[-0.01em]">
+          <h1 className="mt-3 [text-wrap:balance] font-serif text-[17px] leading-[1.3] tracking-[-0.01em] sm:text-[18px]">
             {manifest.title}
           </h1>
           <p className={`mt-2 text-[12px] leading-[1.6] ${cls.muted}`}>
@@ -581,7 +735,8 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
             }) ?? 'Live'}
           </p>
           <div className={`my-4 border-t ${cls.rule}`} />
-          <ul className="space-y-1" role="list">
+          {/* R2: sidebar scroll for 10+ pages */}
+          <ul className="space-y-1 overflow-y-auto max-h-[60vh] md:max-h-none" role="list">
             {manifest.pages.map((p) => (
               <li key={p.slug}>
                 <Link
@@ -591,7 +746,8 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
                   <span className={`mr-2 font-mono text-[10px] ${cls.accent}`}>
                     {(p.position + 1).toString().padStart(2, '0')}
                   </span>
-                  {p.title}
+                  {/* R2: line-clamp for very long page titles */}
+                  <span className="line-clamp-2">{p.title}</span>
                 </Link>
               </li>
             ))}
@@ -599,36 +755,37 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
         </nav>
 
         {/* Main content */}
-        <div className="space-y-5 min-w-0">
+        <div className="min-w-0 space-y-4 sm:space-y-5">
           {/* Hero card */}
-          <div className={`rounded-2xl border p-6 md:p-10 ${cls.panel}`}>
+          <div className={`rounded-2xl border p-5 sm:p-6 md:p-10 ${cls.panel}`}>
             <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
               Command center &middot; {release.liveAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) ?? 'Live'}
             </div>
-            <h2 className="mt-4 max-w-[700px] font-serif text-[34px] leading-[1.06] tracking-[-0.02em] md:text-[52px]">
+            {/* R2: text-balance + responsive scale */}
+            <h2 className="mt-4 max-w-[700px] [text-wrap:balance] font-serif text-[28px] leading-[1.06] tracking-[-0.02em] sm:text-[38px] md:text-[52px]">
               Run the archive like an operating system.
             </h2>
-            <p className={`mt-4 max-w-[580px] text-[15px] leading-[1.7] ${cls.body}`}>
+            <p className={`mt-4 max-w-[580px] text-[14px] leading-[1.7] sm:text-[15px] ${cls.body}`}>
               {overview.summary ?? 'A tactical readout generated from the creator archive.'}
             </p>
             <Link
               href={`/h/${manifest.subdomain}/${overview.slug}`}
-              className={`mt-6 inline-flex h-9 items-center rounded-md px-5 text-[13px] ${cls.button}`}
+              className={`mt-5 inline-flex h-9 items-center rounded-md px-5 text-[13px] sm:mt-6 ${cls.button}`}
             >
               Open first module
             </Link>
-            {/* Stats row */}
-            <dl className="mt-8 grid grid-cols-3 gap-3">
+            {/* Stats row — R2: 2-col on mobile, 3-col on sm */}
+            <dl className="mt-6 grid grid-cols-2 gap-2.5 sm:mt-8 sm:grid-cols-3 sm:gap-3">
               {[
                 { label: 'Modules', value: manifest.pages.length },
                 { label: 'Source moments', value: totalSources },
                 { label: 'Mode', value: 'Read-only' },
               ].map(({ label, value }) => (
-                <div key={label} className={`rounded-lg border px-4 py-3 ${cls.soft}`}>
+                <div key={label} className={`rounded-lg border px-3 py-2.5 sm:px-4 sm:py-3 ${cls.soft}`}>
                   <dt className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.muted}`}>
                     {label}
                   </dt>
-                  <dd className="mt-1 text-[22px] font-serif leading-none tracking-tight">
+                  <dd className="mt-1 text-[18px] font-serif leading-none tracking-tight sm:text-[22px]">
                     {value}
                   </dd>
                 </div>
@@ -636,9 +793,9 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
             </dl>
           </div>
 
-          {/* Module grid */}
+          {/* Module grid — R2: 1-col on mobile, 2-col on sm */}
           <div
-            className="grid gap-3 sm:grid-cols-2"
+            className="grid gap-2.5 sm:grid-cols-2 sm:gap-3"
             aria-label="All modules"
           >
             {manifest.pages.map((p) => (
@@ -655,26 +812,48 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
   const cls = styles.midnight;
   const refs = pageSourceRefs(page);
   const sections = sectionBlocks(page);
+  // R2: mobile sidebar toggle
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
-      <div className="mx-auto grid max-w-[1280px] gap-5 px-4 py-5 lg:grid-cols-[256px_1fr_268px]">
+      {/* R2: mobile top bar */}
+      <div className={`sticky top-0 z-10 flex items-center justify-between border-b px-4 py-3 lg:hidden ${cls.panel}`}>
+        <Link
+          href={`/h/${manifest.subdomain}`}
+          className={`text-[12px] font-medium ${cls.accent} ${cls.navLink} shrink-0`}
+          aria-label="Back to command center"
+        >
+          ← Back
+        </Link>
+        <MobileMenuToggle
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          label="Toggle module navigation"
+          cls={cls}
+        />
+      </div>
 
-        {/* Sidebar */}
+      <div className="mx-auto grid max-w-[1280px] gap-4 px-3 py-4 sm:gap-5 sm:px-4 sm:py-5 lg:grid-cols-[256px_1fr_268px]">
+
+        {/* Sidebar — R2: hidden on mobile unless toggled, shown on lg */}
         <nav
           aria-label="Module navigation"
-          className={`rounded-2xl border p-5 lg:sticky lg:top-5 lg:h-[calc(100vh-40px)] lg:overflow-y-auto ${cls.panel}`}
+          className={`rounded-2xl border p-4 sm:p-5 lg:sticky lg:top-5 lg:h-[calc(100vh-40px)] lg:overflow-y-auto ${cls.panel} ${
+            sidebarOpen ? 'block' : 'hidden lg:block'
+          }`}
         >
           <Link
             href={`/h/${manifest.subdomain}`}
-            className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent} ${cls.navLink}`}
+            className={`hidden text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent} ${cls.navLink} lg:inline-block`}
             aria-label="Back to command center"
           >
             ← Back to OS
           </Link>
-          <p className={`mt-3 text-[13px] font-medium leading-snug`}>{manifest.title}</p>
-          <div className={`my-4 border-t ${cls.rule}`} />
-          <ul className="space-y-1" role="list">
+          <p className="mt-3 hidden text-[13px] font-medium leading-snug lg:block">{manifest.title}</p>
+          <div className={`my-4 border-t ${cls.rule} hidden lg:block`} />
+          {/* R2: sidebar list scrollable for 10+ pages, with line-clamp on titles */}
+          <ul className="max-h-[50vh] space-y-1 overflow-y-auto lg:max-h-none" role="list">
             {manifest.pages.map((item) => (
               <li key={item.slug}>
                 <Link
@@ -687,7 +866,8 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
                   <span className={`mr-2 font-mono text-[10px] ${cls.accent}`}>
                     {(item.position + 1).toString().padStart(2, '0')}
                   </span>
-                  {item.title}
+                  {/* R2: clamp long titles to prevent sidebar from blowing up */}
+                  <span className="line-clamp-2">{item.title}</span>
                 </Link>
               </li>
             ))}
@@ -695,15 +875,16 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
         </nav>
 
         {/* Article */}
-        <article className={`rounded-2xl border p-6 md:p-8 min-w-0 ${cls.panel}`}>
+        <article className={`min-w-0 rounded-2xl border p-5 sm:p-6 md:p-8 ${cls.panel}`}>
           <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
             Module {(page.position + 1).toString().padStart(2, '0')}
           </div>
-          <h1 className="mt-3 font-serif text-[34px] leading-[1.06] tracking-[-0.02em] md:text-[50px]">
+          {/* R2: responsive scale + text-balance */}
+          <h1 className="mt-3 [text-wrap:balance] font-serif text-[28px] leading-[1.06] tracking-[-0.02em] sm:text-[38px] md:text-[50px]">
             {page.title}
           </h1>
           {page.summary && (
-            <p className={`mt-4 max-w-[58ch] text-[15px] leading-[1.7] ${cls.body}`}>
+            <p className={`mt-4 max-w-[58ch] text-[14px] leading-[1.7] sm:text-[15px] ${cls.body}`}>
               {page.summary}
             </p>
           )}
@@ -716,29 +897,30 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
             </span>
           </div>
 
-          <div className="mt-8 space-y-4">
+          <div className="mt-6 space-y-3 sm:mt-8 sm:space-y-4">
             {sections.length > 0 ? (
               sections.map((block, index) => {
                 const content = sectionContent(block);
                 return (
-                  <section key={block.id} className={`rounded-xl border p-5 ${cls.soft}`}>
+                  <section key={block.id} className={`rounded-xl border p-4 sm:p-5 ${cls.soft}`}>
                     <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
                       Step {(index + 1).toString().padStart(2, '0')}
                     </div>
-                    <h2 className="mt-2 text-[16px] font-semibold leading-[1.3] tracking-[-0.005em]">
+                    {/* R2: text-balance on section headings */}
+                    <h2 className="mt-2 [text-wrap:balance] text-[15px] font-semibold leading-[1.3] tracking-[-0.005em] sm:text-[16px]">
                       {content.heading ?? 'Untitled section'}
                     </h2>
-                    <p className={`mt-3 max-w-[60ch] text-[14px] leading-[1.72] ${cls.body}`}>
+                    <p className={`mt-3 max-w-[60ch] text-[13px] leading-[1.72] sm:text-[14px] ${cls.body}`}>
                       {content.body ?? 'No section body was generated.'}
                     </p>
                     {(content.sourceRefs ?? []).length > 0 ? (
-                      <div className="mt-4 space-y-2.5">
+                      <div className="mt-3 space-y-2.5 sm:mt-4">
                         {(content.sourceRefs ?? []).slice(0, 2).map((ref) => (
                           <SourceMomentCard key={ref.segmentId} source={ref} variant="midnight" />
                         ))}
                       </div>
                     ) : (
-                      <div className="mt-4">
+                      <div className="mt-3 sm:mt-4">
                         <TemplateEmptyState
                           variant="midnight"
                           message="Limited source support for this block."
@@ -757,8 +939,10 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
           </div>
         </article>
 
-        {/* Source rail */}
-        <SourceRail refs={refs} variant="midnight" />
+        {/* Source rail — R2: renders below article on mobile via DOM order */}
+        <div className="min-w-0">
+          <SourceRail refs={refs} variant="midnight" />
+        </div>
       </div>
     </div>
   );
@@ -778,40 +962,41 @@ function StudioVaultHome({ manifest, release }: HubHomeProps) {
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
-      {/* Header */}
-      <header className={`border-b px-6 py-4 ${cls.panel}`}>
-        <div className="mx-auto flex max-w-[1180px] items-center justify-between">
+      {/* Header — R2: responsive padding */}
+      <header className={`border-b px-4 py-4 sm:px-6 ${cls.panel}`}>
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-3">
           <Link
             href={`/h/${manifest.subdomain}`}
-            className={`font-serif text-[20px] tracking-[-0.02em] ${cls.navLink}`}
+            className={`shrink-0 font-serif text-[18px] tracking-[-0.02em] sm:text-[20px] ${cls.navLink}`}
             aria-label={`${manifest.title} — vault index`}
           >
             {template.name}
           </Link>
-          <span className={`hidden text-[11px] font-semibold uppercase tracking-[0.1em] md:block ${cls.muted}`}>
+          <span className={`hidden text-[11px] font-semibold uppercase tracking-[0.1em] sm:block ${cls.muted}`}>
             Public archive
           </span>
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="mx-auto max-w-[1180px] px-6 pt-14 pb-10 md:pt-20 md:pb-14">
+      {/* Hero — R2: responsive text scale */}
+      <section className="mx-auto max-w-[1180px] px-4 pt-10 pb-8 sm:px-6 md:pt-16 md:pb-10 lg:pt-20 lg:pb-14">
         <div className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
           {template.name}
         </div>
-        <h1 className="mt-4 max-w-[820px] font-serif text-[40px] leading-[1.04] tracking-[-0.03em] md:text-[64px]">
+        {/* R2: text-balance + responsive sizes */}
+        <h1 className="mt-4 max-w-[820px] [text-wrap:balance] font-serif text-[34px] leading-[1.04] tracking-[-0.03em] sm:text-[46px] md:text-[56px] lg:text-[64px]">
           {manifest.title}
         </h1>
-        <p className={`mt-5 max-w-[600px] text-[16px] leading-[1.75] ${cls.body}`}>
+        <p className={`mt-5 max-w-[600px] text-[15px] leading-[1.75] sm:text-[16px] ${cls.body}`}>
           {overview.summary ?? 'A warm source-forward vault generated from the creator archive.'}
         </p>
 
         {/* Archive note card */}
-        <div className={`mt-10 rounded-2xl border p-6 md:p-8 ${cls.panel}`}>
+        <div className={`mt-8 rounded-2xl border p-5 sm:p-6 md:p-8 ${cls.panel}`}>
           <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}>
             Archive note
           </div>
-          <p className={`mt-3 max-w-[680px] font-serif text-[17px] italic leading-[1.65] ${cls.body}`}>
+          <p className={`mt-3 max-w-[680px] font-serif text-[16px] italic leading-[1.65] sm:text-[17px] ${cls.body}`}>
             This preview contains {manifest.pages.length} generated pages and{' '}
             {totalSources} source moments. Built as a read-only knowledge vault from the creator
             archive.
@@ -827,9 +1012,9 @@ function StudioVaultHome({ manifest, release }: HubHomeProps) {
         </div>
       </section>
 
-      {/* Collections grid */}
+      {/* Collections grid — R2: 1-col mobile, 2-col sm, 3-col md */}
       <section
-        className="mx-auto max-w-[1180px] px-6 pb-20"
+        className="mx-auto max-w-[1180px] px-4 pb-16 sm:px-6 sm:pb-20"
         aria-labelledby="collections-heading"
       >
         <h2
@@ -838,7 +1023,7 @@ function StudioVaultHome({ manifest, release }: HubHomeProps) {
         >
           Collections
         </h2>
-        <div className="grid gap-3.5 sm:grid-cols-2 md:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 sm:gap-3.5">
           {manifest.pages.map((p) => (
             <PageIndexItem key={p.slug} manifest={manifest} page={p} variant="field" compact />
           ))}
@@ -855,36 +1040,37 @@ function StudioVaultDetail({ manifest, page }: HubDetailProps) {
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
-      {/* Header */}
-      <header className={`border-b px-6 py-4 ${cls.panel}`}>
-        <div className="mx-auto flex max-w-[1180px] items-center justify-between">
+      {/* Header — R2: responsive padding */}
+      <header className={`border-b px-4 py-4 sm:px-6 ${cls.panel}`}>
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-3">
           <Link
             href={`/h/${manifest.subdomain}`}
-            className={`text-[13px] ${cls.muted} ${cls.navLink}`}
+            className={`shrink-0 text-[13px] ${cls.muted} ${cls.navLinkUnderline}`}
             aria-label="Back to vault index"
           >
             ← Vault index
           </Link>
-          <span className={`hidden text-[11px] font-semibold uppercase tracking-[0.1em] md:block ${cls.muted}`}>
+          <span className={`hidden text-[11px] font-semibold uppercase tracking-[0.1em] sm:block ${cls.muted} truncate`}>
             {manifest.title}
           </span>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1180px] px-6 py-10">
+      <div className="mx-auto max-w-[1180px] px-4 py-8 sm:px-6 sm:py-10">
         {/* Eyebrow */}
         <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
           Vault lesson &middot; No.&thinsp;{(page.position + 1).toString().padStart(2, '0')}
         </div>
 
-        {/* Title + archive card */}
-        <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_260px]">
+        {/* Title + archive card — R2: stacked on mobile, side-by-side on lg */}
+        <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_260px] lg:gap-6">
           <div>
-            <h1 className="font-serif text-[38px] leading-[1.05] tracking-[-0.025em] md:text-[58px]">
+            {/* R2: text-balance + responsive scale */}
+            <h1 className="[text-wrap:balance] font-serif text-[34px] leading-[1.05] tracking-[-0.025em] sm:text-[46px] md:text-[58px]">
               {page.title}
             </h1>
             {page.summary && (
-              <p className={`mt-4 max-w-[60ch] text-[16px] leading-[1.75] ${cls.body}`}>
+              <p className={`mt-4 max-w-[60ch] text-[15px] leading-[1.75] sm:text-[16px] ${cls.body}`}>
                 {page.summary}
               </p>
             )}
@@ -896,7 +1082,7 @@ function StudioVaultDetail({ manifest, page }: HubDetailProps) {
           {/* Archive metadata card */}
           <aside
             aria-label="Archive metadata"
-            className={`h-fit rounded-2xl border p-5 ${cls.panel}`}
+            className={`h-fit rounded-2xl border p-4 sm:p-5 ${cls.panel}`}
           >
             <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}>
               Archive card
@@ -917,28 +1103,29 @@ function StudioVaultDetail({ manifest, page }: HubDetailProps) {
           </aside>
         </div>
 
-        {/* Body + source rail */}
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_288px]">
-          <article className="min-w-0 space-y-6">
+        {/* Body + source rail — R2: stacked on mobile (source rail below), side-by-side on lg */}
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_288px] lg:gap-8">
+          <article className="min-w-0 space-y-5 sm:space-y-6">
             {sections.length > 0 ? (
               sections.map((block) => {
                 const content = sectionContent(block);
                 return (
-                  <section key={block.id} className={`rounded-2xl border p-6 md:p-7 ${cls.panel}`}>
-                    <h2 className="font-serif text-[20px] leading-[1.3] tracking-[-0.01em]">
+                  <section key={block.id} className={`rounded-2xl border p-5 sm:p-6 md:p-7 ${cls.panel}`}>
+                    {/* R2: text-balance on section headings */}
+                    <h2 className="[text-wrap:balance] font-serif text-[19px] leading-[1.3] tracking-[-0.01em] sm:text-[20px]">
                       {content.heading ?? 'Untitled section'}
                     </h2>
                     <p className={`mt-3.5 max-w-[62ch] text-[14px] leading-[1.78] ${cls.body}`}>
                       {content.body ?? 'No section body was generated.'}
                     </p>
                     {(content.sourceRefs ?? []).length > 0 ? (
-                      <div className="mt-5 space-y-2.5">
+                      <div className="mt-4 space-y-2.5 sm:mt-5">
                         {(content.sourceRefs ?? []).slice(0, 2).map((ref) => (
                           <SourceMomentCard key={ref.segmentId} source={ref} variant="field" />
                         ))}
                       </div>
                     ) : (
-                      <div className="mt-5">
+                      <div className="mt-4 sm:mt-5">
                         <TemplateEmptyState
                           variant="field"
                           message="Limited source support for this section."
@@ -955,7 +1142,10 @@ function StudioVaultDetail({ manifest, page }: HubDetailProps) {
               />
             )}
           </article>
-          <SourceRail refs={refs} variant="field" />
+          {/* R2: source rail renders below article on mobile */}
+          <div className="min-w-0">
+            <SourceRail refs={refs} variant="field" />
+          </div>
         </div>
       </div>
     </div>
