@@ -2,61 +2,87 @@ import Link from 'next/link';
 
 import { Icon } from '@creatorcanon/ui';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-
-const HERO_CHIPS = [
-  'More useful than a playlist',
-  'Looks premium enough to charge for',
-  "Keeps the creator\u2019s core phrasing",
-  'Built for members, not browsers',
-];
 
 export function Hero() {
   return (
-    <section className="dotgrid border-b border-rule" aria-label="Introduction">
-      <div className="mx-auto max-w-[1140px] px-6 py-24 animate-fade-up">
-        <Badge variant="amber" className="mb-7">
-          <span className="size-1.5 rounded-full bg-amber" aria-hidden />
-          Framework creator studio
-        </Badge>
+    <section
+      id="hero"
+      aria-labelledby="hero-heading"
+      className="border-b border-rule bg-paper"
+    >
+      {/* Top rule lines — typographic anchor */}
+      <div className="border-b border-rule/40" aria-hidden />
 
-        <h1 className="font-serif text-display-xl text-ink max-w-[980px] tracking-[-0.025em]">
-          Turn your videos into a{' '}
-          <em className="italic text-amber-ink">premium</em> business knowledge system.
-        </h1>
-
-        <p className="mt-6 max-w-[60ch] text-body-lg text-ink-2 leading-relaxed">
-          CreatorCanon helps business creators turn repeat lessons, frameworks, and operating
-          advice into a source-linked hub with playbooks, searchable lessons, grounded answers,
-          and a product their audience can pay to use.
-        </p>
-
-        <div className="mt-5 flex flex-wrap gap-2" role="list" aria-label="Key qualities">
-          {HERO_CHIPS.map((chip) => (
-            <span key={chip} role="listitem">
-              <Badge variant="default">{chip}</Badge>
-            </span>
-          ))}
+      <div className="mx-auto max-w-[1140px] px-6 py-20 md:py-28">
+        {/* Alpha badge */}
+        <div className="mb-8 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber/40 bg-amber-wash px-3 py-1 font-mono text-[11px] uppercase tracking-widest text-amber-ink">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-ink" aria-hidden />
+            Private alpha
+          </span>
         </div>
 
-        <div className="mt-9 flex flex-wrap items-center gap-3">
+        {/* Headline */}
+        <h1
+          id="hero-heading"
+          className="max-w-[840px] font-serif text-display-xl text-ink tracking-[-0.025em] leading-[1.08]"
+        >
+          Your YouTube archive,{' '}
+          <br className="hidden sm:block" />
+          rebuilt as a knowledge hub.
+        </h1>
+
+        {/* Subheader — one sentence */}
+        <p className="mt-7 max-w-[56ch] text-body-lg text-ink-2 leading-[1.7]">
+          CreatorCanon turns a creator&apos;s video archive into a hosted, searchable website
+          where every lesson is structured, every claim links back to its source moment, and
+          readers can navigate your ideas like an encyclopedia.
+        </p>
+
+        {/* CTAs */}
+        <div className="mt-10 flex flex-wrap items-center gap-3">
           <Button asChild variant="accent" size="lg">
             <Link href="/sign-in">
-              Start a hub
+              Request alpha access
               <Icon name="arrowRight" size={14} />
             </Link>
           </Button>
           <Button asChild variant="secondary" size="lg">
-            <Link href="/case-study">
-              <Icon name="play" size={12} aria-hidden />
-              View demo hub
+            <Link href="#demo">
+              View live demo
             </Link>
           </Button>
-          <span className="ml-2 text-caption text-ink-4" aria-hidden>
-            Frameworks · playbooks · grounded answers
-          </span>
         </div>
+
+        {/* Contextual note */}
+        <p className="mt-6 text-caption text-ink-4">
+          Invite-only · no credit card required during alpha
+        </p>
+
+        {/* Horizontal rule divider — editorial visual anchor */}
+        <div className="mt-16 grid grid-cols-[1fr_auto_1fr] items-center gap-4" aria-hidden>
+          <div className="h-px bg-rule" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-5">
+            creator canon
+          </span>
+          <div className="h-px bg-rule" />
+        </div>
+
+        {/* Value props row */}
+        <dl className="mt-8 grid grid-cols-2 gap-x-8 gap-y-5 sm:grid-cols-4">
+          {[
+            { term: 'Archive', def: 'Any YouTube channel with 2+ years of teaching content' },
+            { term: 'Structure', def: 'Framework tracks, lesson pages, citation links' },
+            { term: 'Ownership', def: 'Your hub, your domain, your content' },
+            { term: 'Readability', def: 'Prose chapters — not transcripts, not summaries' },
+          ].map(({ term, def }) => (
+            <div key={term}>
+              <dt className="text-eyebrow uppercase text-ink-4">{term}</dt>
+              <dd className="mt-1.5 text-body-sm text-ink-2 leading-[1.6]">{def}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );
