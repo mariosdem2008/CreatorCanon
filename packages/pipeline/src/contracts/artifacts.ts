@@ -24,12 +24,16 @@ export const v0ReviewArtifactSchema = z.object({
 
 export type V0ReviewArtifact = z.infer<typeof v0ReviewArtifactSchema>;
 
+export const synthModeSchema = z.enum(['deterministic', 'llm']);
+export type SynthMode = z.infer<typeof synthModeSchema>;
+
 export const v0ReviewStageOutputSchema = z.object({
   r2Key: z.string().min(1),
   videoCount: z.number().int().min(0),
   totalSegmentCount: z.number().int().min(0),
   archiveSummary: z.string().min(1),
   themes: z.array(z.string().min(1)).max(8),
+  synthMode: synthModeSchema.optional(),
 });
 
 export type V0ReviewStageOutput = z.infer<typeof v0ReviewStageOutputSchema>;
@@ -81,6 +85,13 @@ export const draftPagesV0StageOutputSchema = z.object({
   r2Key: z.string().min(1),
   pageCount: z.number().int().min(1),
   pageIds: z.array(z.string().min(1)).min(1),
+  synthMode: synthModeSchema.optional(),
+  /**
+   * Share of sections that had a source-ref resolved via an LLM anchor-quote
+   * match (not the deterministic first-segment fallback). 0.0 - 1.0. Only
+   * meaningful when synthMode === 'llm'. Null when synthMode === 'deterministic'.
+   */
+  groundingRatio: z.number().min(0).max(1).nullable().optional(),
 });
 
 export type DraftPagesV0StageOutput = z.infer<typeof draftPagesV0StageOutputSchema>;

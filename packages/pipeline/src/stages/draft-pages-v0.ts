@@ -729,6 +729,20 @@ export async function draftPagesV0(
 
   const draftPages = attachSourceRefs(synthesizedPages, refsByVideo);
 
+  const synthMode: 'deterministic' | 'llm' = useLlm ? 'llm' : 'deterministic';
+  let groundingRatio: number | null = null;
+  if (useLlm) {
+    let withAnchors = 0;
+    let totalSections = 0;
+    for (const p of synthesizedPages) {
+      for (const s of p.sections) {
+        totalSections += 1;
+        if (s.anchorQuotes && s.anchorQuotes.length > 0) withAnchors += 1;
+      }
+    }
+    groundingRatio = totalSections > 0 ? withAnchors / totalSections : null;
+  }
+
   const artifact: DraftPagesV0Artifact = draftPagesV0ArtifactSchema.parse({
     runId: input.runId,
     workspaceId: input.workspaceId,
@@ -757,5 +771,7 @@ export async function draftPagesV0(
     r2Key,
     pageCount: artifact.pageCount,
     pageIds,
+    synthMode,
+    groundingRatio,
   };
 }

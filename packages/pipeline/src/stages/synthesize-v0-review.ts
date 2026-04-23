@@ -238,6 +238,7 @@ export async function synthesizeV0Review(
   const useLlm = env.PIPELINE_REVIEW_SYNTH === 'llm' && totalSegmentCount > 0;
   let themes = deterministicThemes;
   let archiveSummary = deterministicArchiveSummary;
+  let synthMode: 'deterministic' | 'llm' = 'deterministic';
 
   if (useLlm) {
     const llmReview = await generateLlmReview({
@@ -256,6 +257,7 @@ export async function synthesizeV0Review(
           target.summary = entry.summary;
         }
       }
+      synthMode = 'llm';
     }
   }
 
@@ -289,5 +291,6 @@ export async function synthesizeV0Review(
     totalSegmentCount: artifact.totalSegmentCount,
     archiveSummary: artifact.archiveSummary,
     themes: artifact.themes,
+    synthMode,
   };
 }
