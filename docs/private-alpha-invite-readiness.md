@@ -36,6 +36,21 @@ Remove-Item Env:ALPHA_INSPECT_RUN_ID
 The inspector prints payment status, matching Stripe webhook events, stage
 status, draft page count, live release state, and the next operator action.
 
+If a paid run is stuck in `queued`, `running`, or `failed`, rescue it without
+raw SQL:
+
+```powershell
+$env:ALPHA_RESCUE_CONFIRM="true"
+$env:ALPHA_RESCUE_RUN_ID="<run-id>"
+pnpm rescue:alpha-run
+Remove-Item Env:ALPHA_RESCUE_CONFIRM
+Remove-Item Env:ALPHA_RESCUE_RUN_ID
+```
+
+The rescue command refuses unpaid runs, writes audit rows, retries stale running
+stage rows through the shared idempotent harness, and leaves publish/review to
+the normal creator/admin flow.
+
 ## Admin Rescue
 
 Use `/admin/runs/<run-id>` before touching SQL:
@@ -43,6 +58,7 @@ Use `/admin/runs/<run-id>` before touching SQL:
 - Check whether Stripe delivered and processed `checkout.session.completed`.
 - Check whether the run has a `pi_...` payment intent.
 - Re-dispatch a paid queued/failed run if worker dispatch stalled.
+- Use `pnpm rescue:alpha-run` if hosted in-process dispatch stalls inside Vercel.
 - Rerun from a failed stage when stage output needs rebuilding.
 - Publish current draft only when draft pages exist.
 

@@ -23,6 +23,7 @@
     "smoke:audio-publish": "tsx ./src/smoke-audio-publish.ts",
     "smoke:review-edit": "tsx ./src/smoke-review-edit.ts",
     "inspect:alpha-run": "tsx ./src/inspect-alpha-run.ts",
+    "rescue:alpha-run": "tsx ./src/rescue-alpha-run.ts",
     "smoke:local": "tsx ./src/smoke-local.ts",
     "seed:audio-fixtures": "tsx ./src/seed-audio-fixtures.ts",
     "seed:alpha-audio-videos": "tsx ./src/seed-alpha-audio-videos.ts",

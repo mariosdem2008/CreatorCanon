@@ -104,6 +104,7 @@ source-positive hub publishing.
 | `pnpm dev:seed:audio-fixtures` | Seeds local `.m4a` fixtures as reusable audio assets |
 | `pnpm smoke:audio-fixtures` | Verifies audio fixture transcription reaches segments |
 | `pnpm inspect:alpha-run` | Read-only operator diagnostics for one alpha run |
+| `pnpm rescue:alpha-run` | Audited operator rescue for one paid stuck alpha run |
 | `pnpm env:doctor`   | Read-only alpha environment readiness check      |
 | `pnpm smoke:alpha`  | Real-service alpha smoke for a selected run      |
 | `pnpm alpha:e2e`    | Seeded alpha demo against explicit target env    |
