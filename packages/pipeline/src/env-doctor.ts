@@ -250,6 +250,7 @@ async function main() {
 
   const reviewSynth = process.env.PIPELINE_REVIEW_SYNTH ?? 'deterministic';
   const draftSynth = process.env.PIPELINE_DRAFT_SYNTH ?? 'deterministic';
+  const dispatchMode = process.env.PIPELINE_DISPATCH_MODE ?? 'inprocess';
   record(
     'pipeline:review-synth',
     'pass',
@@ -259,6 +260,11 @@ async function main() {
     'pipeline:draft-synth',
     'pass',
     `draft_pages_v0 is running in ${draftSynth} mode.`,
+  );
+  record(
+    'pipeline:dispatch-mode',
+    'pass',
+    `Stripe webhook dispatches in ${dispatchMode} mode.`,
   );
 
   if (serverParsed.success) {

@@ -48,6 +48,7 @@ export const serverEnvSchema = z.object({
 
   PIPELINE_DRAFT_SYNTH: z.enum(['deterministic', 'llm']).default('deterministic'),
   PIPELINE_REVIEW_SYNTH: z.enum(['deterministic', 'llm']).default('deterministic'),
+  PIPELINE_DISPATCH_MODE: z.enum(['inprocess', 'trigger']).default('inprocess'),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

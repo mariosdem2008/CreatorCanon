@@ -21,15 +21,23 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function runInProcess(payload: RunGenerationPipelinePayload): void {
+  void runGenerationPipeline(payload).catch((err) => {
+    console.error('[stripe-webhook] In-process pipeline run failed:', err);
+  });
+}
+
 async function dispatchPipeline(payload: RunGenerationPipelinePayload): Promise<void> {
-  try {
-    await tasks.trigger('run-pipeline', payload);
-  } catch (error) {
-    console.warn('[stripe-webhook] Failed to trigger pipeline task:', error);
-    void runGenerationPipeline(payload).catch((err) => {
-      console.error('[stripe-webhook] Local pipeline fallback failed:', err);
-    });
+  const mode = process.env.PIPELINE_DISPATCH_MODE ?? 'inprocess';
+  if (mode === 'trigger') {
+    try {
+      await tasks.trigger('run-pipeline', payload);
+      return;
+    } catch (error) {
+      console.warn('[stripe-webhook] Failed to trigger pipeline task, falling back in-process:', error);
+    }
   }
+  runInProcess(payload);
 }
 
 export async function POST(req: Request) {
