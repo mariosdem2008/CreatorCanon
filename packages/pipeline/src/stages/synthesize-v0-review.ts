@@ -92,9 +92,15 @@ function buildArchiveSummary(input: {
   return `Atlas synthesized ${input.totalSegmentCount} transcript segment${input.totalSegmentCount === 1 ? '' : 's'} across ${input.videoCount} selected video${input.videoCount === 1 ? '' : 's'}, with usable transcript material in ${input.videosWithTranscript} of them.${themeText}`;
 }
 
+const llmVideoSummarySchema = z.object({
+  index: z.number().int().min(1),
+  summary: z.string().min(1).max(360),
+});
+
 const llmReviewSchema = z.object({
   archiveSummary: z.string().min(1).max(600),
   themes: z.array(z.string().min(1).max(60)).min(1).max(6),
+  videoSummaries: z.array(llmVideoSummarySchema).min(0).max(40),
 });
 
 type LlmReview = z.infer<typeof llmReviewSchema>;
@@ -102,7 +108,7 @@ type LlmReview = z.infer<typeof llmReviewSchema>;
 const llmReviewJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['archiveSummary', 'themes'],
+  required: ['archiveSummary', 'themes', 'videoSummaries'],
   properties: {
     archiveSummary: { type: 'string' },
     themes: {
@@ -110,6 +116,20 @@ const llmReviewJsonSchema = {
       minItems: 1,
       maxItems: 6,
       items: { type: 'string' },
+    },
+    videoSummaries: {
+      type: 'array',
+      minItems: 0,
+      maxItems: 40,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['index', 'summary'],
+        properties: {
+          index: { type: 'integer' },
+          summary: { type: 'string' },
+        },
+      },
     },
   },
 } as const;
@@ -124,33 +144,34 @@ async function generateLlmReview(args: {
   openai: OpenAIClient;
 }): Promise<LlmReview | null> {
   const corpus = args.videos
-    .filter((v) => v.segmentTexts.length > 0)
     .map((video, idx) => {
       const body = video.segmentTexts.slice(0, 20).join(' ').replace(/\s+/g, ' ').trim();
       const truncated = body.length > 2400 ? `${body.slice(0, 2400)}...` : body;
-      return `VIDEO ${idx + 1} title=${JSON.stringify(video.title ?? 'Untitled')}\n${truncated}`;
+      const content = truncated || '(no transcript)';
+      return `VIDEO ${idx + 1} title=${JSON.stringify(video.title ?? 'Untitled')}\n${content}`;
     })
     .join('\n\n');
 
-  if (!corpus) return null;
+  if (args.videos.every((v) => v.segmentTexts.length === 0)) return null;
 
   const system =
-    'You read transcripts from a creator\'s video archive and identify the semantic shape of the collection. Return a concise archive summary and 3-6 recurring themes (short noun phrases, Title Case). Ground everything in the provided transcripts; do not invent topics.';
+    'You read transcripts from a creator\'s video archive and identify the semantic shape of the collection. Return a concise archive summary, 3-6 recurring themes (short noun phrases, Title Case), and a 1-2 sentence summary per video grounded in its transcript. Do not invent topics.';
 
   const user = [
-    'Transcripts (truncated where long):',
+    'Transcripts (truncated where long). Each video is tagged VIDEO <n>:',
     corpus,
     '',
     'Write:',
     '- archiveSummary: 2-3 sentences (<=480 chars) describing what this archive covers as a whole. Use plain, present-tense prose. Mention what a reader will find; do not mention video counts or transcript stats.',
     '- themes: 3-6 short noun phrases (<=5 words each, Title Case) that name the recurring ideas across videos. No duplicates. Skip generic words like "Content" or "Videos".',
+    "- videoSummaries: one entry per VIDEO you see above. Each has index (matching VIDEO n) and summary (1-2 plain sentences, <=280 chars, grounded in that video's transcript). Skip videos that appear but have no transcript content.",
   ].join('\n');
 
   try {
     const completion = await args.openai.chat({
       model: 'gpt-4o-mini',
       temperature: 0.3,
-      maxTokens: 500,
+      maxTokens: 900,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -229,6 +250,12 @@ export async function synthesizeV0Review(
     if (llmReview) {
       archiveSummary = llmReview.archiveSummary;
       themes = llmReview.themes.slice(0, 6);
+      for (const entry of llmReview.videoSummaries) {
+        const target = videos[entry.index - 1];
+        if (target && target.segmentCount > 0) {
+          target.summary = entry.summary;
+        }
+      }
     }
   }
 
