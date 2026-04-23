@@ -14,7 +14,7 @@
  */
 
 import { createYouTubeClient } from '@creatorcanon/adapters';
-import { and, closeDb, eq, getDb, inArray } from '@creatorcanon/db';
+import { and, closeDb, eq, getDb } from '@creatorcanon/db';
 import { account, video, workspace } from '@creatorcanon/db/schema';
 
 import { loadDefaultEnvFiles } from './env-files';

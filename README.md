@@ -76,6 +76,16 @@ pnpm alpha:e2e
 `alpha:e2e` writes fixed alpha seed rows and artifacts. It refuses to run
 against a non-local database or R2 bucket unless `ALPHA_E2E_CONFIRM=true`.
 
+### Deferred YouTube Caption Proof
+
+The owner OAuth `captions.download` lane is wired and the alpha account has
+granted the required `youtube.force-ssl` scope. The current alpha channel videos
+authoritatively report no caption tracks, so a full source-positive
+`youtube_captions` proof is deferred until at least one selected channel video
+has captions enabled in YouTube Studio. This is not blocking the current MVP
+build because the safe audio-asset transcription lane already proves
+source-positive hub publishing.
+
 ## Scripts
 
 | Command             | What it does                                     |

@@ -14,6 +14,13 @@ import {
 import { EvidenceChips, type SourceReferenceView } from '@/components/hub/EvidenceChips';
 import { getHubTemplate } from '@/components/hub/templates';
 import { publishCurrentRun } from '../publish';
+import {
+  approvePage,
+  markPageReviewed,
+  updatePageSummary,
+  updatePageTitle,
+  updateSectionBlock,
+} from './actions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Draft Pages' };
@@ -23,6 +30,7 @@ type BlockTree = {
     type: string;
     id: string;
     content: unknown;
+    supportLabel?: 'strong' | 'review_recommended' | 'limited';
   }>;
 };
 
@@ -32,6 +40,16 @@ type SectionContent = {
   sourceVideoIds?: string[];
   sourceRefs?: SourceReferenceView[];
 };
+
+function statusLabel(status: string) {
+  return status.replace('_', ' ');
+}
+
+function statusClass(status: string) {
+  if (status === 'approved') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  if (status === 'reviewed') return 'border-amber-200 bg-amber-50 text-amber-800';
+  return 'border-rule bg-paper-2 text-ink-4';
+}
 
 export default async function ProjectPagesPage({ params }: { params: { id: string } }) {
   const session = await auth();
@@ -104,6 +122,8 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
   const publishedSubdomain = publishedHubs[0]?.subdomain;
   const publishedTemplate = getHubTemplate(publishedHubs[0]?.theme ?? selectedTemplate.id);
   const canPublish = run?.status === 'awaiting_review' && pages.length > 0;
+  const approvedCount = pages.filter((item) => item.status === 'approved').length;
+  const allPagesApproved = pages.length > 0 && approvedCount === pages.length;
 
   return (
     <main className="min-h-screen bg-paper-studio">
@@ -120,7 +140,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
               href={`/app/projects/${params.id}`}
               className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
             >
-              ← Run status
+              Back to run status
             </Link>
             <Link
               href={`/app/projects/${params.id}/review`}
@@ -145,27 +165,39 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
           <h2 className="text-body-md font-medium text-ink">Current run</h2>
           <p className="mt-2 text-body-sm text-ink-4">
             {run
-              ? `Status: ${run.status}. Draft pages appear here after the pipeline persists them.`
+              ? `Status: ${run.status}. Edit and approve generated draft pages before publishing.`
               : 'No generation run was found for this project yet.'}
           </p>
           <p className="mt-2 text-body-sm text-ink-4">
             Selected template: <span className="font-medium text-ink">{selectedTemplate.name}</span> - {selectedTemplate.tagline}
           </p>
+          {pages.length > 0 && (
+            <p className="mt-2 text-body-sm text-ink-4">
+              Review progress: <span className="font-medium text-ink">{approvedCount}</span> of{' '}
+              <span className="font-medium text-ink">{pages.length}</span> pages approved.
+            </p>
+          )}
           {publishedSubdomain && (
             <p className="mt-2 text-body-sm text-ink-4">
               Published with <span className="font-medium text-ink">{publishedTemplate.name}</span> at{' '}
               <Link href={`/h/${publishedSubdomain}`} className="font-mono text-ink underline">
                 /h/{publishedSubdomain}
               </Link>
+              . Edits made here do not update the live hub until republishing support lands.
             </p>
           )}
           {canPublish && (
-            <form action={publishCurrentRun.bind(null, params.id)} className="mt-4">
+            <form action={publishCurrentRun.bind(null, params.id)} className="mt-4 space-y-3">
+              {!allPagesApproved && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-body-sm text-amber-900">
+                  You can publish now, but at least one page still needs approval. Approving pages first makes this a cleaner creator-reviewed preview.
+                </p>
+              )}
               <button
                 type="submit"
                 className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
               >
-                Publish with {selectedTemplate.name}
+                {allPagesApproved ? 'Publish approved hub' : `Publish with ${selectedTemplate.name}`}
               </button>
             </form>
           )}
@@ -202,9 +234,11 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                     <p className="mt-1 text-body-sm text-ink-4">{version.subtitle}</p>
                   )}
                 </div>
-                <div className="text-right text-caption text-ink-4">
-                  <div>{item.status.replace('_', ' ')}</div>
-                  <div>{item.supportLabel.replace('_', ' ')}</div>
+                <div className="flex flex-col items-end gap-2 text-right text-caption">
+                  <span className={`rounded-full border px-2.5 py-1 uppercase tracking-widest ${statusClass(item.status)}`}>
+                    {statusLabel(item.status)}
+                  </span>
+                  <span className="text-ink-4">{item.supportLabel.replace('_', ' ')}</span>
                 </div>
               </div>
 
@@ -212,17 +246,86 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                 <p className="mt-4 text-body-md leading-7 text-ink-2">{version.summary}</p>
               )}
 
+              {version && (
+                <div className="mt-5 grid gap-4 border-t border-rule pt-5 md:grid-cols-2">
+                  <form action={updatePageTitle.bind(null, params.id, item.id)} className="space-y-2">
+                    <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`title-${item.id}`}>
+                      Page title
+                    </label>
+                    <input
+                      id={`title-${item.id}`}
+                      name="title"
+                      defaultValue={version.title}
+                      className="w-full rounded-md border border-rule bg-paper-2 px-3 py-2 text-body-sm text-ink outline-none transition focus:border-ink"
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex h-8 items-center rounded-md border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                    >
+                      Save title
+                    </button>
+                  </form>
+
+                  <form action={updatePageSummary.bind(null, params.id, item.id)} className="space-y-2">
+                    <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`summary-${item.id}`}>
+                      Page summary
+                    </label>
+                    <textarea
+                      id={`summary-${item.id}`}
+                      name="summary"
+                      defaultValue={version.summary ?? ''}
+                      rows={4}
+                      className="w-full rounded-md border border-rule bg-paper-2 px-3 py-2 text-body-sm leading-6 text-ink outline-none transition focus:border-ink"
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex h-8 items-center rounded-md border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                    >
+                      Save summary
+                    </button>
+                  </form>
+                </div>
+              )}
+
               <div className="mt-6 space-y-4">
                 {sections.length > 0 ? sections.map((section) => {
                   const content = section.content as SectionContent;
                   return (
                     <section key={section.id} className="rounded-md border border-rule bg-paper-2 p-4">
-                      <h3 className="text-body-sm font-medium text-ink">
-                        {content.heading ?? 'Untitled section'}
-                      </h3>
-                      <p className="mt-2 text-body-sm leading-6 text-ink-2">
-                        {content.body ?? 'No section body was generated.'}
-                      </p>
+                      <form
+                        action={updateSectionBlock.bind(null, params.id, item.id, section.id)}
+                        className="space-y-3"
+                      >
+                        <div>
+                          <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`heading-${item.id}-${section.id}`}>
+                            Section heading
+                          </label>
+                          <input
+                            id={`heading-${item.id}-${section.id}`}
+                            name="heading"
+                            defaultValue={content.heading ?? ''}
+                            className="mt-1 w-full rounded-md border border-rule bg-paper px-3 py-2 text-body-sm font-medium text-ink outline-none transition focus:border-ink"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`body-${item.id}-${section.id}`}>
+                            Section body
+                          </label>
+                          <textarea
+                            id={`body-${item.id}-${section.id}`}
+                            name="body"
+                            defaultValue={content.body ?? ''}
+                            rows={5}
+                            className="mt-1 w-full rounded-md border border-rule bg-paper px-3 py-2 text-body-sm leading-6 text-ink-2 outline-none transition focus:border-ink"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="inline-flex h-8 items-center rounded-md border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                        >
+                          Save section
+                        </button>
+                      </form>
                       <EvidenceChips refs={content.sourceRefs} variant={selectedTemplate.evidenceVariant} />
                     </section>
                   );
@@ -231,6 +334,28 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                     This page does not have generated sections yet.
                   </p>
                 )}
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-rule pt-5">
+                <form action={markPageReviewed.bind(null, params.id, item.id)}>
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 items-center rounded-md border border-rule bg-paper px-4 text-body-sm text-ink-3 transition hover:text-ink"
+                  >
+                    Mark reviewed
+                  </button>
+                </form>
+                <form action={approvePage.bind(null, params.id, item.id)}>
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
+                  >
+                    Approve page
+                  </button>
+                </form>
+                <p className="text-body-sm text-ink-4">
+                  Text edits create a new version and keep source evidence attached.
+                </p>
               </div>
             </article>
           );
