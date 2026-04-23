@@ -9,6 +9,7 @@ import {
   page,
   pageVersion,
   project,
+  release,
   workspaceMember,
 } from '@creatorcanon/db/schema';
 import { EvidenceChips, type SourceReferenceView } from '@/components/hub/EvidenceChips';
@@ -114,16 +115,47 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
   const versionMap = new Map(versions.map((version) => [version.id, version]));
   const publishedHubs = proj.publishedHubId
     ? await db
-        .select({ subdomain: hub.subdomain, theme: hub.theme })
+        .select({ subdomain: hub.subdomain, theme: hub.theme, liveReleaseId: hub.liveReleaseId })
         .from(hub)
         .where(eq(hub.id, proj.publishedHubId))
         .limit(1)
     : [];
   const publishedSubdomain = publishedHubs[0]?.subdomain;
   const publishedTemplate = getHubTemplate(publishedHubs[0]?.theme ?? selectedTemplate.id);
-  const canPublish = run?.status === 'awaiting_review' && pages.length > 0;
   const approvedCount = pages.filter((item) => item.status === 'approved').length;
   const allPagesApproved = pages.length > 0 && approvedCount === pages.length;
+
+  // Compare the current page-version set against the live release's metadata.
+  // If they differ (creator edited since last publish), offer a republish.
+  // If they match, the live hub is already faithful to the current draft.
+  const currentVersionIds = pages
+    .map((p) => p.currentVersionId)
+    .filter((id): id is string => Boolean(id));
+  let liveReleaseVersionIds: string[] | undefined;
+  if (publishedHubs[0]?.liveReleaseId) {
+    const liveRows = await db
+      .select({ metadata: release.metadata })
+      .from(release)
+      .where(eq(release.id, publishedHubs[0].liveReleaseId))
+      .limit(1);
+    const meta = liveRows[0]?.metadata as { pageVersionIds?: unknown } | null | undefined;
+    if (meta && Array.isArray(meta.pageVersionIds)) {
+      liveReleaseVersionIds = meta.pageVersionIds.filter((id): id is string => typeof id === 'string');
+    }
+  }
+  const isHubPublished = run?.status === 'published' && !!publishedSubdomain;
+  const hasEditsSinceLiveRelease =
+    isHubPublished &&
+    (!liveReleaseVersionIds ||
+      liveReleaseVersionIds.length !== currentVersionIds.length ||
+      liveReleaseVersionIds.some((id, i) => id !== currentVersionIds[i]));
+  const canPublishAwaitingReview = run?.status === 'awaiting_review' && pages.length > 0;
+  const canPublish = canPublishAwaitingReview || (isHubPublished && hasEditsSinceLiveRelease);
+  const publishButtonLabel = canPublishAwaitingReview
+    ? allPagesApproved
+      ? 'Publish approved hub'
+      : `Publish with ${selectedTemplate.name}`
+    : 'Publish updated hub';
 
   return (
     <main className="min-h-screen bg-paper-studio">
@@ -183,12 +215,17 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
               <Link href={`/h/${publishedSubdomain}`} className="font-mono text-ink underline">
                 /h/{publishedSubdomain}
               </Link>
-              . Edits made here do not update the live hub until republishing support lands.
+              .{' '}
+              {isHubPublished && !hasEditsSinceLiveRelease
+                ? 'Published hub is current.'
+                : hasEditsSinceLiveRelease
+                  ? 'You have edits that are not in the live hub yet.'
+                  : ''}
             </p>
           )}
           {canPublish && (
             <form action={publishCurrentRun.bind(null, params.id)} className="mt-4 space-y-3">
-              {!allPagesApproved && (
+              {canPublishAwaitingReview && !allPagesApproved && (
                 <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-body-sm text-amber-900">
                   You can publish now, but at least one page still needs approval. Approving pages first makes this a cleaner creator-reviewed preview.
                 </p>
@@ -197,7 +234,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                 type="submit"
                 className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
               >
-                {allPagesApproved ? 'Publish approved hub' : `Publish with ${selectedTemplate.name}`}
+                {publishButtonLabel}
               </button>
             </form>
           )}

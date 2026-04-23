@@ -21,6 +21,7 @@
     "smoke:browser:local": "tsx ./src/smoke-browser-local.ts",
     "smoke:audio-fixtures": "tsx ./src/smoke-audio-fixtures.ts",
     "smoke:audio-publish": "tsx ./src/smoke-audio-publish.ts",
+    "smoke:review-edit": "tsx ./src/smoke-review-edit.ts",
     "smoke:local": "tsx ./src/smoke-local.ts",
     "seed:audio-fixtures": "tsx ./src/seed-audio-fixtures.ts",
     "seed:alpha-audio-videos": "tsx ./src/seed-alpha-audio-videos.ts",

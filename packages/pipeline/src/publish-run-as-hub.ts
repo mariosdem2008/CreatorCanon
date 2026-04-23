@@ -133,7 +133,7 @@ async function getOrCreateHub(input: {
 async function loadPages(input: {
   workspaceId: string;
   runId: string;
-}): Promise<ReleaseManifestV0Page[]> {
+}): Promise<{ pages: ReleaseManifestV0Page[]; pageVersionIds: string[] }> {
   const db = getDb();
   const pageRows = await db
     .select({
@@ -165,7 +165,7 @@ async function loadPages(input: {
     .where(inArray(pageVersion.id, versionIds));
   const versionMap = new Map(versions.map((version) => [version.id, version]));
 
-  return pageRows.map((pageRow) => {
+  const manifestPages = pageRows.map((pageRow) => {
     const version = pageRow.currentVersionId
       ? versionMap.get(pageRow.currentVersionId)
       : undefined;
@@ -182,7 +182,23 @@ async function loadPages(input: {
       blocks: blockTree.blocks ?? [],
     };
   });
+
+  return { pages: manifestPages, pageVersionIds: versionIds };
 }
+
+function pageVersionIdsEqual(a: string[] | undefined, b: string[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+type ReleaseMetadata = {
+  pageVersionIds?: string[];
+  actorUserId?: string;
+  error?: string;
+};
 
 export async function publishRunAsHub(
   input: PublishRunAsHubInput,
@@ -220,6 +236,15 @@ export async function publishRunAsHub(
     theme,
   });
 
+  // Snapshot the current state of the run's pages before deciding whether to
+  // publish a new release. Idempotency key is the ordered list of
+  // page_version ids on the page rows — if that matches what's in the live
+  // release's metadata, the live release is still faithful to the draft and
+  // we return it verbatim. If it differs (creator edited pages since the
+  // last publish), fall through to build a new numbered release, archive
+  // the previous live, and point the hub at the new one.
+  const { pages, pageVersionIds: currentPageVersionIds } = await loadPages(input);
+
   const existingLive = await db
     .select()
     .from(release)
@@ -233,17 +258,21 @@ export async function publishRunAsHub(
     .limit(1);
 
   if (existingLive[0]?.manifestR2Key) {
-    return {
-      hubId: hubRow.id,
-      releaseId: existingLive[0].id,
-      subdomain: hubRow.subdomain,
-      publicPath: `/h/${hubRow.subdomain}`,
-      manifestR2Key: existingLive[0].manifestR2Key,
-      pageCount: (await loadPages(input)).length,
-    };
+    const liveMetadata = (existingLive[0].metadata ?? {}) as ReleaseMetadata;
+    if (pageVersionIdsEqual(liveMetadata.pageVersionIds, currentPageVersionIds)) {
+      return {
+        hubId: hubRow.id,
+        releaseId: existingLive[0].id,
+        subdomain: hubRow.subdomain,
+        publicPath: `/h/${hubRow.subdomain}`,
+        manifestR2Key: existingLive[0].manifestR2Key,
+        pageCount: pages.length,
+      };
+    }
+    // Fall through: content has changed since the last publish, build a new
+    // release and rotate the hub's live pointer.
   }
 
-  const pages = await loadPages(input);
   const latestRelease = await db
     .select({ releaseNumber: release.releaseNumber })
     .from(release)
@@ -258,6 +287,11 @@ export async function publishRunAsHub(
     path: 'manifest.json',
   });
 
+  const releaseMetadata: ReleaseMetadata = {
+    pageVersionIds: currentPageVersionIds,
+    actorUserId: input.actorUserId,
+  };
+
   await db.insert(release).values({
     id: releaseId,
     workspaceId: input.workspaceId,
@@ -265,6 +299,7 @@ export async function publishRunAsHub(
     runId: input.runId,
     releaseNumber,
     status: 'building',
+    metadata: releaseMetadata,
     createdAt: now,
     updatedAt: now,
   });
@@ -325,8 +360,8 @@ export async function publishRunAsHub(
       .set({
         status: 'failed',
         metadata: {
+          ...releaseMetadata,
           error: error instanceof Error ? error.message : 'Unknown publish error',
-          actorUserId: input.actorUserId,
         },
         updatedAt: new Date(),
       })
