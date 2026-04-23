@@ -9,6 +9,7 @@ import { getSourceCoverage, type SourceCoverageSummary } from '@creatorcanon/pip
 
 import { HUB_TEMPLATE_OPTIONS } from '@/components/hub/templates';
 import { checkSourceCoverage, createProject } from './actions';
+import { CheckSourceButton, ConfigureSubmitButton } from './ConfigureButtons';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Configure Hub' };
@@ -195,12 +196,7 @@ export default async function ConfigurePage({
               {hasUnknownVideos && (
                 <form action={checkSourceCoverage} className="shrink-0">
                   <input type="hidden" name="video_ids" value={videoIds.join(',')} />
-                  <button
-                    type="submit"
-                    className="inline-flex h-9 whitespace-nowrap items-center rounded-lg border border-rule bg-paper px-4 text-body-sm font-medium text-ink transition hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                  >
-                    Check transcript support
-                  </button>
+                  <CheckSourceButton />
                 </form>
               )}
             </div>
@@ -396,13 +392,10 @@ export default async function ConfigurePage({
                     Payment processed securely via Stripe
                   </div>
                 )}
-                <button
-                  type="submit"
-                  className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-ink px-6 text-body-sm font-semibold text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 sm:w-auto sm:justify-start"
-                >
-                  {requiresLimitedSourceConfirmation ? 'Continue with limited-source hub' : 'Continue to payment'}
-                  <span aria-hidden="true">→</span>
-                </button>
+                <ConfigureSubmitButton
+                  label={requiresLimitedSourceConfirmation ? 'Continue with limited-source hub' : 'Continue to payment'}
+                  pendingLabel="Creating project…"
+                />
               </div>
             </div>
           </div>

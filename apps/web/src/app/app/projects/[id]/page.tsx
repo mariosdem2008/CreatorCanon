@@ -14,6 +14,8 @@ import {
   workspaceMember,
 } from '@creatorcanon/db/schema';
 import { getHubTemplate } from '@/components/hub/templates';
+import { CopyUrlButton } from './CopyUrlButton';
+import { PublishButton } from './PublishButton';
 import { RefreshButton } from './RefreshButton';
 import { publishCurrentRun } from './publish';
 
@@ -173,9 +175,12 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
-          <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
+          <Link
+            href="/app"
+            className="mb-1 inline-block text-eyebrow uppercase tracking-widest text-ink-4 transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+          >
             Creator Studio
-          </div>
+          </Link>
           <h1 className="font-serif text-heading-lg text-ink truncate">{proj.title}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -317,30 +322,41 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                       Creates a public read-only hub using {selectedTemplate.name}.
                     </p>
                   </div>
-                  <button
-                    type="submit"
-                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
-                  >
-                    Publish preview
-                  </button>
+                  <PublishButton label="Publish preview now" />
                 </div>
               </form>
             )}
 
             {publishedSubdomain && (
-              <div className="flex flex-col gap-3 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-body-sm font-semibold text-ink">Published preview hub</p>
-                  <p className="mt-0.5 text-caption text-ink-4">
-                    {publishedTemplate.name} · <span className="font-mono">/h/{publishedSubdomain}</span>
-                  </p>
+              <div className="rounded-lg border border-sage/30 bg-sage/8 px-4 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-body-sm font-semibold text-ink">Your hub is live!</p>
+                    <p className="mt-0.5 text-caption text-ink-4">
+                      {publishedTemplate.name} · <span className="font-mono">/h/{publishedSubdomain}</span>
+                    </p>
+                  </div>
+                  <Link
+                    href={`/h/${publishedSubdomain}`}
+                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
+                  >
+                    Open hub
+                  </Link>
                 </div>
-                <Link
-                  href={`/h/${publishedSubdomain}`}
-                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:justify-start"
-                >
-                  Open hub
-                </Link>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <CopyUrlButton url={`https://creatorcanon.com/h/${publishedSubdomain}`} />
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just published my knowledge hub — ${proj.title}`)}&url=${encodeURIComponent(`https://creatorcanon.com/h/${publishedSubdomain}`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-4 text-body-sm font-medium text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                  >
+                    Share on X
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                      <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </a>
+                </div>
               </div>
             )}
 

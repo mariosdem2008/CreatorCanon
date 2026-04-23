@@ -85,9 +85,12 @@ export default async function ProjectReviewPage({ params }: { params: { id: stri
       <div className="border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div className="mx-auto flex max-w-[880px] items-center justify-between gap-4">
           <div className="min-w-0">
-            <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
-              Review Draft
-            </div>
+            <Link
+              href="/app"
+              className="mb-1 inline-block text-eyebrow uppercase tracking-widest text-ink-4 transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+            >
+              Creator Studio
+            </Link>
             <h1 className="font-serif text-heading-lg text-ink truncate">{proj.title}</h1>
           </div>
           <Link

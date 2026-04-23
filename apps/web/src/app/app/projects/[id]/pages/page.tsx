@@ -22,6 +22,13 @@ import {
   updatePageTitle,
   updateSectionBlock,
 } from './actions';
+import {
+  ApprovePageButton,
+  MarkReviewedButton,
+  PublishHubButton,
+  SaveButton,
+} from './PageActionButtons';
+import { CopyUrlButton } from '../CopyUrlButton';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Draft Pages' };
@@ -40,6 +47,17 @@ type SectionContent = {
   body?: string;
   sourceVideoIds?: string[];
   sourceRefs?: SourceReferenceView[];
+};
+
+const RUN_STATUS_LABEL: Record<string, string> = {
+  draft: 'Draft',
+  awaiting_payment: 'Awaiting payment',
+  queued: 'Queued — pipeline starting',
+  running: 'Processing',
+  awaiting_review: 'Draft ready — awaiting your review',
+  published: 'Published',
+  failed: 'Failed',
+  canceled: 'Canceled',
 };
 
 function statusBadgeClass(status: string) {
@@ -162,9 +180,12 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
       <div className="border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div className="mx-auto flex max-w-[920px] items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
-              Draft Pages
-            </div>
+            <Link
+              href="/app"
+              className="mb-1 inline-block text-eyebrow uppercase tracking-widest text-ink-4 transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+            >
+              Creator Studio
+            </Link>
             <h1 className="font-serif text-heading-lg text-ink truncate">{proj.title}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -203,7 +224,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
           <div className="space-y-2 px-4 py-4 sm:px-6">
             <p className="text-body-sm text-ink-4">
               {run
-                ? `Status: ${run.status}. Edit and approve generated draft pages before publishing.`
+                ? `${RUN_STATUS_LABEL[run.status] ?? run.status}. Edit and approve generated draft pages before publishing.`
                 : 'No generation run was found for this project yet.'}
             </p>
             <p className="text-body-sm text-ink-4">
@@ -259,16 +280,60 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                     </p>
                   </div>
                 )}
-                <button
-                  type="submit"
-                  className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-ink px-5 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 sm:w-auto sm:justify-start"
-                >
-                  {publishButtonLabel}
-                </button>
+                <PublishHubButton label={publishButtonLabel} />
               </form>
             </div>
           )}
         </div>
+
+        {/* Publish success celebration */}
+        {isHubPublished && publishedSubdomain && (
+          <div className="overflow-hidden rounded-xl border border-sage/40 bg-sage/8">
+            <div className="px-4 py-5 sm:px-6">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sage text-paper text-[13px] font-bold" aria-hidden="true">✓</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-body-sm font-semibold text-ink">Your hub is live!</p>
+                  <p className="mt-1 text-body-sm text-ink-3 leading-relaxed">
+                    Shared with the world at{' '}
+                    <Link
+                      href={`/h/${publishedSubdomain}`}
+                      className="font-mono text-sage underline underline-offset-2 hover:text-sage/80"
+                    >
+                      creatorcanon.com/h/{publishedSubdomain}
+                    </Link>
+                    {hasEditsSinceLiveRelease && (
+                      <span className="ml-1 text-ink-4">(you have unpublished edits)</span>
+                    )}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <CopyUrlButton url={`https://creatorcanon.com/h/${publishedSubdomain}`} />
+                    <a
+                      href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Just published my knowledge hub — ${proj.title}`)}&url=${encodeURIComponent(`https://creatorcanon.com/h/${publishedSubdomain}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-paper px-4 text-body-sm font-medium text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                    >
+                      Share on X (Twitter)
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </a>
+                    <Link
+                      href={`/h/${publishedSubdomain}`}
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-paper px-4 text-body-sm font-medium text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                    >
+                      Open hub
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Empty states */}
         {!run && (
@@ -350,12 +415,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                       defaultValue={version.title}
                       className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-body-sm text-ink outline-none transition focus:ring-2 focus:ring-amber focus:border-transparent"
                     />
-                    <button
-                      type="submit"
-                      className="inline-flex h-8 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                    >
-                      Save title
-                    </button>
+                    <SaveButton label="Save title" />
                   </form>
 
                   <form action={updatePageSummary.bind(null, params.id, item.id)} className="space-y-2">
@@ -372,12 +432,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                       rows={4}
                       className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-body-sm leading-6 text-ink outline-none transition focus:ring-2 focus:ring-amber focus:border-transparent"
                     />
-                    <button
-                      type="submit"
-                      className="inline-flex h-8 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                    >
-                      Save summary
-                    </button>
+                    <SaveButton label="Save summary" />
                   </form>
                 </div>
               )}
@@ -421,12 +476,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                             className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-body-sm leading-6 text-ink-2 outline-none transition focus:ring-2 focus:ring-amber focus:border-transparent"
                           />
                         </div>
-                        <button
-                          type="submit"
-                          className="inline-flex h-8 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                        >
-                          Save section
-                        </button>
+                        <SaveButton label="Save section" />
                       </form>
                       <EvidenceChips refs={content.sourceRefs} variant={selectedTemplate.evidenceVariant} />
                     </section>
@@ -443,20 +493,10 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
               {/* Approve row */}
               <div className="flex flex-wrap items-center gap-3 border-t border-rule-dark bg-paper-2 px-4 py-4 sm:px-6">
                 <form action={markPageReviewed.bind(null, params.id, item.id)}>
-                  <button
-                    type="submit"
-                    className="inline-flex h-9 items-center rounded-lg border border-rule bg-paper px-4 text-body-sm text-ink-3 transition hover:bg-paper-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                  >
-                    Mark reviewed
-                  </button>
+                  <MarkReviewedButton />
                 </form>
                 <form action={approvePage.bind(null, params.id, item.id)}>
-                  <button
-                    type="submit"
-                    className="inline-flex h-9 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                  >
-                    Approve page
-                  </button>
+                  <ApprovePageButton />
                 </form>
                 <p className="text-caption text-ink-4">
                   Edits create a new version while keeping source evidence attached.
