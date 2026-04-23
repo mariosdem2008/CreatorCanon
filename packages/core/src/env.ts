@@ -45,6 +45,8 @@ export const serverEnvSchema = z.object({
 
   TRIGGER_SECRET_KEY: z.string().min(1),
   TRIGGER_API_URL: z.string().url().optional(),
+
+  PIPELINE_DRAFT_SYNTH: z.enum(['deterministic', 'llm']).default('deterministic'),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

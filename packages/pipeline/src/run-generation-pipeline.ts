@@ -1,3 +1,5 @@
+import { and, eq, getDb } from '@creatorcanon/db';
+import { project } from '@creatorcanon/db/schema';
 import { runStage, transitionRun } from './harness';
 import {
   importSelectionSnapshot,
@@ -6,6 +8,7 @@ import {
   segmentTranscripts,
   synthesizeV0Review,
   draftPagesV0,
+  type DraftPagesV0Config,
 } from './stages';
 
 export interface RunGenerationPipelinePayload {
@@ -94,6 +97,27 @@ export async function runGenerationPipeline(
       run: synthesizeV0Review,
     });
 
+    const db = getDb();
+    const projectRows = await db
+      .select({ config: project.config })
+      .from(project)
+      .where(
+        and(
+          eq(project.id, payload.projectId),
+          eq(project.workspaceId, payload.workspaceId),
+        ),
+      )
+      .limit(1);
+
+    const projectConfig = projectRows[0]?.config ?? null;
+    const draftConfig: DraftPagesV0Config | null = projectConfig
+      ? {
+          tone: projectConfig.tone ?? null,
+          length_preset: projectConfig.length_preset ?? null,
+          audience: projectConfig.audience ?? null,
+        }
+      : null;
+
     const draftPagesResult = await runStage({
       ctx,
       stage: 'draft_pages_v0',
@@ -101,6 +125,7 @@ export async function runGenerationPipeline(
         runId: payload.runId,
         projectId: payload.projectId,
         workspaceId: payload.workspaceId,
+        config: draftConfig,
       },
       run: draftPagesV0,
     });

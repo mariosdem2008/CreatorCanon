@@ -8,8 +8,9 @@ import {
   segment,
   video,
 } from '@creatorcanon/db/schema';
-import { artifactKey, createR2Client } from '@creatorcanon/adapters';
+import { artifactKey, createOpenAIClient, createR2Client, type OpenAIClient } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
+import { z } from 'zod';
 import {
   type DraftPagesV0Artifact,
   type DraftPagesV0Page,
@@ -21,10 +22,17 @@ import {
   v0ReviewStageOutputSchema,
 } from '../contracts';
 
+export interface DraftPagesV0Config {
+  tone?: string | null;
+  length_preset?: 'short' | 'standard' | 'deep' | string | null;
+  audience?: string | null;
+}
+
 export interface DraftPagesV0Input {
   runId: string;
   projectId: string;
   workspaceId: string;
+  config?: DraftPagesV0Config | null;
 }
 
 interface ReviewArtifactVideo {
@@ -191,6 +199,240 @@ function buildDraftPages(input: {
   });
 }
 
+const LENGTH_WORD_BUDGET: Record<string, number> = {
+  short: 180,
+  standard: 360,
+  deep: 700,
+};
+
+const llmSectionSchema = z.object({
+  heading: z.string().min(1),
+  body: z.string().min(1),
+  sourceVideoIds: z.array(z.string().min(1)).min(1),
+});
+
+const llmPageSchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  sections: z.array(llmSectionSchema).min(1).max(6),
+});
+
+type LlmPage = z.infer<typeof llmPageSchema>;
+
+const llmResponseJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'summary', 'sections'],
+  properties: {
+    title: { type: 'string' },
+    summary: { type: 'string' },
+    sections: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 6,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['heading', 'body', 'sourceVideoIds'],
+        properties: {
+          heading: { type: 'string' },
+          body: { type: 'string' },
+          sourceVideoIds: {
+            type: 'array',
+            minItems: 1,
+            items: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+function wordBudget(lengthPreset: string | null | undefined): number {
+  if (!lengthPreset) return LENGTH_WORD_BUDGET.standard!;
+  return LENGTH_WORD_BUDGET[lengthPreset] ?? LENGTH_WORD_BUDGET.standard!;
+}
+
+interface PageSegmentContext {
+  videoId: string;
+  videoTitle: string | null;
+  quotes: string[];
+}
+
+function buildPageSegmentContext(
+  skeleton: DraftPagesV0Page,
+  refsByVideo: SourceRefByVideo,
+): PageSegmentContext[] {
+  const skeletonVideoIds = new Set(
+    skeleton.sections.flatMap((section) => section.sourceVideoIds),
+  );
+  const contexts: PageSegmentContext[] = [];
+  for (const videoId of skeletonVideoIds) {
+    const refs = refsByVideo.get(videoId) ?? [];
+    if (refs.length === 0) continue;
+    contexts.push({
+      videoId,
+      videoTitle: refs[0]?.title ?? null,
+      quotes: refs.slice(0, 6).map((ref) => ref.quote),
+    });
+  }
+  return contexts;
+}
+
+function buildLlmPrompt(args: {
+  skeleton: DraftPagesV0Page;
+  config: DraftPagesV0Config;
+  segmentContext: PageSegmentContext[];
+}): { system: string; user: string } {
+  const tone = (args.config.tone ?? 'conversational').toString().trim() || 'conversational';
+  const audience = (args.config.audience ?? 'general creators').toString().trim() || 'general creators';
+  const lengthPreset = (args.config.length_preset ?? 'standard').toString();
+  const budget = wordBudget(lengthPreset);
+
+  const system =
+    'You write one page of a creator-archive knowledge hub. Ground every claim in the provided transcript quotes. Do not invent facts, URLs, or new video IDs. Match the requested tone and length. Return JSON that conforms to the provided schema.';
+
+  const sourcesBlock = args.segmentContext
+    .map((ctx) => {
+      const quoteList = ctx.quotes.map((quote, idx) => `  [${idx + 1}] "${quote}"`).join('\n');
+      const heading = `VIDEO videoId=${ctx.videoId} title=${JSON.stringify(ctx.videoTitle ?? 'Untitled')}`;
+      return `${heading}\n${quoteList}`;
+    })
+    .join('\n\n');
+
+  const allowedVideoIds = args.segmentContext.map((ctx) => ctx.videoId);
+
+  const user = [
+    `tone: ${tone}`,
+    `audience: ${audience}`,
+    `length_preset: ${lengthPreset} (target ~${budget} words across all section bodies combined)`,
+    '',
+    `page_slug: ${args.skeleton.slug}`,
+    `skeleton_title: ${args.skeleton.title}`,
+    `skeleton_summary_seed: ${args.skeleton.summary}`,
+    `allowed_sourceVideoIds (use ONLY these, at least one per section): ${JSON.stringify(allowedVideoIds)}`,
+    '',
+    'Transcript quotes grounded in the videos above. Use them to back the body prose — paraphrase, do not quote verbatim:',
+    sourcesBlock || '(no quotes available; keep body brief and factual)',
+    '',
+    'Write:',
+    `- title: a short headline (<= 60 chars) that reads like a real chapter, not a template.`,
+    `- summary: 1-2 sentences (<= 220 chars) that set up the page for the ${audience}.`,
+    `- sections: 1-4 sections. Each has a heading (<= 60 chars), a body (prose, bullets allowed as markdown, grounded in the quotes), and sourceVideoIds (a subset of allowed_sourceVideoIds with at least one id).`,
+  ].join('\n');
+
+  return { system, user };
+}
+
+function filterSourceVideoIds(
+  candidate: string[],
+  allowed: Set<string>,
+  fallback: string[],
+): string[] {
+  const filtered = candidate.filter((id) => allowed.has(id));
+  if (filtered.length > 0) return filtered;
+  return fallback.length > 0 ? [fallback[0]!] : [];
+}
+
+function mergeLlmPage(
+  skeleton: DraftPagesV0Page,
+  llmPage: LlmPage,
+  segmentContext: PageSegmentContext[],
+): DraftPagesV0Page | null {
+  const allowed = new Set(segmentContext.map((ctx) => ctx.videoId));
+  const skeletonVideoIds = Array.from(
+    new Set(skeleton.sections.flatMap((section) => section.sourceVideoIds)),
+  );
+
+  const sections: DraftPagesV0Section[] = [];
+  for (const section of llmPage.sections) {
+    const sourceVideoIds = filterSourceVideoIds(
+      section.sourceVideoIds,
+      allowed,
+      skeletonVideoIds,
+    );
+    if (sourceVideoIds.length === 0) continue;
+    sections.push({
+      heading: section.heading.slice(0, 120),
+      body: section.body,
+      sourceVideoIds,
+    });
+  }
+
+  if (sections.length === 0) return null;
+
+  return {
+    slug: skeleton.slug,
+    title: llmPage.title.slice(0, 120),
+    summary: llmPage.summary.slice(0, 480),
+    sections,
+  };
+}
+
+async function generateLlmPage(args: {
+  skeleton: DraftPagesV0Page;
+  config: DraftPagesV0Config;
+  segmentContext: PageSegmentContext[];
+  openai: OpenAIClient;
+}): Promise<DraftPagesV0Page | null> {
+  if (args.segmentContext.length === 0) return null;
+
+  const { system, user } = buildLlmPrompt({
+    skeleton: args.skeleton,
+    config: args.config,
+    segmentContext: args.segmentContext,
+  });
+
+  try {
+    const completion = await args.openai.chat({
+      model: 'gpt-4o-mini',
+      temperature: 0.3,
+      maxTokens: 900,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      jsonSchema: {
+        name: 'draft_page_v0',
+        schema: llmResponseJsonSchema as unknown as Record<string, unknown>,
+        strict: true,
+      },
+    });
+
+    if (!completion.content) return null;
+    const parsedJson = JSON.parse(completion.content) as unknown;
+    const parsed = llmPageSchema.safeParse(parsedJson);
+    if (!parsed.success) return null;
+    return mergeLlmPage(args.skeleton, parsed.data, args.segmentContext);
+  } catch (err) {
+    console.warn(
+      `[draft_pages_v0] LLM page synthesis failed for slug=${args.skeleton.slug}, falling back to deterministic:`,
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
+}
+
+async function buildLlmPages(args: {
+  skeleton: DraftPagesV0Page[];
+  config: DraftPagesV0Config;
+  refsByVideo: SourceRefByVideo;
+  openai: OpenAIClient;
+}): Promise<DraftPagesV0Page[]> {
+  const result: DraftPagesV0Page[] = [];
+  for (const skeleton of args.skeleton) {
+    const segmentContext = buildPageSegmentContext(skeleton, args.refsByVideo);
+    const llmPage = await generateLlmPage({
+      skeleton,
+      config: args.config,
+      segmentContext,
+      openai: args.openai,
+    });
+    result.push(llmPage ?? skeleton);
+  }
+  return result;
+}
+
 async function loadSourceRefs(input: DraftPagesV0Input): Promise<SourceRefByVideo> {
   const db = getDb();
   const rows = await db
@@ -247,7 +489,10 @@ function attachSourceRefs(
   }));
 }
 
-async function loadReviewArtifact(input: DraftPagesV0Input) {
+async function loadReviewArtifact(
+  input: DraftPagesV0Input,
+  r2: ReturnType<typeof createR2Client>,
+) {
   const db = getDb();
   const reviewStageRows = await db
     .select({
@@ -269,14 +514,12 @@ async function loadReviewArtifact(input: DraftPagesV0Input) {
   }
 
   const parsedOutput = v0ReviewStageOutputSchema.parse(latestStage.outputJson);
-  const env = parseServerEnv(process.env);
-  const r2 = createR2Client(env);
   const obj = await r2.getObject(parsedOutput.r2Key);
   const artifact = v0ReviewArtifactSchema.parse(
     JSON.parse(new TextDecoder().decode(obj.body)),
   );
 
-  return { artifact, r2 };
+  return { artifact };
 }
 
 async function replaceRunPages(input: DraftPagesV0Input, pagesToPersist: DraftPagesV0Page[]) {
@@ -375,14 +618,34 @@ async function replaceRunPages(input: DraftPagesV0Input, pagesToPersist: DraftPa
 export async function draftPagesV0(
   input: DraftPagesV0Input,
 ): Promise<DraftPagesV0StageOutput> {
-  const { artifact: reviewArtifact, r2 } = await loadReviewArtifact(input);
+  const env = parseServerEnv(process.env);
+  const r2 = createR2Client(env);
+  const { artifact: reviewArtifact } = await loadReviewArtifact(input, r2);
 
-  const draftPages = attachSourceRefs(buildDraftPages({
+  const skeleton = buildDraftPages({
     archiveSummary: reviewArtifact.archiveSummary,
     themes: reviewArtifact.themes,
     videos: reviewArtifact.videos,
     totalSegmentCount: reviewArtifact.totalSegmentCount,
-  }), await loadSourceRefs(input));
+  });
+
+  const refsByVideo = await loadSourceRefs(input);
+
+  const useLlm =
+    env.PIPELINE_DRAFT_SYNTH === 'llm' &&
+    reviewArtifact.totalSegmentCount > 0 &&
+    !!input.config;
+
+  const synthesizedPages = useLlm
+    ? await buildLlmPages({
+        skeleton,
+        config: input.config!,
+        refsByVideo,
+        openai: createOpenAIClient(env),
+      })
+    : skeleton;
+
+  const draftPages = attachSourceRefs(synthesizedPages, refsByVideo);
 
   const artifact: DraftPagesV0Artifact = draftPagesV0ArtifactSchema.parse({
     runId: input.runId,
