@@ -209,6 +209,7 @@ const llmSectionSchema = z.object({
   heading: z.string().min(1),
   body: z.string().min(1),
   sourceVideoIds: z.array(z.string().min(1)).min(1),
+  anchorQuotes: z.array(z.string().min(1).max(300)).min(0).max(3),
 });
 
 const llmPageSchema = z.object({
@@ -233,13 +234,19 @@ const llmResponseJsonSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['heading', 'body', 'sourceVideoIds'],
+        required: ['heading', 'body', 'sourceVideoIds', 'anchorQuotes'],
         properties: {
           heading: { type: 'string' },
           body: { type: 'string' },
           sourceVideoIds: {
             type: 'array',
             minItems: 1,
+            items: { type: 'string' },
+          },
+          anchorQuotes: {
+            type: 'array',
+            minItems: 0,
+            maxItems: 3,
             items: { type: 'string' },
           },
         },
@@ -318,7 +325,7 @@ function buildLlmPrompt(args: {
     'Write:',
     `- title: a short headline (<= 60 chars) that reads like a real chapter, not a template.`,
     `- summary: 1-2 sentences (<= 220 chars) that set up the page for the ${audience}.`,
-    `- sections: 1-4 sections. Each has a heading (<= 60 chars), a body (prose, bullets allowed as markdown, grounded in the quotes), and sourceVideoIds (a subset of allowed_sourceVideoIds with at least one id).`,
+    `- sections: 1-4 sections. Each has a heading (<= 60 chars), a body (prose, bullets allowed as markdown, grounded in the quotes), sourceVideoIds (a subset of allowed_sourceVideoIds with at least one id), and anchorQuotes (0-3 short verbatim or near-verbatim spans copied from the transcript quotes above — the specific lines that back this section's claims. Use [] if no single quote cleanly anchors the section).`,
   ].join('\n');
 
   return { system, user };
@@ -356,6 +363,7 @@ function mergeLlmPage(
       heading: section.heading.slice(0, 120),
       body: section.body,
       sourceVideoIds,
+      anchorQuotes: section.anchorQuotes.slice(0, 3),
     });
   }
 
@@ -470,6 +478,44 @@ async function loadSourceRefs(input: DraftPagesV0Input): Promise<SourceRefByVide
   return refsByVideo;
 }
 
+function tokenize(text: string): Set<string> {
+  const tokens = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s']/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 3);
+  return new Set(tokens);
+}
+
+function scoreQuoteAgainstSegment(quote: string, segmentText: string): number {
+  const quoteNorm = quote.toLowerCase().replace(/\s+/g, ' ').trim();
+  const segNorm = segmentText.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (quoteNorm.length === 0 || segNorm.length === 0) return 0;
+  if (segNorm.includes(quoteNorm) || quoteNorm.includes(segNorm)) return 1;
+  const quoteTokens = tokenize(quoteNorm);
+  const segTokens = tokenize(segNorm);
+  if (quoteTokens.size === 0) return 0;
+  let hits = 0;
+  for (const t of quoteTokens) if (segTokens.has(t)) hits += 1;
+  return hits / quoteTokens.size;
+}
+
+function pickRefForAnchor(
+  refs: SourceReferenceV0[],
+  anchor: string,
+): SourceReferenceV0 | null {
+  let best: SourceReferenceV0 | null = null;
+  let bestScore = 0;
+  for (const ref of refs) {
+    const score = scoreQuoteAgainstSegment(anchor, ref.quote);
+    if (score > bestScore) {
+      bestScore = score;
+      best = ref;
+    }
+  }
+  return bestScore >= 0.4 ? best : null;
+}
+
 function attachSourceRefs(
   pagesToPersist: DraftPagesV0Page[],
   refsByVideo: SourceRefByVideo,
@@ -477,13 +523,49 @@ function attachSourceRefs(
   return pagesToPersist.map((draftPage) => ({
     ...draftPage,
     sections: draftPage.sections.map((section) => {
-      const sourceRefs = section.sourceVideoIds
-        .flatMap((videoId) => refsByVideo.get(videoId)?.slice(0, 1) ?? [])
-        .slice(0, 3);
+      const anchorQuotes = section.anchorQuotes ?? [];
+      const sourceRefs: SourceReferenceV0[] = [];
+      const seen = new Set<string>();
+
+      if (anchorQuotes.length > 0) {
+        for (const anchor of anchorQuotes) {
+          for (const videoId of section.sourceVideoIds) {
+            const refs = refsByVideo.get(videoId) ?? [];
+            const picked = pickRefForAnchor(refs, anchor);
+            if (picked && !seen.has(picked.segmentId)) {
+              sourceRefs.push(picked);
+              seen.add(picked.segmentId);
+              break;
+            }
+          }
+          if (sourceRefs.length >= 3) break;
+        }
+      }
+
+      if (sourceRefs.length === 0) {
+        const fallback = section.sourceVideoIds
+          .flatMap((videoId) => refsByVideo.get(videoId)?.slice(0, 1) ?? [])
+          .slice(0, 3);
+        for (const ref of fallback) {
+          if (!seen.has(ref.segmentId)) {
+            sourceRefs.push(ref);
+            seen.add(ref.segmentId);
+          }
+        }
+      } else if (sourceRefs.length < section.sourceVideoIds.length) {
+        for (const videoId of section.sourceVideoIds) {
+          if (sourceRefs.length >= 3) break;
+          const firstRef = refsByVideo.get(videoId)?.[0];
+          if (firstRef && !seen.has(firstRef.segmentId)) {
+            sourceRefs.push(firstRef);
+            seen.add(firstRef.segmentId);
+          }
+        }
+      }
 
       return {
         ...section,
-        sourceRefs,
+        sourceRefs: sourceRefs.slice(0, 3),
       };
     }),
   }));

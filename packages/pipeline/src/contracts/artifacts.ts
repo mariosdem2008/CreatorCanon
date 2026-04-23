@@ -52,6 +52,7 @@ export const draftPagesV0SectionSchema = z.object({
   body: z.string().min(1),
   sourceVideoIds: z.array(z.string().min(1)).min(1),
   sourceRefs: z.array(sourceReferenceV0Schema).optional(),
+  anchorQuotes: z.array(z.string().min(1).max(300)).max(3).optional(),
 });
 
 export type DraftPagesV0Section = z.infer<typeof draftPagesV0SectionSchema>;
