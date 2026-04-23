@@ -25,29 +25,41 @@ function sourceCoverageCopy(coverage: SourceCoverageSummary) {
     return {
       title: 'Source coverage looks strong',
       body: 'Every selected video has confirmed transcript support, so generated sections can be grounded with source moments.',
-      className: 'border-sage/30 bg-sage/5 text-sage',
+      dotClass: 'bg-sage',
+      wrapperClass: 'border-sage/30 bg-sage/8',
+      textClass: 'text-sage',
+      bodyClass: 'text-ink-3',
     };
   }
   if (coverage.estimatedSourceQuality === 'partial') {
     return {
       title: 'Partial source coverage',
       body: 'Some selected videos have transcript support and some do not. The hub can be generated, but a few sections may show limited-source labels.',
-      className: 'border-amber/40 bg-amber-wash text-amber-ink',
+      dotClass: 'bg-amber',
+      wrapperClass: 'border-amber/40 bg-amber-wash',
+      textClass: 'text-amber-ink',
+      bodyClass: 'text-amber-ink/80',
     };
   }
   return {
     title: 'Limited source coverage',
     body: 'None of the selected videos have confirmed captions yet. Choose videos with captions, check transcript support, or explicitly continue with a limited-source hub.',
-    className: 'border-rule-dark bg-paper-3 text-ink-3',
+    dotClass: 'bg-ink-4',
+    wrapperClass: 'border-rule-dark bg-paper-3',
+    textClass: 'text-ink-3',
+    bodyClass: 'text-ink-4',
   };
 }
 
-function readinessLabel(label: SourceCoverageSummary['videos'][number]['readinessLabel']): string {
-  if (label === 'source_ready') return 'Source ready';
-  if (label === 'auto_captions') return 'Auto captions';
-  if (label === 'needs_transcription') return 'Needs transcription';
-  if (label === 'limited_source') return 'Limited source';
-  return 'Needs transcript check';
+function readinessLabel(label: SourceCoverageSummary['videos'][number]['readinessLabel']): {
+  text: string;
+  className: string;
+} {
+  if (label === 'source_ready') return { text: 'Source ready', className: 'text-sage bg-sage/10 border-sage/20' };
+  if (label === 'auto_captions') return { text: 'Auto captions', className: 'text-amber-ink bg-amber-wash border-amber/20' };
+  if (label === 'needs_transcription') return { text: 'Needs transcription', className: 'text-amber-ink bg-amber-wash border-amber/20' };
+  if (label === 'limited_source') return { text: 'Limited source', className: 'text-ink-4 bg-paper-3 border-rule' };
+  return { text: 'Unchecked', className: 'text-ink-4 bg-paper-3 border-rule' };
 }
 
 export default async function ConfigurePage({
@@ -99,42 +111,52 @@ export default async function ConfigurePage({
         </div>
         <Link
           href="/app/library"
-          className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
         >
-          ← Back to library
+          <span aria-hidden="true">←</span>
+          Back to library
         </Link>
       </div>
 
       <div className="mx-auto max-w-[720px] px-8 py-10">
         {/* Selection summary */}
-        <div className="mb-8 rounded-lg border border-rule bg-paper p-5">
-          <p className="mb-3 text-body-sm font-medium text-ink">
-            {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
-            {totalSeconds > 0 && (
-              <span className="ml-2 text-ink-4">· {fmtDuration(totalSeconds)} total</span>
-            )}
-          </p>
-          <ul className="space-y-1">
-            {selectedVideos.slice(0, 5).map((v) => (
-              <li key={v.id} className="text-body-sm text-ink-3 truncate">
-                {v.title ?? 'Untitled'}
-                {v.durationSeconds != null && (
-                  <span className="ml-2 text-ink-5">{fmtDuration(v.durationSeconds)}</span>
-                )}
-              </li>
-            ))}
-            {selectedVideos.length > 5 && (
-              <li className="text-body-sm text-ink-4">
-                + {selectedVideos.length - 5} more
-              </li>
-            )}
-          </ul>
+        <div className="mb-8 overflow-hidden rounded-xl border border-rule bg-paper">
+          <div className="border-b border-rule bg-paper-2 px-5 py-3">
+            <p className="text-eyebrow uppercase tracking-widest text-ink-4">Selection</p>
+          </div>
+          <div className="px-5 py-4">
+            <p className="mb-3 text-body-sm font-medium text-ink">
+              {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''}
+              {totalSeconds > 0 && (
+                <span className="ml-2 font-normal text-ink-4">· {fmtDuration(totalSeconds)} total</span>
+              )}
+            </p>
+            <ul className="space-y-1.5">
+              {selectedVideos.slice(0, 5).map((v) => (
+                <li key={v.id} className="flex items-center gap-2 text-body-sm text-ink-3 min-w-0">
+                  <span className="h-1 w-1 shrink-0 rounded-full bg-ink-4" aria-hidden="true" />
+                  <span className="truncate">{v.title ?? 'Untitled'}</span>
+                  {v.durationSeconds != null && (
+                    <span className="ml-auto shrink-0 font-mono text-caption text-ink-5">
+                      {fmtDuration(v.durationSeconds)}
+                    </span>
+                  )}
+                </li>
+              ))}
+              {selectedVideos.length > 5 && (
+                <li className="text-body-sm text-ink-4 pl-3">
+                  + {selectedVideos.length - 5} more
+                </li>
+              )}
+            </ul>
+          </div>
         </div>
 
+        {/* Source required error */}
         {showSourceRequiredError && (
-          <div className="mb-8 rounded-lg border border-amber/40 bg-amber-wash px-5 py-4 text-amber-ink">
-            <p className="text-body-sm font-medium">Source confirmation required</p>
-            <p className="mt-1 text-body-sm">
+          <div className="mb-8 rounded-xl border border-amber/40 bg-amber-wash px-5 py-4" role="alert">
+            <p className="text-body-sm font-semibold text-amber-ink">Source confirmation required</p>
+            <p className="mt-1.5 text-body-sm text-amber-ink/80 leading-relaxed">
               These videos do not have confirmed transcript support yet. Choose captioned videos,
               check transcript support, or explicitly confirm that you want to continue with a
               limited-source hub.
@@ -143,63 +165,76 @@ export default async function ConfigurePage({
         )}
 
         {/* Source coverage */}
-        <div className={`mb-8 rounded-lg border p-5 ${coverageCopy.className}`}>
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-body-md font-medium">{coverageCopy.title}</p>
-              <p className="mt-1 max-w-[560px] text-body-sm opacity-80">{coverageCopy.body}</p>
-              <div className="mt-3 flex flex-wrap gap-2 text-caption">
-                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
-                  {sourceCoverage.readyCount} ready
-                </span>
-                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
-                  {sourceCoverage.transcribableCount} needs transcription
-                </span>
-                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
-                  {sourceCoverage.unknownCount} unchecked
-                </span>
-                <span className="rounded-full bg-paper/70 px-2 py-1 text-ink-3">
-                  {sourceCoverage.unavailableCount} limited
-                </span>
+        <div className={`mb-8 overflow-hidden rounded-xl border ${coverageCopy.wrapperClass}`}>
+          <div className="px-5 py-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${coverageCopy.dotClass}`} aria-hidden="true" />
+                  <p className={`text-body-sm font-semibold ${coverageCopy.textClass}`}>{coverageCopy.title}</p>
+                </div>
+                <p className={`mt-2 max-w-[520px] text-body-sm leading-relaxed ${coverageCopy.bodyClass}`}>
+                  {coverageCopy.body}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-rule bg-paper/70 px-2.5 py-1 text-caption text-ink-3">
+                    {sourceCoverage.readyCount} ready
+                  </span>
+                  <span className="rounded-full border border-rule bg-paper/70 px-2.5 py-1 text-caption text-ink-3">
+                    {sourceCoverage.transcribableCount} needs transcription
+                  </span>
+                  <span className="rounded-full border border-rule bg-paper/70 px-2.5 py-1 text-caption text-ink-3">
+                    {sourceCoverage.unknownCount} unchecked
+                  </span>
+                  <span className="rounded-full border border-rule bg-paper/70 px-2.5 py-1 text-caption text-ink-3">
+                    {sourceCoverage.unavailableCount} limited
+                  </span>
+                </div>
               </div>
+              {hasUnknownVideos && (
+                <form action={checkSourceCoverage} className="shrink-0">
+                  <input type="hidden" name="video_ids" value={videoIds.join(',')} />
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 whitespace-nowrap items-center rounded-lg border border-rule bg-paper px-4 text-body-sm font-medium text-ink transition hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                  >
+                    Check transcript support
+                  </button>
+                </form>
+              )}
             </div>
-            {hasUnknownVideos && (
-              <form action={checkSourceCoverage}>
-                <input type="hidden" name="video_ids" value={videoIds.join(',')} />
-                <button
-                  type="submit"
-                  className="inline-flex h-9 whitespace-nowrap items-center rounded-md border border-rule bg-paper px-3 text-body-sm font-medium text-ink transition hover:bg-paper-2"
-                >
-                  Check transcript support
-                </button>
-              </form>
-            )}
-          </div>
-          <div className="mt-4 space-y-2">
-            {sourceCoverage.videos.slice(0, 5).map((row) => (
-              <div key={row.videoId} className="flex items-center justify-between gap-3 rounded-md bg-paper/70 px-3 py-2">
-                <span className="truncate text-body-sm text-ink">{row.title ?? 'Untitled'}</span>
-                <span className="shrink-0 rounded-full border border-rule bg-paper px-2 py-0.5 text-caption text-ink-3">
-                  {readinessLabel(row.readinessLabel)}
-                </span>
+            {sourceCoverage.videos.length > 0 && (
+              <div className="mt-4 space-y-1.5">
+                {sourceCoverage.videos.slice(0, 5).map((row) => {
+                  const rl = readinessLabel(row.readinessLabel);
+                  return (
+                    <div key={row.videoId} className="flex items-center justify-between gap-3 rounded-lg bg-paper/70 px-3 py-2">
+                      <span className="truncate text-body-sm text-ink">{row.title ?? 'Untitled'}</span>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-caption font-medium ${rl.className}`}>
+                        {rl.text}
+                      </span>
+                    </div>
+                  );
+                })}
+                {sourceCoverage.videos.length > 5 && (
+                  <p className={`text-caption ${coverageCopy.bodyClass}`}>
+                    + {sourceCoverage.videos.length - 5} more selected videos
+                  </p>
+                )}
               </div>
-            ))}
-            {sourceCoverage.videos.length > 5 && (
-              <p className="text-caption opacity-70">
-                + {sourceCoverage.videos.length - 5} more selected videos
-              </p>
             )}
           </div>
         </div>
 
         {/* Config form */}
-        <form action={createProject} className="space-y-6">
+        <form action={createProject} className="space-y-8">
           <input type="hidden" name="video_ids" value={videoIds.join(',')} />
 
           {/* Title */}
-          <div>
-            <label className="mb-1.5 block text-body-sm font-medium text-ink" htmlFor="title">
+          <div className="space-y-2">
+            <label className="block text-body-sm font-semibold text-ink" htmlFor="title">
               Hub title
+              <span className="ml-1.5 font-normal text-rose" aria-label="required">*</span>
             </label>
             <input
               id="title"
@@ -207,33 +242,33 @@ export default async function ConfigurePage({
               type="text"
               required
               placeholder="e.g. The KeyBooks Productivity System"
-              className="h-10 w-full rounded-md border border-rule bg-paper px-3 text-body-md text-ink placeholder:text-ink-4 focus:outline-none focus:ring-1 focus:ring-amber"
+              className="h-10 w-full rounded-lg border border-rule bg-paper px-3 text-body-md text-ink placeholder:text-ink-4 transition focus:outline-none focus:ring-2 focus:ring-amber focus:border-transparent"
             />
           </div>
 
           {/* Audience */}
-          <div>
-            <label className="mb-1.5 block text-body-sm font-medium text-ink" htmlFor="audience">
+          <div className="space-y-2">
+            <label className="block text-body-sm font-semibold text-ink" htmlFor="audience">
               Target audience
-              <span className="ml-1 font-normal text-ink-4">(optional)</span>
+              <span className="ml-1.5 font-normal text-ink-4">(optional)</span>
             </label>
             <input
               id="audience"
               name="audience"
               type="text"
               placeholder="e.g. Busy professionals who want to read more"
-              className="h-10 w-full rounded-md border border-rule bg-paper px-3 text-body-md text-ink placeholder:text-ink-4 focus:outline-none focus:ring-1 focus:ring-amber"
+              className="h-10 w-full rounded-lg border border-rule bg-paper px-3 text-body-md text-ink placeholder:text-ink-4 transition focus:outline-none focus:ring-2 focus:ring-amber focus:border-transparent"
             />
           </div>
 
-          {/* Tone */}
-          <div>
-            <label className="mb-1.5 block text-body-sm font-medium text-ink">Tone</label>
-            <div className="flex gap-2">
+          {/* Tone — segmented control */}
+          <div className="space-y-2">
+            <p className="text-body-sm font-semibold text-ink" id="tone-label">Tone</p>
+            <div className="flex gap-2" role="radiogroup" aria-labelledby="tone-label">
               {(['conversational', 'professional', 'academic'] as const).map((t) => (
                 <label
                   key={t}
-                  className="flex cursor-pointer items-center gap-2 rounded-md border border-rule bg-paper px-3 py-2 text-body-sm text-ink has-[:checked]:border-amber has-[:checked]:bg-amber/5"
+                  className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-rule bg-paper px-3 py-2.5 text-body-sm text-ink-3 transition hover:bg-paper-2 has-[:checked]:border-amber has-[:checked]:bg-amber/8 has-[:checked]:text-ink has-[:checked]:font-medium"
                 >
                   <input type="radio" name="tone" value={t} defaultChecked={t === 'conversational'} className="sr-only" />
                   <span className="capitalize">{t}</span>
@@ -242,10 +277,10 @@ export default async function ConfigurePage({
             </div>
           </div>
 
-          {/* Length preset */}
-          <div>
-            <label className="mb-1.5 block text-body-sm font-medium text-ink">Hub depth</label>
-            <div className="flex gap-2">
+          {/* Hub depth — segmented control */}
+          <div className="space-y-2">
+            <p className="text-body-sm font-semibold text-ink" id="depth-label">Hub depth</p>
+            <div className="flex gap-2" role="radiogroup" aria-labelledby="depth-label">
               {([
                 { key: 'short', label: 'Concise', desc: 'Key ideas only' },
                 { key: 'standard', label: 'Standard', desc: 'Balanced depth' },
@@ -253,26 +288,24 @@ export default async function ConfigurePage({
               ] as const).map(({ key, label, desc }) => (
                 <label
                   key={key}
-                  className="flex flex-1 cursor-pointer flex-col rounded-md border border-rule bg-paper px-3 py-2.5 text-body-sm has-[:checked]:border-amber has-[:checked]:bg-amber/5"
+                  className="flex flex-1 cursor-pointer flex-col rounded-lg border border-rule bg-paper px-3 py-3 transition hover:bg-paper-2 has-[:checked]:border-amber has-[:checked]:bg-amber/8"
                 >
                   <input type="radio" name="length_preset" value={key} defaultChecked={key === 'standard'} className="sr-only" />
-                  <span className="font-medium text-ink">{label}</span>
-                  <span className="text-ink-4">{desc}</span>
+                  <span className="text-body-sm font-semibold text-ink">{label}</span>
+                  <span className="mt-0.5 text-caption text-ink-4">{desc}</span>
                 </label>
               ))}
             </div>
           </div>
 
-          {/* Presentation preset */}
-          <div>
-            <label className="mb-1.5 block text-body-sm font-medium text-ink">
-              Hub template
-            </label>
-            <div className="grid gap-3 md:grid-cols-3">
+          {/* Hub template */}
+          <div className="space-y-2">
+            <p className="text-body-sm font-semibold text-ink" id="template-label">Hub template</p>
+            <div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-labelledby="template-label">
               {HUB_TEMPLATE_OPTIONS.map((template) => (
                 <label
                   key={template.id}
-                  className={`flex min-h-[160px] cursor-pointer flex-col rounded-lg border p-4 text-body-sm transition ${template.configureClassName}`}
+                  className={`flex min-h-[160px] cursor-pointer flex-col rounded-xl border p-4 transition ${template.configureClassName}`}
                 >
                   <input
                     type="radio"
@@ -281,68 +314,96 @@ export default async function ConfigurePage({
                     defaultChecked={template.id === 'paper'}
                     className="sr-only"
                   />
-                  <span className="text-caption uppercase tracking-widest opacity-70">
+                  <span className="text-eyebrow uppercase tracking-widest opacity-70">
                     {template.previewLabel}
                   </span>
-                  <span className="mt-3 text-body-md font-medium">{template.name}</span>
-                  <span className="mt-2 leading-6 opacity-75">{template.tagline}</span>
+                  <span className="mt-3 text-body-md font-semibold">{template.name}</span>
+                  <span className="mt-2 text-body-sm leading-relaxed opacity-75">{template.tagline}</span>
                 </label>
               ))}
             </div>
-            <p className="mt-2 text-caption text-ink-4">
-              This controls the public hub layout after publishing. You can keep the generated
-              content contract identical while changing the reader experience.
+            <p className="text-caption text-ink-4 leading-relaxed">
+              Controls the public hub layout after publishing. Content stays identical while the reader experience changes.
             </p>
           </div>
 
           {/* Chat toggle */}
-          <div className="flex items-center justify-between rounded-md border border-rule bg-paper px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-rule bg-paper px-5 py-4">
             <div>
-              <p className="text-body-sm font-medium text-ink">Enable chat</p>
-              <p className="text-body-sm text-ink-4">Viewers can ask questions about your content</p>
+              <p className="text-body-sm font-semibold text-ink">Enable chat</p>
+              <p className="mt-0.5 text-body-sm text-ink-4">Viewers can ask questions about your content</p>
             </div>
-            <label className="relative inline-flex cursor-pointer items-center">
+            <label className="relative inline-flex cursor-pointer items-center" aria-label="Toggle chat">
               <input type="checkbox" name="chat_enabled" value="true" defaultChecked className="sr-only peer" />
-              <div className="h-5 w-9 rounded-full bg-rule peer-checked:bg-ink transition-colors" />
-              <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+              <div className="h-5 w-9 rounded-full bg-rule transition-colors peer-checked:bg-ink peer-focus-visible:ring-2 peer-focus-visible:ring-amber peer-focus-visible:ring-offset-2" />
+              <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" />
             </label>
           </div>
 
           {/* Price + submit */}
-          <div className="flex items-center justify-between rounded-lg border border-rule-dark bg-paper p-5">
-            <div>
-              <p className="text-heading-sm font-medium text-ink">{price}</p>
-              <p className="text-body-sm text-ink-4">
-                {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''}
-                {totalSeconds > 0 && ` · ${fmtDuration(totalSeconds)}`}
-              </p>
-              {requiresLimitedSourceConfirmation && (
-                <label className="mt-3 flex max-w-md items-start gap-2 text-body-sm text-ink-3">
-                  <input
-                    type="checkbox"
-                    name="allow_limited_source"
-                    value="true"
-                    required
-                    className="mt-1"
-                  />
-                  <span>
-                    I understand this hub may publish with limited source support because no
-                    selected videos have confirmed captions.
-                  </span>
-                </label>
-              )}
+          <div className="overflow-hidden rounded-xl border border-rule-dark bg-paper">
+            <div className="border-b border-rule bg-paper-2 px-5 py-3">
+              <p className="text-eyebrow uppercase tracking-widest text-ink-4">Order summary</p>
             </div>
-            {requiresLimitedSourceConfirmation && (
-              <Link href="/app/library" className="text-body-sm text-ink-3 underline">
-                Choose videos with captions
-              </Link>
-            )}
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-ink px-6 text-body-sm font-medium text-paper transition hover:opacity-90"
-            >
-              {requiresLimitedSourceConfirmation ? 'Continue with limited-source hub' : 'Continue to payment'}
-            </button>
+            <div className="px-5 py-4 space-y-3">
+              <div className="flex items-center justify-between text-body-sm">
+                <span className="text-ink-3">Hub generation</span>
+                <span className="font-semibold text-ink">{price}</span>
+              </div>
+              <div className="flex items-center justify-between text-body-sm">
+                <span className="text-ink-3">Videos included</span>
+                <span className="text-ink">
+                  {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''}
+                  {totalSeconds > 0 && (
+                    <span className="ml-1.5 text-ink-4">· {fmtDuration(totalSeconds)}</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-body-sm">
+                <span className="text-ink-3">Delivery</span>
+                <span className="text-ink">Draft ready in ~4 minutes</span>
+              </div>
+
+              {requiresLimitedSourceConfirmation && (
+                <div className="rounded-lg border border-amber/30 bg-amber-wash px-4 py-3">
+                  <label className="flex items-start gap-3 cursor-pointer text-body-sm text-ink-3">
+                    <input
+                      type="checkbox"
+                      name="allow_limited_source"
+                      value="true"
+                      required
+                      className="mt-0.5 h-4 w-4 rounded border-rule text-ink accent-ink focus:ring-amber"
+                    />
+                    <span className="leading-relaxed">
+                      I understand this hub may publish with limited source support because no
+                      selected videos have confirmed captions.
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-4 border-t border-rule pt-4">
+                {requiresLimitedSourceConfirmation ? (
+                  <Link href="/app/library" className="text-body-sm text-ink-4 underline hover:text-ink">
+                    Choose videos with captions
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-caption text-ink-4">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      <path d="M6 1a5 5 0 100 10A5 5 0 006 1zm0 2.5v3l2 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    </svg>
+                    Payment processed securely via Stripe
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-ink px-6 text-body-sm font-semibold text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                >
+                  {requiresLimitedSourceConfirmation ? 'Continue with limited-source hub' : 'Continue to payment'}
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
           </div>
         </form>
       </div>

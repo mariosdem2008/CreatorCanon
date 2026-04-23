@@ -91,6 +91,7 @@ export default async function CheckoutPage({
 
   return (
     <main className="min-h-screen bg-paper-studio">
+      {/* Top bar */}
       <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-8 py-5">
         <div>
           <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
@@ -100,79 +101,116 @@ export default async function CheckoutPage({
         </div>
         <Link
           href={`/app/projects/${projectId}`}
-          className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
         >
-          ← Project status
+          <span aria-hidden="true">←</span>
+          Project status
         </Link>
       </div>
 
-      <div className="mx-auto max-w-[720px] space-y-6 px-8 py-10">
+      <div className="mx-auto max-w-[520px] space-y-6 px-8 py-10">
+        {/* Canceled state */}
         {searchParams?.canceled === '1' && (
-          <section className="rounded-lg border border-rule bg-paper p-6 text-body-sm text-ink-3">
-            Checkout was canceled. Your run is still saved and waiting for payment.
-          </section>
-        )}
-
-        {paymentProcessing && (
-          <section className="rounded-lg border border-sage/30 bg-sage/10 p-6">
-            <h2 className="text-body-md font-medium text-ink">Payment received</h2>
-            <p className="mt-2 text-body-sm text-ink-3">
-              Stripe has accepted the payment. CreatorCanon is waiting for webhook confirmation before queueing your run.
+          <div className="rounded-xl border border-rule bg-paper px-5 py-4" role="alert">
+            <p className="text-body-sm font-medium text-ink">Checkout was canceled</p>
+            <p className="mt-1 text-body-sm text-ink-3">
+              Your run is still saved and waiting for payment. Come back whenever you&apos;re ready.
             </p>
-          </section>
+          </div>
         )}
 
-        <section className="rounded-lg border border-rule bg-paper p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-body-md font-medium text-ink">{proj.title}</h2>
-              <p className="mt-1 text-body-sm text-ink-4">Run status: awaiting payment</p>
+        {/* Payment received state */}
+        {paymentProcessing && (
+          <div className="rounded-xl border border-sage/30 bg-sage/8 px-5 py-4" role="status">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-sage" aria-hidden="true" />
+              <p className="text-body-sm font-semibold text-sage">Payment received</p>
             </div>
-            <div className="text-right">
-              <p className="text-heading-sm font-medium text-ink">
-                {formatUsdCents(run.priceCents ?? 0)}
-              </p>
-              <p className="text-caption text-ink-4">One-time generation payment</p>
+            <p className="mt-2 text-body-sm text-ink-3 leading-relaxed">
+              Stripe has accepted the payment. CreatorCanon is waiting for webhook confirmation
+              before queueing your run.
+            </p>
+          </div>
+        )}
+
+        {/* Receipt card */}
+        <div className="overflow-hidden rounded-xl border border-rule bg-paper shadow-1">
+          {/* Receipt header */}
+          <div className="border-b border-rule bg-paper-2 px-6 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-eyebrow uppercase tracking-widest text-ink-4">Hub project</p>
+                <h2 className="mt-1 font-serif text-heading-md text-ink truncate">{proj.title}</h2>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="font-serif text-heading-lg text-ink">
+                  {formatUsdCents(run.priceCents ?? 0)}
+                </p>
+                <p className="text-caption text-ink-4">one-time</p>
+              </div>
             </div>
           </div>
 
-          <dl className="grid grid-cols-3 gap-4 rounded-md border border-rule bg-paper-2 p-4 text-center">
-            <div>
-              <dt className="text-caption text-ink-4">Videos</dt>
-              <dd className="mt-1 font-mono text-body-md text-ink">{videoCount}</dd>
+          {/* Line items */}
+          <div className="divide-y divide-rule px-6">
+            <div className="flex items-center justify-between py-3 text-body-sm">
+              <span className="text-ink-3">Videos included</span>
+              <span className="font-medium text-ink">
+                {videoCount} video{videoCount === 1 ? '' : 's'}
+              </span>
             </div>
-            <div>
-              <dt className="text-caption text-ink-4">Duration</dt>
-              <dd className="mt-1 font-mono text-body-md text-ink">
-                {fmtDuration(run.selectedDurationSeconds)}
-              </dd>
+            <div className="flex items-center justify-between py-3 text-body-sm">
+              <span className="text-ink-3">Source audio</span>
+              <span className="font-medium text-ink">{fmtDuration(run.selectedDurationSeconds)}</span>
             </div>
-            <div>
-              <dt className="text-caption text-ink-4">Pipeline</dt>
-              <dd className="mt-1 font-mono text-body-md text-ink">{run.pipelineVersion}</dd>
+            <div className="flex items-center justify-between py-3 text-body-sm">
+              <span className="text-ink-3">Expected delivery</span>
+              <span className="font-medium text-ink">Draft ready in ~4 minutes</span>
             </div>
-          </dl>
+            <div className="flex items-center justify-between py-3 text-body-sm">
+              <span className="text-ink-3">Pipeline</span>
+              <span className="font-mono text-caption text-ink-4">{run.pipelineVersion}</span>
+            </div>
+          </div>
 
-          <p className="text-body-sm text-ink-3">
-            Payment is required before CreatorCanon queues the run. After Stripe confirms the charge, the existing worker flow will start automatically.
-          </p>
+          {/* Trust copy + pay button */}
+          <div className="border-t border-rule-dark bg-paper-2 px-6 py-5">
+            <form action={startCheckout} className="space-y-4">
+              <input type="hidden" name="project_id" value={projectId} />
 
-          <form action={startCheckout} className="flex items-center justify-between rounded-lg border border-rule-dark bg-paper p-5">
-            <input type="hidden" name="project_id" value={projectId} />
-            <div>
-              <p className="text-heading-sm font-medium text-ink">{formatUsdCents(run.priceCents ?? 0)}</p>
-              <p className="text-body-sm text-ink-4">
-                {videoCount} video{videoCount === 1 ? '' : 's'} · {fmtDuration(run.selectedDurationSeconds)}
-              </p>
-            </div>
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-ink px-6 text-body-sm font-medium text-paper transition hover:opacity-90"
-            >
-              Pay to queue run
-            </button>
-          </form>
-        </section>
+              <div className="flex items-center justify-between">
+                <p className="text-body-sm font-semibold text-ink">Total</p>
+                <p className="font-serif text-heading-md text-ink">
+                  {formatUsdCents(run.priceCents ?? 0)}
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                className="inline-flex w-full h-11 items-center justify-center gap-2 rounded-lg bg-ink px-6 text-body-sm font-semibold text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+              >
+                Pay to queue run
+              </button>
+
+              <div className="flex items-center justify-center gap-4 text-caption text-ink-4">
+                <div className="flex items-center gap-1.5">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <rect x="1" y="4" width="10" height="7" rx="1" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M4 4V3a2 2 0 014 0v1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  Secure Stripe checkout
+                </div>
+                <span aria-hidden="true">·</span>
+                <span>No subscription — one-time payment</span>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <p className="text-center text-caption text-ink-4">
+          After Stripe confirms the charge, the generation run starts automatically.
+          You&apos;ll be able to track progress from the project status page.
+        </p>
       </div>
     </main>
   );

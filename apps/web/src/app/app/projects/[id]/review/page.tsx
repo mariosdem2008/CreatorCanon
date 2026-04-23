@@ -81,100 +81,125 @@ export default async function ProjectReviewPage({ params }: { params: { id: stri
 
   return (
     <main className="min-h-screen bg-paper-studio">
+      {/* Top bar */}
       <div className="border-b border-rule-dark bg-paper px-8 py-5">
         <div className="mx-auto flex max-w-[880px] items-center justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
               Review Draft
             </div>
-            <h1 className="font-serif text-heading-lg text-ink">{proj.title}</h1>
+            <h1 className="font-serif text-heading-lg text-ink truncate">{proj.title}</h1>
           </div>
           <Link
             href={`/app/projects/${params.id}`}
-            className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
           >
-            ← Run status
+            <span aria-hidden="true">←</span>
+            Run status
           </Link>
         </div>
       </div>
 
       <div className="mx-auto max-w-[880px] space-y-6 px-8 py-10">
-        <section className="rounded-lg border border-rule bg-paper p-6">
-          <div className="flex items-center justify-between gap-4">
+        {/* Run status row */}
+        <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+          <div className="flex items-center justify-between gap-4 px-6 py-5">
             <div>
-              <h2 className="text-body-md font-medium text-ink">Current run</h2>
+              <h2 className="text-body-sm font-semibold text-ink">Current run</h2>
               <p className="mt-1 text-body-sm text-ink-4">
                 {run ? `Status: ${run.status}` : 'No generation run found for this project yet.'}
               </p>
             </div>
             {artifact && (
               <div className="text-right">
-                <div className="text-body-sm font-medium text-ink">
-                  {artifact.videoCount} videos
-                </div>
-                <div className="text-caption text-ink-4">
+                <p className="text-body-sm font-semibold text-ink">
+                  {artifact.videoCount} video{artifact.videoCount === 1 ? '' : 's'}
+                </p>
+                <p className="mt-0.5 text-caption text-ink-4">
                   {artifact.totalSegmentCount} transcript segments
-                </div>
+                </p>
               </div>
             )}
           </div>
-        </section>
+        </div>
 
+        {/* States */}
         {!run && (
-          <section className="rounded-lg border border-rule bg-paper p-6 text-body-sm text-ink-3">
-            Create and queue a project run before opening the review surface.
-          </section>
+          <div className="rounded-xl border border-rule bg-paper px-6 py-8 text-center">
+            <p className="text-body-sm font-medium text-ink">No run yet</p>
+            <p className="mt-2 text-body-sm text-ink-3">
+              Create and queue a project run before opening the review surface.
+            </p>
+          </div>
         )}
 
         {run && !artifact && !artifactError && (
-          <section className="rounded-lg border border-rule bg-paper p-6 text-body-sm text-ink-3">
-            This review draft is not ready yet. Keep watching the run status page while the pipeline is still queued or running.
-          </section>
+          <div className="rounded-xl border border-rule bg-paper px-6 py-8 text-center">
+            <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-paper-3">
+              <span className="h-2 w-2 rounded-full bg-amber animate-pulse" aria-hidden="true" />
+            </div>
+            <p className="text-body-sm font-medium text-ink">Review draft not ready yet</p>
+            <p className="mt-2 text-body-sm text-ink-3">
+              Keep watching the run status page while the pipeline is still queued or running.
+            </p>
+            <Link
+              href={`/app/projects/${params.id}`}
+              className="mt-4 inline-flex items-center gap-1.5 text-body-sm text-ink-4 underline hover:text-ink"
+            >
+              Back to run status
+            </Link>
+          </div>
         )}
 
         {artifactError && (
-          <section className="rounded-lg border border-rose/30 bg-rose/10 p-6">
-            <h2 className="text-body-md font-medium text-ink">Review draft unavailable</h2>
-            <p className="mt-2 text-body-sm text-ink-3">
+          <div className="rounded-xl border border-rose/30 bg-rose/8 px-6 py-5" role="alert">
+            <h2 className="text-body-sm font-semibold text-rose">Review draft unavailable</h2>
+            <p className="mt-2 text-body-sm text-ink-3 leading-relaxed">
               CreatorCanon expected a review artifact for this run but could not load a valid draft.
             </p>
-            <p className="mt-2 text-caption text-ink-4">{artifactError}</p>
-          </section>
+            <p className="mt-2 font-mono text-caption text-ink-4">{artifactError}</p>
+          </div>
         )}
 
         {artifact && (
           <>
-            <section className="rounded-lg border border-rule bg-paper p-6 space-y-4">
-              <div>
-                <h2 className="text-body-md font-medium text-ink">Archive summary</h2>
-                <p className="mt-2 text-body-md text-ink-2">{artifact.archiveSummary}</p>
+            {/* Archive summary */}
+            <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+              <div className="border-b border-rule bg-paper-2 px-6 py-4">
+                <h2 className="text-body-sm font-semibold text-ink">Archive summary</h2>
               </div>
+              <div className="px-6 py-5 space-y-5">
+                <p className="text-body-md leading-7 text-ink-2">{artifact.archiveSummary}</p>
 
-              <div>
-                <h3 className="text-body-sm font-medium text-ink">Top themes</h3>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {artifact.themes.length > 0 ? artifact.themes.map((theme: string) => (
-                    <span
-                      key={theme}
-                      className="rounded-full border border-rule bg-paper-2 px-3 py-1 text-caption text-ink-3"
-                    >
-                      {theme}
-                    </span>
-                  )) : (
-                    <span className="text-body-sm text-ink-4">
+                <div>
+                  <h3 className="mb-3 text-eyebrow uppercase tracking-widest text-ink-4">Top themes</h3>
+                  {artifact.themes.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {artifact.themes.map((theme: string) => (
+                        <span
+                          key={theme}
+                          className="rounded-full border border-rule bg-paper-2 px-3 py-1 text-body-sm text-ink-3"
+                        >
+                          {theme}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-body-sm text-ink-4">
                       No repeated themes were strong enough to extract yet.
-                    </span>
+                    </p>
                   )}
                 </div>
               </div>
-            </section>
+            </div>
 
-            <section className="space-y-4">
+            {/* Per-video sections */}
+            <div className="space-y-4">
               {artifact.videos.map((video: V0ReviewArtifact['videos'][number]) => (
-                <article key={video.videoId} className="rounded-lg border border-rule bg-paper p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-body-md font-medium text-ink">
+                <article key={video.videoId} className="overflow-hidden rounded-xl border border-rule bg-paper">
+                  <div className="flex items-start justify-between gap-4 border-b border-rule bg-paper-2 px-6 py-4">
+                    <div className="min-w-0">
+                      <h2 className="font-serif text-heading-sm text-ink">
                         {video.title ?? 'Untitled video'}
                       </h2>
                       <p className="mt-1 text-caption text-ink-4">
@@ -187,17 +212,21 @@ export default async function ProjectReviewPage({ params }: { params: { id: stri
                       href={`https://www.youtube.com/watch?v=${video.youtubeVideoId}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-caption text-ink-4 underline hover:text-ink-2"
+                      aria-label={`Watch source video: ${video.title ?? 'Untitled'}`}
+                      className="inline-flex shrink-0 items-center gap-1 text-caption text-ink-4 underline hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
                     >
                       Watch source
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                        <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     </a>
                   </div>
-                  <p className="mt-4 text-body-sm leading-6 text-ink-2">
-                    {video.summary}
-                  </p>
+                  <div className="px-6 py-5">
+                    <p className="text-body-sm leading-6 text-ink-2">{video.summary}</p>
+                  </div>
                 </article>
               ))}
-            </section>
+            </div>
           </>
         )}
       </div>

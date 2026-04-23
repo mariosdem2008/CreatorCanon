@@ -42,14 +42,16 @@ type SectionContent = {
   sourceRefs?: SourceReferenceView[];
 };
 
-function statusLabel(status: string) {
-  return status.replace('_', ' ');
+function statusBadgeClass(status: string) {
+  if (status === 'approved') return 'border-sage/30 bg-sage/10 text-sage';
+  if (status === 'reviewed') return 'border-amber/30 bg-amber-wash text-amber-ink';
+  return 'border-rule bg-paper-3 text-ink-4';
 }
 
-function statusClass(status: string) {
-  if (status === 'approved') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
-  if (status === 'reviewed') return 'border-amber-200 bg-amber-50 text-amber-800';
-  return 'border-rule bg-paper-2 text-ink-4';
+function statusLabel(status: string) {
+  if (status === 'approved') return 'Approved';
+  if (status === 'reviewed') return 'Reviewed';
+  return 'Draft';
 }
 
 export default async function ProjectPagesPage({ params }: { params: { id: string } }) {
@@ -125,9 +127,6 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
   const approvedCount = pages.filter((item) => item.status === 'approved').length;
   const allPagesApproved = pages.length > 0 && approvedCount === pages.length;
 
-  // Compare the current page-version set against the live release's metadata.
-  // If they differ (creator edited since last publish), offer a republish.
-  // If they match, the live hub is already faithful to the current draft.
   const currentVersionIds = pages
     .map((p) => p.currentVersionId)
     .filter((id): id is string => Boolean(id));
@@ -159,31 +158,32 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
 
   return (
     <main className="min-h-screen bg-paper-studio">
+      {/* Top bar */}
       <div className="border-b border-rule-dark bg-paper px-8 py-5">
         <div className="mx-auto flex max-w-[920px] items-center justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
               Draft Pages
             </div>
-            <h1 className="font-serif text-heading-lg text-ink">{proj.title}</h1>
+            <h1 className="font-serif text-heading-lg text-ink truncate">{proj.title}</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2">
             <Link
               href={`/app/projects/${params.id}`}
-              className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
             >
-              Back to run status
+              Run status
             </Link>
             <Link
               href={`/app/projects/${params.id}/review`}
-              className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
             >
               Review draft
             </Link>
             {publishedSubdomain && (
               <Link
                 href={`/h/${publishedSubdomain}`}
-                className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
               >
                 Public hub
               </Link>
@@ -193,118 +193,174 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
       </div>
 
       <div className="mx-auto max-w-[920px] space-y-6 px-8 py-10">
-        <section className="rounded-lg border border-rule bg-paper p-6">
-          <h2 className="text-body-md font-medium text-ink">Current run</h2>
-          <p className="mt-2 text-body-sm text-ink-4">
-            {run
-              ? `Status: ${run.status}. Edit and approve generated draft pages before publishing.`
-              : 'No generation run was found for this project yet.'}
-          </p>
-          <p className="mt-2 text-body-sm text-ink-4">
-            Selected template: <span className="font-medium text-ink">{selectedTemplate.name}</span> - {selectedTemplate.tagline}
-          </p>
-          {pages.length > 0 && (
-            <p className="mt-2 text-body-sm text-ink-4">
-              Review progress: <span className="font-medium text-ink">{approvedCount}</span> of{' '}
-              <span className="font-medium text-ink">{pages.length}</span> pages approved.
+        {/* Run summary */}
+        <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+          <div className="border-b border-rule bg-paper-2 px-6 py-4">
+            <h2 className="text-body-sm font-semibold text-ink">Run overview</h2>
+          </div>
+          <div className="px-6 py-4 space-y-2">
+            <p className="text-body-sm text-ink-4">
+              {run
+                ? `Status: ${run.status}. Edit and approve generated draft pages before publishing.`
+                : 'No generation run was found for this project yet.'}
             </p>
-          )}
-          {publishedSubdomain && (
-            <p className="mt-2 text-body-sm text-ink-4">
-              Published with <span className="font-medium text-ink">{publishedTemplate.name}</span> at{' '}
-              <Link href={`/h/${publishedSubdomain}`} className="font-mono text-ink underline">
-                /h/{publishedSubdomain}
-              </Link>
-              .{' '}
-              {isHubPublished && !hasEditsSinceLiveRelease
-                ? 'Published hub is current.'
-                : hasEditsSinceLiveRelease
-                  ? 'You have edits that are not in the live hub yet.'
-                  : ''}
+            <p className="text-body-sm text-ink-4">
+              Template:{' '}
+              <span className="font-medium text-ink">{selectedTemplate.name}</span>
+              {' — '}
+              <span>{selectedTemplate.tagline}</span>
             </p>
-          )}
-          {canPublish && (
-            <form action={publishCurrentRun.bind(null, params.id)} className="mt-4 space-y-3">
-              {canPublishAwaitingReview && !allPagesApproved && (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-body-sm text-amber-900">
-                  You can publish now, but at least one page still needs approval. Approving pages first makes this a cleaner creator-reviewed preview.
+            {pages.length > 0 && (
+              <div className="flex items-center gap-3">
+                <p className="text-body-sm text-ink-4">
+                  Review progress:{' '}
+                  <span className="font-semibold text-ink">{approvedCount}</span>
+                  {' of '}
+                  <span className="font-semibold text-ink">{pages.length}</span>
+                  {' pages approved'}
                 </p>
-              )}
-              <button
-                type="submit"
-                className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
-              >
-                {publishButtonLabel}
-              </button>
-            </form>
-          )}
-        </section>
+                {/* Progress bar */}
+                <div className="flex-1 max-w-[160px]">
+                  <div className="h-1.5 rounded-full bg-paper-3 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-sage transition-all"
+                      style={{ width: `${pages.length > 0 ? (approvedCount / pages.length) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            {publishedSubdomain && (
+              <p className="text-body-sm text-ink-4">
+                Published with{' '}
+                <span className="font-medium text-ink">{publishedTemplate.name}</span>
+                {' at '}
+                <Link href={`/h/${publishedSubdomain}`} className="font-mono text-ink underline hover:text-ink-2">
+                  /h/{publishedSubdomain}
+                </Link>
+                {isHubPublished && !hasEditsSinceLiveRelease
+                  ? ' — hub is current.'
+                  : hasEditsSinceLiveRelease
+                    ? ' — you have edits not yet in the live hub.'
+                    : ''}
+              </p>
+            )}
+          </div>
 
+          {canPublish && (
+            <div className="border-t border-rule px-6 py-4">
+              <form action={publishCurrentRun.bind(null, params.id)} className="space-y-3">
+                {canPublishAwaitingReview && !allPagesApproved && (
+                  <div className="rounded-lg border border-amber/30 bg-amber-wash px-4 py-3">
+                    <p className="text-body-sm text-amber-ink">
+                      You can publish now, but at least one page still needs approval. Approving pages first makes this a cleaner creator-reviewed preview.
+                    </p>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="inline-flex h-9 items-center rounded-lg bg-ink px-5 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                >
+                  {publishButtonLabel}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {/* Empty states */}
         {!run && (
-          <section className="rounded-lg border border-rule bg-paper p-6 text-body-sm text-ink-3">
-            Create and queue a project run before opening draft pages.
-          </section>
+          <div className="rounded-xl border border-rule bg-paper px-6 py-10 text-center">
+            <p className="text-body-sm font-medium text-ink">No run yet</p>
+            <p className="mt-2 text-body-sm text-ink-3">
+              Create and queue a project run before opening draft pages.
+            </p>
+          </div>
         )}
 
         {run && pages.length === 0 && (
-          <section className="rounded-lg border border-rule bg-paper p-6 text-body-sm text-ink-3">
-            Draft pages are not ready yet. Keep watching the run status page while the pipeline is still queued or running.
-          </section>
+          <div className="rounded-xl border border-rule bg-paper px-6 py-10 text-center">
+            <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-paper-3">
+              <span className="h-2 w-2 rounded-full bg-amber animate-pulse" aria-hidden="true" />
+            </div>
+            <p className="text-body-sm font-medium text-ink">Draft pages not ready yet</p>
+            <p className="mt-2 text-body-sm text-ink-3">
+              Keep watching the run status page while the pipeline is queued or running.
+            </p>
+            <Link
+              href={`/app/projects/${params.id}`}
+              className="mt-4 inline-flex items-center gap-1.5 text-body-sm text-ink-4 underline hover:text-ink"
+            >
+              Back to run status
+            </Link>
+          </div>
         )}
 
+        {/* Page cards */}
         {pages.map((item) => {
           const version = item.currentVersionId ? versionMap.get(item.currentVersionId) : undefined;
           const blockTree = (version?.blockTreeJson ?? { blocks: [] }) as BlockTree;
           const sections = blockTree.blocks.filter((block) => block.type === 'section');
 
           return (
-            <article key={item.id} className="rounded-lg border border-rule bg-paper p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-caption uppercase tracking-widest text-ink-4">
+            <article key={item.id} className="overflow-hidden rounded-xl border border-rule bg-paper">
+              {/* Page header */}
+              <div className="flex items-start justify-between gap-4 border-b border-rule bg-paper-2 px-6 py-5">
+                <div className="min-w-0">
+                  <p className="text-eyebrow uppercase tracking-widest text-ink-4">
                     Page {item.position + 1}
                   </p>
-                  <h2 className="mt-2 text-heading-sm font-serif text-ink">
+                  <h2 className="mt-1.5 font-serif text-heading-sm text-ink">
                     {version?.title ?? item.slug}
                   </h2>
                   {version?.subtitle && (
                     <p className="mt-1 text-body-sm text-ink-4">{version.subtitle}</p>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-2 text-right text-caption">
-                  <span className={`rounded-full border px-2.5 py-1 uppercase tracking-widest ${statusClass(item.status)}`}>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <span className={`rounded-full border px-2.5 py-1 text-eyebrow uppercase tracking-widest ${statusBadgeClass(item.status)}`}>
                     {statusLabel(item.status)}
                   </span>
-                  <span className="text-ink-4">{item.supportLabel.replace('_', ' ')}</span>
+                  <span className="text-caption text-ink-4 capitalize">{item.supportLabel.replace('_', ' ')}</span>
                 </div>
               </div>
 
+              {/* Summary */}
               {version?.summary && (
-                <p className="mt-4 text-body-md leading-7 text-ink-2">{version.summary}</p>
+                <div className="border-b border-rule px-6 py-5">
+                  <p className="text-body-md leading-7 text-ink-2">{version.summary}</p>
+                </div>
               )}
 
+              {/* Edit forms */}
               {version && (
-                <div className="mt-5 grid gap-4 border-t border-rule pt-5 md:grid-cols-2">
+                <div className="grid gap-5 border-b border-rule px-6 py-5 md:grid-cols-2">
                   <form action={updatePageTitle.bind(null, params.id, item.id)} className="space-y-2">
-                    <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`title-${item.id}`}>
+                    <label
+                      className="block text-body-sm font-semibold text-ink"
+                      htmlFor={`title-${item.id}`}
+                    >
                       Page title
                     </label>
                     <input
                       id={`title-${item.id}`}
                       name="title"
                       defaultValue={version.title}
-                      className="w-full rounded-md border border-rule bg-paper-2 px-3 py-2 text-body-sm text-ink outline-none transition focus:border-ink"
+                      className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-body-sm text-ink outline-none transition focus:ring-2 focus:ring-amber focus:border-transparent"
                     />
                     <button
                       type="submit"
-                      className="inline-flex h-8 items-center rounded-md border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                      className="inline-flex h-8 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                     >
                       Save title
                     </button>
                   </form>
 
                   <form action={updatePageSummary.bind(null, params.id, item.id)} className="space-y-2">
-                    <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`summary-${item.id}`}>
+                    <label
+                      className="block text-body-sm font-semibold text-ink"
+                      htmlFor={`summary-${item.id}`}
+                    >
                       Page summary
                     </label>
                     <textarea
@@ -312,11 +368,11 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                       name="summary"
                       defaultValue={version.summary ?? ''}
                       rows={4}
-                      className="w-full rounded-md border border-rule bg-paper-2 px-3 py-2 text-body-sm leading-6 text-ink outline-none transition focus:border-ink"
+                      className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-body-sm leading-6 text-ink outline-none transition focus:ring-2 focus:ring-amber focus:border-transparent"
                     />
                     <button
                       type="submit"
-                      className="inline-flex h-8 items-center rounded-md border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                      className="inline-flex h-8 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                     >
                       Save summary
                     </button>
@@ -324,28 +380,35 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                 </div>
               )}
 
-              <div className="mt-6 space-y-4">
+              {/* Sections */}
+              <div className="divide-y divide-rule">
                 {sections.length > 0 ? sections.map((section) => {
                   const content = section.content as SectionContent;
                   return (
-                    <section key={section.id} className="rounded-md border border-rule bg-paper-2 p-4">
+                    <section key={section.id} className="px-6 py-5">
                       <form
                         action={updateSectionBlock.bind(null, params.id, item.id, section.id)}
-                        className="space-y-3"
+                        className="space-y-4"
                       >
-                        <div>
-                          <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`heading-${item.id}-${section.id}`}>
+                        <div className="space-y-1.5">
+                          <label
+                            className="block text-body-sm font-semibold text-ink"
+                            htmlFor={`heading-${item.id}-${section.id}`}
+                          >
                             Section heading
                           </label>
                           <input
                             id={`heading-${item.id}-${section.id}`}
                             name="heading"
                             defaultValue={content.heading ?? ''}
-                            className="mt-1 w-full rounded-md border border-rule bg-paper px-3 py-2 text-body-sm font-medium text-ink outline-none transition focus:border-ink"
+                            className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-body-sm font-medium text-ink outline-none transition focus:ring-2 focus:ring-amber focus:border-transparent"
                           />
                         </div>
-                        <div>
-                          <label className="block text-caption uppercase tracking-widest text-ink-4" htmlFor={`body-${item.id}-${section.id}`}>
+                        <div className="space-y-1.5">
+                          <label
+                            className="block text-body-sm font-semibold text-ink"
+                            htmlFor={`body-${item.id}-${section.id}`}
+                          >
                             Section body
                           </label>
                           <textarea
@@ -353,12 +416,12 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                             name="body"
                             defaultValue={content.body ?? ''}
                             rows={5}
-                            className="mt-1 w-full rounded-md border border-rule bg-paper px-3 py-2 text-body-sm leading-6 text-ink-2 outline-none transition focus:border-ink"
+                            className="w-full rounded-lg border border-rule bg-paper px-3 py-2 text-body-sm leading-6 text-ink-2 outline-none transition focus:ring-2 focus:ring-amber focus:border-transparent"
                           />
                         </div>
                         <button
                           type="submit"
-                          className="inline-flex h-8 items-center rounded-md border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                          className="inline-flex h-8 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                         >
                           Save section
                         </button>
@@ -367,17 +430,20 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                     </section>
                   );
                 }) : (
-                  <p className="text-body-sm text-ink-4">
-                    This page does not have generated sections yet.
-                  </p>
+                  <div className="px-6 py-5">
+                    <p className="text-body-sm text-ink-4">
+                      This page does not have generated sections yet.
+                    </p>
+                  </div>
                 )}
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-rule pt-5">
+              {/* Approve row */}
+              <div className="flex flex-wrap items-center gap-3 border-t border-rule-dark bg-paper-2 px-6 py-4">
                 <form action={markPageReviewed.bind(null, params.id, item.id)}>
                   <button
                     type="submit"
-                    className="inline-flex h-9 items-center rounded-md border border-rule bg-paper px-4 text-body-sm text-ink-3 transition hover:text-ink"
+                    className="inline-flex h-9 items-center rounded-lg border border-rule bg-paper px-4 text-body-sm text-ink-3 transition hover:bg-paper-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
                   >
                     Mark reviewed
                   </button>
@@ -385,13 +451,13 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                 <form action={approvePage.bind(null, params.id, item.id)}>
                   <button
                     type="submit"
-                    className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
+                    className="inline-flex h-9 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
                   >
                     Approve page
                   </button>
                 </form>
-                <p className="text-body-sm text-ink-4">
-                  Text edits create a new version and keep source evidence attached.
+                <p className="text-caption text-ink-4">
+                  Edits create a new version while keeping source evidence attached.
                 </p>
               </div>
             </article>

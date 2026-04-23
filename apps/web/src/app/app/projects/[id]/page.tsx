@@ -39,43 +39,47 @@ const STAGE_LABELS: Record<string, string> = {
   build_release: 'Build release',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: 'text-ink-4',
-  running: 'text-amber-ink',
-  succeeded: 'text-sage',
-  failed_retryable: 'text-rose',
-  failed_terminal: 'text-rose',
-  skipped: 'text-ink-4',
-};
+type StageStatus = 'pending' | 'running' | 'succeeded' | 'failed_retryable' | 'failed_terminal' | 'skipped';
 
 const STATUS_DOT: Record<string, string> = {
-  pending: 'bg-rule',
+  pending: 'bg-paper-3 border border-rule',
   running: 'bg-amber animate-pulse',
   succeeded: 'bg-sage',
   failed_retryable: 'bg-rose',
   failed_terminal: 'bg-rose',
-  skipped: 'bg-rule',
+  skipped: 'bg-paper-3',
 };
 
-const RUN_STATUS_COLOR: Record<string, string> = {
-  draft: 'text-ink-4',
-  awaiting_payment: 'text-amber-ink',
-  queued: 'text-amber-ink',
-  running: 'text-amber-ink',
-  awaiting_review: 'text-sage',
-  published: 'text-sage',
-  failed: 'text-rose',
-  canceled: 'text-ink-4',
+const STATUS_TEXT: Record<string, string> = {
+  pending: 'text-ink-5',
+  running: 'text-amber-ink font-medium',
+  succeeded: 'text-sage',
+  failed_retryable: 'text-rose',
+  failed_terminal: 'text-rose',
+  skipped: 'text-ink-5',
+};
+
+type RunStatus = 'draft' | 'awaiting_payment' | 'queued' | 'running' | 'awaiting_review' | 'published' | 'failed' | 'canceled';
+
+const RUN_STATUS_BADGE: Record<string, string> = {
+  draft: 'bg-paper-3 text-ink-4 border-rule',
+  awaiting_payment: 'bg-amber-wash text-amber-ink border-amber/30',
+  queued: 'bg-amber-wash text-amber-ink border-amber/30',
+  running: 'bg-amber-wash text-amber-ink border-amber/30',
+  awaiting_review: 'bg-sage/10 text-sage border-sage/30',
+  published: 'bg-sage/10 text-sage border-sage/30',
+  failed: 'bg-rose/10 text-rose border-rose/30',
+  canceled: 'bg-paper-3 text-ink-4 border-rule',
 };
 
 const RUN_STATUS_LABEL: Record<string, string> = {
   draft: 'Draft',
   awaiting_payment: 'Awaiting payment',
-  queued: 'Payment received, queued',
+  queued: 'Queued',
   running: 'Processing',
   awaiting_review: 'Draft ready',
   published: 'Published',
-  failed: 'Failed / needs support',
+  failed: 'Failed',
   canceled: 'Canceled',
 };
 
@@ -162,265 +166,294 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const publishedSubdomain = publishedHubs[0]?.subdomain;
   const publishedTemplate = getHubTemplate(publishedHubs[0]?.theme ?? selectedTemplate.id);
 
+  const runStatus = (run?.status ?? '') as RunStatus;
+
   return (
     <main className="min-h-screen bg-paper-studio">
+      {/* Top bar */}
       <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-8 py-5">
-        <div>
+        <div className="min-w-0">
           <div className="mb-1 text-eyebrow uppercase tracking-widest text-ink-4">
             Creator Studio
           </div>
-          <h1 className="font-serif text-heading-lg text-ink">{proj.title}</h1>
+          <h1 className="font-serif text-heading-lg text-ink truncate">{proj.title}</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           {isActive && <RefreshButton />}
           <Link
             href="/app"
-            className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
           >
-            ← Dashboard
+            <span aria-hidden="true">←</span>
+            Dashboard
           </Link>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[720px] px-8 py-10 space-y-6">
+      <div className="mx-auto max-w-[720px] space-y-5 px-8 py-10">
         {/* Status card */}
-        <div className="rounded-lg border border-rule bg-paper p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-body-md font-medium text-ink">Generation run</h2>
+        <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+          <div className="flex items-center justify-between border-b border-rule bg-paper-2 px-6 py-4">
+            <h2 className="text-body-sm font-semibold text-ink">Generation run</h2>
             {run && (
-              <span className={`text-body-sm font-medium ${RUN_STATUS_COLOR[run.status] ?? 'text-ink-4'}`}>
-                {RUN_STATUS_LABEL[run.status] ?? run.status}
+              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-caption font-medium ${RUN_STATUS_BADGE[runStatus] ?? 'bg-paper-3 text-ink-4 border-rule'}`}>
+                {RUN_STATUS_LABEL[runStatus] ?? runStatus}
               </span>
             )}
           </div>
 
-          <dl className="grid grid-cols-3 gap-4 rounded-md border border-rule bg-paper-2 p-4 text-center">
-            <div>
-              <dt className="text-caption text-ink-4">Videos</dt>
-              <dd className="mt-1 font-mono text-body-md text-ink">{videoCount}</dd>
+          {/* Run stats */}
+          <div className="grid grid-cols-3 divide-x divide-rule border-b border-rule">
+            <div className="px-6 py-4">
+              <p className="text-eyebrow uppercase tracking-widest text-ink-4">Videos</p>
+              <p className="mt-2 font-serif text-heading-md text-ink">{videoCount}</p>
             </div>
-            <div>
-              <dt className="text-caption text-ink-4">Pipeline</dt>
-              <dd className="mt-1 font-mono text-body-md text-ink">{run?.pipelineVersion ?? '—'}</dd>
+            <div className="px-6 py-4">
+              <p className="text-eyebrow uppercase tracking-widest text-ink-4">Pipeline</p>
+              <p className="mt-2 font-mono text-body-sm text-ink">{run?.pipelineVersion ?? (
+                <span className="text-ink-5">—</span>
+              )}</p>
             </div>
-            <div>
-              <dt className="text-caption text-ink-4">Status</dt>
-              <dd className={`mt-1 font-mono text-body-md ${RUN_STATUS_COLOR[run?.status ?? ''] ?? 'text-ink-4'}`}>
-                {run ? (RUN_STATUS_LABEL[run.status] ?? run.status) : '—'}
-              </dd>
+            <div className="px-6 py-4">
+              <p className="text-eyebrow uppercase tracking-widest text-ink-4">Status</p>
+              <p className={`mt-2 text-body-sm font-medium ${runStatus ? (RUN_STATUS_BADGE[runStatus]?.includes('sage') ? 'text-sage' : RUN_STATUS_BADGE[runStatus]?.includes('amber') ? 'text-amber-ink' : RUN_STATUS_BADGE[runStatus]?.includes('rose') ? 'text-rose' : 'text-ink-4') : 'text-ink-5'}`}>
+                {run ? (RUN_STATUS_LABEL[runStatus] ?? runStatus) : (
+                  <span className="text-ink-5">No run yet</span>
+                )}
+              </p>
             </div>
-          </dl>
+          </div>
 
-          {run?.status === 'queued' && (
-            <p className="text-body-sm text-ink-3 rounded-md border border-rule bg-paper-2 px-3 py-2">
-              {hasStageRuns
-                ? 'Payment is confirmed. Your run is queued and has started writing stage progress.'
-                : 'Payment received, preparing your run. If this stays here for more than a few minutes, send the support ids below.'}
-            </p>
-          )}
+          {/* Status messages */}
+          <div className="px-6 py-4 space-y-3">
+            {run?.status === 'queued' && (
+              <div className="rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
+                <p className="text-body-sm text-ink-3">
+                  {hasStageRuns
+                    ? 'Payment confirmed. Your run is queued and has started writing stage progress.'
+                    : 'Payment received — preparing your run. If this persists for more than a few minutes, send the support IDs below.'}
+                </p>
+              </div>
+            )}
 
-          {run?.status === 'running' && (
-            <p className="text-body-sm text-ink-3 rounded-md border border-rule bg-paper-2 px-3 py-2">
-              CreatorCanon is processing your source library now. This page refreshes while the worker advances through the pipeline stages.
-            </p>
-          )}
+            {run?.status === 'running' && (
+              <div className="rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
+                <p className="text-body-sm text-ink-3">
+                  CreatorCanon is processing your source library. This page refreshes while the worker advances through pipeline stages.
+                </p>
+              </div>
+            )}
 
-          {run?.status === 'awaiting_payment' && (
-            <div className="rounded-md border border-amber/30 bg-amber/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+            {run?.status === 'awaiting_payment' && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
                 <div>
-                  <p className="text-body-sm font-medium text-ink">Payment required</p>
-                  <p className="text-caption text-ink-4">
+                  <p className="text-body-sm font-semibold text-ink">Payment required</p>
+                  <p className="mt-0.5 text-caption text-ink-4">
                     This run will not queue until Stripe confirms payment.
                   </p>
                 </div>
                 <Link
                   href={`/app/checkout?projectId=${params.id}`}
-                  className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
+                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                 >
                   Complete payment
                 </Link>
               </div>
-            </div>
-          )}
+            )}
 
-          {run?.status === 'failed' && (
-            <p className="text-body-sm text-rose rounded-md border border-rose/30 bg-rose/10 px-3 py-2">
-              {hasStageRuns
-                ? 'This run failed during processing. Send the support ids below so we can inspect the failed stage and retry it.'
-                : 'This run failed before pipeline work began. Send the support ids below so we can inspect payment, worker, and dispatch state.'}
-            </p>
-          )}
+            {run?.status === 'failed' && (
+              <div className="rounded-lg border border-rose/30 bg-rose/8 px-4 py-3">
+                <p className="text-body-sm text-rose">
+                  {hasStageRuns
+                    ? 'This run failed during processing. Send the support IDs below so we can inspect the failed stage and retry it.'
+                    : 'This run failed before pipeline work began. Send the support IDs below so we can inspect payment, worker, and dispatch state.'}
+                </p>
+              </div>
+            )}
 
-          {run && (
-            <div className="rounded-md border border-rule bg-paper-2 px-4 py-3">
-              <p className="text-caption uppercase tracking-widest text-ink-4">Support ids</p>
-              <dl className="mt-2 space-y-1 text-caption text-ink-4">
-                <div className="flex gap-2">
-                  <dt className="w-20 shrink-0">Project</dt>
-                  <dd className="break-all font-mono text-ink-3">{proj.id}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-20 shrink-0">Run</dt>
-                  <dd className="break-all font-mono text-ink-3">{run.id}</dd>
-                </div>
-              </dl>
-            </div>
-          )}
+            {transcriptOutput && (transcriptOutput.skippedCount ?? 0) > 0 && (
+              <div className="rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
+                <p className="text-body-sm font-semibold text-ink">Limited transcript coverage</p>
+                <p className="mt-1 text-caption text-ink-4 leading-relaxed">
+                  {transcriptOutput.fetchedCount ?? 0} video{(transcriptOutput.fetchedCount ?? 0) === 1 ? '' : 's'} had usable captions; {transcriptOutput.skippedCount} video{transcriptOutput.skippedCount === 1 ? '' : 's'} did not. Atlas still generates draft pages with limited source support where needed.
+                </p>
+                {skippedTranscriptReasons.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-caption text-ink-4">
+                    {skippedTranscriptReasons.map((item) => (
+                      <li key={`${item.youtubeVideoId}-${item.skipReason}`} className="flex gap-1.5">
+                        <span className="shrink-0">·</span>
+                        <span>{item.youtubeVideoId ?? 'Video'}: {item.skipReason ?? 'No usable transcript material.'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
-          {transcriptOutput && (transcriptOutput.skippedCount ?? 0) > 0 && (
-            <div className="rounded-md border border-amber/30 bg-amber/10 px-4 py-3">
-              <p className="text-body-sm font-medium text-ink">Limited transcript coverage</p>
-              <p className="mt-1 text-caption text-ink-4">
-                {transcriptOutput.fetchedCount ?? 0} video{(transcriptOutput.fetchedCount ?? 0) === 1 ? '' : 's'} had usable captions; {transcriptOutput.skippedCount} video{transcriptOutput.skippedCount === 1 ? '' : 's'} did not. Atlas still generates draft pages with limited source support where needed.
-              </p>
-              {skippedTranscriptReasons.length > 0 && (
-                <ul className="mt-2 space-y-1 text-caption text-ink-4">
-                  {skippedTranscriptReasons.map((item) => (
-                    <li key={`${item.youtubeVideoId}-${item.skipReason}`}>
-                      {item.youtubeVideoId ?? 'Video'}: {item.skipReason ?? 'No usable transcript material.'}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {draftPagesReady && (
-            <div className="rounded-md border border-sage/30 bg-sage/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+            {draftPagesReady && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3">
                 <div>
-                  <p className="text-body-sm font-medium text-ink">Draft pages ready</p>
-                  <p className="text-caption text-ink-4">
+                  <p className="text-body-sm font-semibold text-ink">Draft pages ready</p>
+                  <p className="mt-0.5 text-caption text-ink-4">
                     {persistedPages.length} page{persistedPages.length === 1 ? '' : 's'} persisted from the current run.
                   </p>
                 </div>
                 <Link
                   href={`/app/projects/${params.id}/pages`}
-                  className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
+                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                 >
                   Open draft pages
                 </Link>
               </div>
-            </div>
-          )}
+            )}
 
-          {draftPagesReady && run?.status === 'awaiting_review' && (
-            <form action={publishCurrentRun.bind(null, params.id)} className="rounded-md border border-amber/30 bg-amber/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-body-sm font-medium text-ink">Ready to publish a local preview</p>
-                  <p className="text-caption text-ink-4">
-                    This creates a public read-only hub using {selectedTemplate.name}.
-                  </p>
+            {draftPagesReady && run?.status === 'awaiting_review' && (
+              <form action={publishCurrentRun.bind(null, params.id)}>
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-amber/30 bg-amber-wash/50 px-4 py-3">
+                  <div>
+                    <p className="text-body-sm font-semibold text-ink">Ready to publish a preview</p>
+                    <p className="mt-0.5 text-caption text-ink-4">
+                      Creates a public read-only hub using {selectedTemplate.name}.
+                    </p>
+                  </div>
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                  >
+                    Publish preview
+                  </button>
                 </div>
-                <button
-                  type="submit"
-                  className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
-                >
-                  Publish preview hub with {selectedTemplate.name}
-                </button>
-              </div>
-            </form>
-          )}
+              </form>
+            )}
 
-          {publishedSubdomain && (
-            <div className="rounded-md border border-sage/30 bg-sage/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+            {publishedSubdomain && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3">
                 <div>
-                  <p className="text-body-sm font-medium text-ink">Published preview hub</p>
-                  <p className="text-caption text-ink-4">
-                    {publishedTemplate.name} / <span className="font-mono">/h/{publishedSubdomain}</span>
+                  <p className="text-body-sm font-semibold text-ink">Published preview hub</p>
+                  <p className="mt-0.5 text-caption text-ink-4">
+                    {publishedTemplate.name} · <span className="font-mono">/h/{publishedSubdomain}</span>
                   </p>
                 </div>
                 <Link
                   href={`/h/${publishedSubdomain}`}
-                  className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
+                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                 >
-                  Open public hub
+                  Open hub
                 </Link>
               </div>
-            </div>
-          )}
+            )}
 
-          {reviewReady && (
-            <div className="rounded-md border border-sage/30 bg-sage/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+            {reviewReady && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-sage/30 bg-sage/8 px-4 py-3">
                 <div>
-                  <p className="text-body-sm font-medium text-ink">Review draft ready</p>
-                  <p className="text-caption text-ink-4">
-                    {parsedReview.data.totalSegmentCount} transcript segments summarized into a first read-only draft.
+                  <p className="text-body-sm font-semibold text-ink">Review draft ready</p>
+                  <p className="mt-0.5 text-caption text-ink-4">
+                    {parsedReview.data.totalSegmentCount} transcript segments summarized into a first draft.
                   </p>
                 </div>
                 <Link
                   href={`/app/projects/${params.id}/review`}
-                  className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90"
+                  className="inline-flex h-9 shrink-0 items-center rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                 >
                   Open review
                 </Link>
               </div>
-            </div>
-          )}
+            )}
 
-          {run?.status === 'awaiting_review' && !reviewReady && (
-            <p className="text-body-sm text-rose rounded-md border border-rose/30 bg-rose/10 px-3 py-2">
-              This run reached review status, but the review artifact is missing or invalid. Re-run the pipeline after fixing the stage output.
-            </p>
-          )}
+            {run?.status === 'awaiting_review' && !reviewReady && (
+              <div className="rounded-lg border border-rose/30 bg-rose/8 px-4 py-3">
+                <p className="text-body-sm text-rose">
+                  This run reached review status, but the review artifact is missing or invalid. Re-run the pipeline after fixing the stage output.
+                </p>
+              </div>
+            )}
 
-          {reviewReady && !draftPagesReady && (
-            <p className="text-body-sm text-rose rounded-md border border-rose/30 bg-rose/10 px-3 py-2">
-              The review draft exists, but draft pages were not persisted for this run. Re-run the pipeline after fixing the page generation stage.
-            </p>
-          )}
+            {reviewReady && !draftPagesReady && (
+              <div className="rounded-lg border border-rose/30 bg-rose/8 px-4 py-3">
+                <p className="text-body-sm text-rose">
+                  The review draft exists, but draft pages were not persisted for this run. Re-run the pipeline after fixing the page generation stage.
+                </p>
+              </div>
+            )}
+
+            {/* Support IDs */}
+            {run && (
+              <details className="group">
+                <summary className="cursor-pointer list-none text-caption text-ink-4 hover:text-ink-3">
+                  <span className="group-open:hidden">Show support IDs</span>
+                  <span className="hidden group-open:inline">Hide support IDs</span>
+                </summary>
+                <div className="mt-3 rounded-lg border border-rule bg-paper-2 px-4 py-3">
+                  <p className="text-eyebrow uppercase tracking-widest text-ink-4">Support IDs</p>
+                  <dl className="mt-2 space-y-1.5">
+                    <div className="flex gap-3 text-caption">
+                      <dt className="w-16 shrink-0 text-ink-4">Project</dt>
+                      <dd className="break-all font-mono text-ink-3">{proj.id}</dd>
+                    </div>
+                    <div className="flex gap-3 text-caption">
+                      <dt className="w-16 shrink-0 text-ink-4">Run</dt>
+                      <dd className="break-all font-mono text-ink-3">{run.id}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </details>
+            )}
+          </div>
         </div>
 
         {/* Stage progress */}
         {stageRuns.length > 0 && (
-          <div className="rounded-lg border border-rule bg-paper p-6 space-y-3">
-            <h2 className="text-body-md font-medium text-ink">Pipeline stages</h2>
-            <ul className="space-y-2">
-              {stageRuns.map((sr) => (
-                <li key={sr.id} className="flex items-center gap-3">
-                  <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[sr.status] ?? 'bg-rule'}`} />
-                  <span className="flex-1 text-body-sm text-ink">
-                    {STAGE_LABELS[sr.stageName] ?? sr.stageName}
-                  </span>
-                  <span className={`text-caption ${STATUS_COLOR[sr.status] ?? 'text-ink-4'}`}>
-                    {sr.status === 'succeeded' && sr.durationMs
-                      ? `${(sr.durationMs / 1000).toFixed(1)}s`
-                      : sr.status}
-                  </span>
-                </li>
-              ))}
+          <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+            <div className="border-b border-rule bg-paper-2 px-6 py-4">
+              <h2 className="text-body-sm font-semibold text-ink">Pipeline stages</h2>
+            </div>
+            <ul className="divide-y divide-rule px-0">
+              {stageRuns.map((sr) => {
+                const status = sr.status as StageStatus;
+                return (
+                  <li key={sr.id} className="flex items-center gap-3 px-6 py-3">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status] ?? 'bg-rule'}`} aria-hidden="true" />
+                    <span className="flex-1 text-body-sm text-ink">
+                      {STAGE_LABELS[sr.stageName] ?? sr.stageName}
+                    </span>
+                    <span className={`font-mono text-[11px] ${STATUS_TEXT[status] ?? 'text-ink-5'}`}>
+                      {status === 'succeeded' && sr.durationMs
+                        ? `${(sr.durationMs / 1000).toFixed(1)}s`
+                        : RUN_STATUS_LABEL[status] ?? status}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
 
         {/* Config summary */}
         {proj.config && (
-          <div className="rounded-lg border border-rule bg-paper p-6 space-y-3">
-            <h2 className="text-body-md font-medium text-ink">Configuration</h2>
-            <dl className="space-y-2 text-body-sm">
+          <div className="overflow-hidden rounded-xl border border-rule bg-paper">
+            <div className="border-b border-rule bg-paper-2 px-6 py-4">
+              <h2 className="text-body-sm font-semibold text-ink">Configuration</h2>
+            </div>
+            <dl className="divide-y divide-rule px-6">
               {proj.config.audience && (
-                <div className="flex gap-3">
+                <div className="flex gap-4 py-3 text-body-sm">
                   <dt className="w-28 shrink-0 text-ink-4">Audience</dt>
                   <dd className="text-ink">{proj.config.audience as string}</dd>
                 </div>
               )}
-              <div className="flex gap-3">
+              <div className="flex gap-4 py-3 text-body-sm">
                 <dt className="w-28 shrink-0 text-ink-4">Tone</dt>
-                <dd className="text-ink capitalize">{proj.config.tone as string ?? 'Conversational'}</dd>
+                <dd className="capitalize text-ink">{proj.config.tone as string ?? 'Conversational'}</dd>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-4 py-3 text-body-sm">
                 <dt className="w-28 shrink-0 text-ink-4">Depth</dt>
-                <dd className="text-ink capitalize">{String(proj.config.length_preset ?? 'standard')}</dd>
+                <dd className="capitalize text-ink">{String(proj.config.length_preset ?? 'standard')}</dd>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-4 py-3 text-body-sm">
                 <dt className="w-28 shrink-0 text-ink-4">Template</dt>
                 <dd className="text-ink">{selectedTemplate.name}</dd>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-4 py-3 text-body-sm">
                 <dt className="w-28 shrink-0 text-ink-4">Chat</dt>
                 <dd className="text-ink">{proj.config.chat_enabled ? 'Enabled' : 'Disabled'}</dd>
               </div>

@@ -59,46 +59,49 @@ function estimatePrice(totalSeconds: number): string {
   return '$299';
 }
 
-function CaptionChip({
-  status,
-  hasCanonicalTranscript,
-  hasAudioAsset,
-}: {
+type CaptionChipProps = {
   status: VideoRow['captionStatus'];
   hasCanonicalTranscript: boolean;
   hasAudioAsset: boolean;
-}) {
+};
+
+function CaptionChip({ status, hasCanonicalTranscript, hasAudioAsset }: CaptionChipProps) {
   if (hasCanonicalTranscript || status === 'available') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-sage/10 px-2 py-0.5 text-[10px] font-medium text-sage">
+      <span className="inline-flex items-center gap-1 rounded-full bg-sage/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sage">
+        <span className="h-1 w-1 rounded-full bg-sage" aria-hidden="true" />
         Source ready
       </span>
     );
   }
   if (status === 'auto_only') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-medium text-amber-ink">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-ink">
+        <span className="h-1 w-1 rounded-full bg-amber" aria-hidden="true" />
         Auto captions
       </span>
     );
   }
   if (hasAudioAsset) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-medium text-amber-ink">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-ink">
+        <span className="h-1 w-1 rounded-full bg-amber" aria-hidden="true" />
         Needs transcription
       </span>
     );
   }
   if (status === 'none') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-0.5 text-[10px] font-medium text-ink-4">
+      <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-4">
+        <span className="h-1 w-1 rounded-full bg-ink-4" aria-hidden="true" />
         Limited source
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-0.5 text-[10px] font-medium text-ink-4">
-      Needs transcript check
+    <span className="inline-flex items-center gap-1 rounded-full bg-paper-3 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-4">
+      <span className="h-1 w-1 rounded-full bg-ink-4" aria-hidden="true" />
+      Unchecked
     </span>
   );
 }
@@ -111,14 +114,36 @@ function VideoThumbnail({ url, title }: { url: string | null; title: string | nu
         alt={title ?? 'Video thumbnail'}
         width={120}
         height={68}
-        className="h-[56px] w-[100px] rounded object-cover"
+        className="h-[58px] w-[104px] rounded-md object-cover"
         unoptimized={false}
       />
     );
   }
+  const initials = title
+    ? title.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
+    : '?';
   return (
-    <div className="flex h-[56px] w-[100px] items-center justify-center rounded bg-paper-3 text-[10px] text-ink-4">
-      {title?.slice(0, 2) ?? '?'}
+    <div className="flex h-[58px] w-[104px] items-center justify-center rounded-md bg-paper-3 text-body-sm font-medium text-ink-4">
+      {initials}
+    </div>
+  );
+}
+
+function CheckboxIcon({ checked }: { checked: boolean }) {
+  return (
+    <div
+      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
+        checked
+          ? 'border-transparent bg-ink text-paper'
+          : 'border-ink-4 bg-paper hover:border-ink-2'
+      }`}
+      aria-hidden="true"
+    >
+      {checked && (
+        <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+          <path d="M1 3L3.5 5.5L8 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
     </div>
   );
 }
@@ -204,9 +229,10 @@ export default function LibraryClient({
         <div className="flex items-center gap-2">
           <Link
             href="/app"
-            className="inline-flex h-8 items-center gap-1.5 rounded border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:text-ink"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
           >
-            ← Dashboard
+            <span aria-hidden="true">←</span>
+            Dashboard
           </Link>
           <button
             disabled={selected.size === 0}
@@ -214,38 +240,49 @@ export default function LibraryClient({
               const ids = [...selected].join(',');
               router.push(`/app/configure?ids=${ids}`);
             }}
-            className="inline-flex h-8 items-center gap-1.5 rounded bg-ink px-3 text-body-sm font-medium text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
           >
-            ✦ Build from {selected.size > 0 ? selected.size : '…'} selected
+            Build hub from {selected.size > 0 ? selected.size : '…'} videos
           </button>
         </div>
       </div>
 
       <div className="mx-auto max-w-[1320px] px-8 py-7">
         {/* Filter bar */}
-        <div className="mb-5 flex items-center gap-3">
-          <div className="relative max-w-[360px] flex-1">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-4 text-[13px]">
-              ⌕
-            </span>
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="relative w-72">
+            <svg
+              className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-4"
+              viewBox="0 0 16 16" fill="none" aria-hidden="true"
+            >
+              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
             <input
               type="search"
               placeholder="Search videos…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="h-8 w-full rounded border border-rule bg-paper pl-7 pr-3 text-body-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-1 focus:ring-amber"
+              aria-label="Search videos"
+              className="h-9 w-full rounded-lg border border-rule bg-paper pl-8 pr-3 text-body-sm text-ink placeholder:text-ink-4 transition focus:outline-none focus:ring-2 focus:ring-amber focus:border-transparent"
             />
           </div>
 
-          <div className="flex items-center gap-0.5 rounded border border-rule bg-paper p-0.5">
+          {/* Duration segmented control */}
+          <div
+            className="flex items-center gap-0.5 rounded-lg border border-rule bg-paper p-0.5"
+            role="group"
+            aria-label="Filter by duration"
+          >
             {durationLabels.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setDurationFilter(key)}
-                className={`rounded px-2.5 py-1 text-[12px] transition ${
+                aria-pressed={durationFilter === key}
+                className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
                   durationFilter === key
-                    ? 'bg-paper-3 font-medium text-ink'
-                    : 'text-ink-3 hover:text-ink'
+                    ? 'bg-ink text-paper shadow-sm'
+                    : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
                 }`}
               >
                 {label}
@@ -255,90 +292,118 @@ export default function LibraryClient({
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-0.5 rounded border border-rule bg-paper p-0.5">
+          {/* View mode segmented control */}
+          <div
+            className="flex items-center gap-0.5 rounded-lg border border-rule bg-paper p-0.5"
+            role="group"
+            aria-label="View mode"
+          >
             {(['list', 'grid'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`rounded px-2.5 py-1 text-[12px] transition ${
-                  view === v ? 'bg-paper-3 font-medium text-ink' : 'text-ink-3 hover:text-ink'
+                aria-pressed={view === v}
+                aria-label={v === 'list' ? 'List view' : 'Grid view'}
+                className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
+                  view === v ? 'bg-ink text-paper shadow-sm' : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
                 }`}
               >
-                {v === 'list' ? '≡ List' : '⊞ Grid'}
+                {v === 'list' ? (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M2 4h10M2 7h10M2 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                    <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                    <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                    <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                )}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Empty state */}
+        {/* Empty state — no videos synced */}
         {videos.length === 0 && (
-          <div className="flex flex-col items-center gap-4 rounded-lg border border-rule bg-paper px-8 py-16 text-center">
-            <p className="font-serif text-heading-md text-ink">No videos synced yet</p>
-            <p className="max-w-sm text-body-md text-ink-3">
-              Run{' '}
-              <code className="rounded bg-paper-3 px-1.5 py-0.5 font-mono text-caption">
-                pnpm trigger:dev
-              </code>{' '}
-              in the worker app to sync up to {channel.videoCount ?? 'all'} videos from{' '}
-              {channel.title ?? 'your channel'}.
-            </p>
-            <p className="text-caption text-ink-4">
-              {channel.videoCount != null
-                ? `${channel.videoCount.toLocaleString()} videos available on YouTube`
-                : ''}
-            </p>
+          <div className="flex flex-col items-center gap-5 rounded-xl border border-rule bg-paper px-8 py-20 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-paper-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" className="text-ink-4" />
+                <path d="M10 8.5l5 3-5 3v-6z" fill="currentColor" className="text-ink-4" />
+                <path d="M8 21h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-ink-4" />
+                <path d="M12 17v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-ink-4" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <p className="font-serif text-heading-md text-ink">No videos synced yet</p>
+              <p className="max-w-sm text-body-md text-ink-3 leading-relaxed">
+                Your YouTube channel is connected. Run a sync to import your video library and start building a hub.
+              </p>
+            </div>
+            {channel.videoCount != null && (
+              <p className="rounded-full border border-rule bg-paper-2 px-4 py-1.5 text-caption text-ink-4">
+                {channel.videoCount.toLocaleString()} videos available on YouTube
+              </p>
+            )}
           </div>
         )}
 
-        {/* Selection panel */}
+        {/* Selection summary panel */}
         {selected.size > 0 && (
-          <div className="mb-4 rounded-lg border border-amber/30 bg-paper px-5 py-4 shadow-1">
-            <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_auto] items-center gap-4">
+          <div className="mb-5 overflow-hidden rounded-xl border border-amber/30 bg-paper shadow-1">
+            <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_auto] items-center gap-5 px-6 py-5">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-amber text-[14px]">✦</span>
-                  <span className="text-body-sm font-medium text-ink">
+                  <span className="text-amber text-[14px]" aria-hidden="true">✦</span>
+                  <span className="text-body-sm font-semibold text-ink">
                     {selected.size} video{selected.size !== 1 ? 's' : ''} selected
                   </span>
                 </div>
-                <p className="mt-1.5 text-caption text-ink-3">
-                  CreatorCanon will preserve all citations and source evidence throughout review.
+                <p className="mt-1.5 text-caption text-ink-3 leading-relaxed">
+                  Citations and source evidence are preserved throughout the review process.
                 </p>
               </div>
               <div>
-                <div className="text-caption text-ink-4">Archive scope</div>
-                <div className="mt-1 font-serif text-heading-md text-ink">
+                <p className="text-eyebrow uppercase tracking-widest text-ink-4">Archive scope</p>
+                <p className="mt-1.5 font-serif text-heading-md text-ink">
                   {totalSelectedHours >= 1
                     ? `${totalSelectedHours.toFixed(1)}h`
                     : `${Math.round(totalSelectedSeconds / 60)}m`}
-                </div>
-                <div className="mt-0.5 text-caption text-ink-4">
-                  {selected.size} videos
-                </div>
+                </p>
+                <p className="mt-0.5 text-caption text-ink-4">{selected.size} videos</p>
               </div>
               <div>
-                <div className="text-caption text-ink-4">Expected output</div>
-                <div className="mt-1 font-serif text-heading-md text-ink">
+                <p className="text-eyebrow uppercase tracking-widest text-ink-4">Expected output</p>
+                <p className="mt-1.5 font-serif text-heading-md text-ink">
                   ~{expectedLessons} lesson{expectedLessons !== 1 ? 's' : ''}
-                </div>
-                <div className="mt-0.5 text-caption text-ink-4">plus playbooks</div>
+                </p>
+                <p className="mt-0.5 text-caption text-ink-4">plus playbooks</p>
               </div>
               <div>
-                <div className="text-caption text-ink-4">Estimate</div>
-                <div className="mt-1 font-serif text-heading-md text-ink">
+                <p className="text-eyebrow uppercase tracking-widest text-ink-4">Estimate</p>
+                <p className="mt-1.5 font-serif text-heading-md text-ink">
                   {estimatePrice(totalSelectedSeconds)}
-                </div>
-                <div className="mt-0.5 text-caption text-ink-4">~4 min to draft</div>
+                </p>
+                <p className="mt-0.5 text-caption text-ink-4">~4 min to draft</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelected(new Set())}
-                  className="inline-flex h-8 items-center rounded border border-rule px-3 text-body-sm text-ink-3 transition hover:text-ink"
+                  className="inline-flex h-9 items-center rounded-lg border border-rule bg-paper px-3 text-body-sm text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                 >
                   Clear
                 </button>
-                <button className="inline-flex h-8 items-center gap-1 rounded bg-ink px-3 text-body-sm font-medium text-paper transition hover:opacity-90">
-                  Build your hub →
+                <button
+                  onClick={() => {
+                    const ids = [...selected].join(',');
+                    router.push(`/app/configure?ids=${ids}`);
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                >
+                  Build hub
+                  <span aria-hidden="true">→</span>
                 </button>
               </div>
             </div>
@@ -347,41 +412,35 @@ export default function LibraryClient({
 
         {/* List view */}
         {view === 'list' && videos.length > 0 && (
-          <div className="overflow-hidden rounded-lg border border-rule bg-paper">
+          <div className="overflow-hidden rounded-xl border border-rule bg-paper">
             {/* Header row */}
-            <div className="grid grid-cols-[36px_100px_1fr_100px_90px_70px] gap-3 border-b border-rule bg-paper-2 px-4 py-2.5">
+            <div className="grid grid-cols-[40px_112px_1fr_104px_96px_72px] items-center gap-3 border-b border-rule bg-paper-2 px-4 py-3">
               <div className="flex items-center">
                 <button
                   onClick={toggleAll}
-                  className={`h-4 w-4 rounded border transition ${
-                    allFilteredSelected
-                      ? 'border-transparent bg-ink text-paper'
-                      : 'border-ink-4 hover:border-ink-2'
-                  } flex items-center justify-center text-[10px]`}
+                  aria-label={allFilteredSelected ? 'Deselect all visible' : 'Select all visible'}
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
                 >
-                  {allFilteredSelected && '✓'}
+                  <CheckboxIcon checked={allFilteredSelected} />
                 </button>
               </div>
-              <div className="text-eyebrow text-[10px] uppercase tracking-widest text-ink-4">
-                Thumb
-              </div>
-              <div className="text-eyebrow text-[10px] uppercase tracking-widest text-ink-4">
-                Title
-              </div>
-              <div className="text-right text-eyebrow text-[10px] uppercase tracking-widest text-ink-4">
-                Views
-              </div>
-              <div className="text-eyebrow text-[10px] uppercase tracking-widest text-ink-4">
-                Date
-              </div>
-              <div className="text-eyebrow text-[10px] uppercase tracking-widest text-ink-4">
-                Length
-              </div>
+              <div className="text-eyebrow uppercase tracking-widest text-ink-4">Thumb</div>
+              <div className="text-eyebrow uppercase tracking-widest text-ink-4">Title</div>
+              <div className="text-right text-eyebrow uppercase tracking-widest text-ink-4">Views</div>
+              <div className="text-eyebrow uppercase tracking-widest text-ink-4">Date</div>
+              <div className="text-eyebrow uppercase tracking-widest text-ink-4">Length</div>
             </div>
 
+            {/* No-results within filter */}
             {filtered.length === 0 && (
-              <div className="px-4 py-10 text-center text-body-sm text-ink-4">
-                No videos match your filter.
+              <div className="px-4 py-16 text-center">
+                <p className="text-body-sm text-ink-3">No videos match your filter.</p>
+                <button
+                  onClick={() => { setQuery(''); setDurationFilter('all'); }}
+                  className="mt-2 text-body-sm text-ink-4 underline hover:text-ink"
+                >
+                  Clear filters
+                </button>
               </div>
             )}
 
@@ -391,25 +450,21 @@ export default function LibraryClient({
                 <button
                   key={v.id}
                   onClick={() => toggle(v.id)}
-                  className={`grid w-full grid-cols-[36px_100px_1fr_100px_90px_70px] items-center gap-3 border-b border-rule px-4 py-2.5 text-left transition last:border-0 hover:bg-paper-2 ${
-                    sel ? 'bg-paper-warm' : ''
+                  aria-pressed={sel}
+                  aria-label={`${sel ? 'Deselect' : 'Select'} ${v.title ?? 'video'}`}
+                  className={`grid w-full grid-cols-[40px_112px_1fr_104px_96px_72px] items-center gap-3 border-b border-rule px-4 py-3 text-left transition last:border-0 hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber ${
+                    sel ? 'bg-amber-wash/40' : ''
                   }`}
                 >
-                  <div
-                    className={`flex h-4 w-4 items-center justify-center rounded border transition ${
-                      sel
-                        ? 'border-transparent bg-ink text-paper'
-                        : 'border-ink-4 hover:border-ink-2'
-                    } text-[10px]`}
-                  >
-                    {sel && '✓'}
+                  <div className="flex items-center">
+                    <CheckboxIcon checked={sel} />
                   </div>
                   <VideoThumbnail url={v.thumbnailUrl} title={v.title} />
-                  <div>
-                    <div className="mb-0.5 font-serif text-[15px] leading-snug text-ink line-clamp-2">
+                  <div className="min-w-0">
+                    <div className="mb-1.5 font-serif text-[15px] leading-snug text-ink line-clamp-2">
                       {v.title ?? 'Untitled'}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <CaptionChip
                         status={v.captionStatus}
                         hasCanonicalTranscript={v.hasCanonicalTranscript}
@@ -423,13 +478,19 @@ export default function LibraryClient({
                     </div>
                   </div>
                   <div className="text-right font-mono text-[12px] text-ink-3">
-                    {v.viewCount != null ? fmtViews(v.viewCount) : '—'}
+                    {v.viewCount != null ? fmtViews(v.viewCount) : (
+                      <span className="text-ink-5">—</span>
+                    )}
                   </div>
                   <div className="text-[12px] text-ink-4">
-                    {v.publishedAt ? fmtDate(v.publishedAt) : '—'}
+                    {v.publishedAt ? fmtDate(v.publishedAt) : (
+                      <span className="text-ink-5">—</span>
+                    )}
                   </div>
                   <div className="font-mono text-[12px] text-ink-3">
-                    {v.durationSeconds != null ? fmtDuration(v.durationSeconds) : '—'}
+                    {v.durationSeconds != null ? fmtDuration(v.durationSeconds) : (
+                      <span className="text-ink-5">—</span>
+                    )}
                   </div>
                 </button>
               );
@@ -439,10 +500,16 @@ export default function LibraryClient({
 
         {/* Grid view */}
         {view === 'grid' && videos.length > 0 && (
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {filtered.length === 0 && (
-              <div className="col-span-4 py-10 text-center text-body-sm text-ink-4">
-                No videos match your filter.
+              <div className="col-span-4 py-16 text-center">
+                <p className="text-body-sm text-ink-3">No videos match your filter.</p>
+                <button
+                  onClick={() => { setQuery(''); setDurationFilter('all'); }}
+                  className="mt-2 text-body-sm text-ink-4 underline hover:text-ink"
+                >
+                  Clear filters
+                </button>
               </div>
             )}
             {filtered.map((v) => {
@@ -451,9 +518,15 @@ export default function LibraryClient({
                 <button
                   key={v.id}
                   onClick={() => toggle(v.id)}
-                  className="group text-left"
+                  aria-pressed={sel}
+                  aria-label={`${sel ? 'Deselect' : 'Select'} ${v.title ?? 'video'}`}
+                  className={`group rounded-xl border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+                    sel
+                      ? 'border-amber/40 bg-amber-wash/30'
+                      : 'border-rule bg-paper hover:border-ink-4 hover:bg-paper-2'
+                  }`}
                 >
-                  <div className="relative mb-2.5 overflow-hidden rounded">
+                  <div className="relative overflow-hidden rounded-t-xl">
                     {v.thumbnailUrl ? (
                       <Image
                         src={v.thumbnailUrl}
@@ -463,19 +536,24 @@ export default function LibraryClient({
                         className="aspect-video w-full object-cover"
                       />
                     ) : (
-                      <div className="flex aspect-video w-full items-center justify-center bg-paper-3 text-[11px] text-ink-4">
-                        {v.title?.slice(0, 2) ?? '?'}
+                      <div className="flex aspect-video w-full items-center justify-center bg-paper-3 text-body-md font-medium text-ink-4">
+                        {v.title?.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') ?? '?'}
                       </div>
                     )}
-                    {/* Checkbox overlay */}
+                    {/* Selection overlay */}
                     <div
-                      className={`absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border text-[11px] transition ${
+                      className={`absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border transition-all ${
                         sel
-                          ? 'border-transparent bg-ink text-paper'
+                          ? 'border-transparent bg-ink text-paper shadow-1'
                           : 'border-rule bg-paper/85 text-ink-3 group-hover:border-ink-3'
                       }`}
+                      aria-hidden="true"
                     >
-                      {sel && '✓'}
+                      {sel && (
+                        <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                          <path d="M1 3L3.5 5.5L8 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
                     </div>
                     {/* Duration badge */}
                     {v.durationSeconds != null && (
@@ -484,23 +562,25 @@ export default function LibraryClient({
                       </div>
                     )}
                   </div>
-                  <div className="font-serif text-[14px] leading-snug text-ink line-clamp-2">
-                    {v.title ?? 'Untitled'}
-                  </div>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    {v.viewCount != null && (
-                      <span className="text-[11px] text-ink-4">{fmtViews(v.viewCount)} views</span>
-                    )}
-                    {v.publishedAt && (
-                      <span className="text-[11px] text-ink-4">· {fmtDate(v.publishedAt)}</span>
-                    )}
-                  </div>
-                  <div className="mt-1">
-                    <CaptionChip
-                      status={v.captionStatus}
-                      hasCanonicalTranscript={v.hasCanonicalTranscript}
-                      hasAudioAsset={v.hasAudioAsset}
-                    />
+                  <div className="p-3">
+                    <div className="font-serif text-[14px] leading-snug text-ink line-clamp-2">
+                      {v.title ?? 'Untitled'}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      {v.viewCount != null && (
+                        <span className="text-[11px] text-ink-4">{fmtViews(v.viewCount)} views</span>
+                      )}
+                      {v.publishedAt && (
+                        <span className="text-[11px] text-ink-4">· {fmtDate(v.publishedAt)}</span>
+                      )}
+                    </div>
+                    <div className="mt-1.5">
+                      <CaptionChip
+                        status={v.captionStatus}
+                        hasCanonicalTranscript={v.hasCanonicalTranscript}
+                        hasAudioAsset={v.hasAudioAsset}
+                      />
+                    </div>
                   </div>
                 </button>
               );
@@ -510,10 +590,28 @@ export default function LibraryClient({
 
         {/* Footer count */}
         {videos.length > 0 && (
-          <div className="mt-4 text-right text-caption text-ink-4">
-            {filtered.length === videos.length
-              ? `${videos.length} videos`
-              : `${filtered.length} of ${videos.length} videos`}
+          <div className="mt-5 flex items-center justify-between text-caption text-ink-4">
+            <span>
+              {filtered.length === videos.length
+                ? `${videos.length} videos`
+                : `${filtered.length} of ${videos.length} videos`}
+              {selected.size > 0 && (
+                <span className="ml-2 font-medium text-ink-3">
+                  · {selected.size} selected
+                </span>
+              )}
+            </span>
+            {selected.size > 0 && (
+              <button
+                onClick={() => {
+                  const ids = [...selected].join(',');
+                  router.push(`/app/configure?ids=${ids}`);
+                }}
+                className="text-caption font-medium text-ink-3 underline hover:text-ink"
+              >
+                Build hub →
+              </button>
+            )}
           </div>
         )}
       </div>
