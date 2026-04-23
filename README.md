@@ -136,3 +136,4 @@ only after the private-alpha smoke passes.
 - Worker deploys to Railway from `apps/worker`.
 - Trigger.dev remains the production-oriented async runner; the shared pipeline
   runner is also used by local fallback and smoke checks.
+- Hosted private-alpha readiness is tracked in `docs/hosted-alpha-readiness.md`.

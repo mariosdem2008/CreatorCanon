@@ -37,7 +37,7 @@ export function Footer() {
       <div className="mx-auto max-w-[1140px] px-6 py-16">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div>
-            <Logo size={18} />
+            <Logo size={22} />
             <p className="mt-4 max-w-xs text-body-sm text-ink-3">
               Turn your videos into a premium business knowledge system — structured, cited, creator-owned.
             </p>

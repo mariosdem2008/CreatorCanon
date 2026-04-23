@@ -27,9 +27,9 @@ export function MarketingNav() {
           : 'border-transparent bg-paper',
       )}
     >
-      <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between gap-3 px-4 sm:px-6">
         <Link href="/" className="inline-flex items-center" aria-label="CreatorCanon home">
-          <Logo size={18} />
+          <Logo size={22} />
         </Link>
 
         <nav className="hidden items-center gap-8 text-body-sm text-ink-2 md:flex">
@@ -48,12 +48,13 @@ export function MarketingNav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <Link href="/sign-in">Sign in</Link>
           </Button>
           <Button asChild variant="accent" size="sm">
             <Link href="/sign-in">
-              Start a hub
+              <span className="sm:hidden">Start</span>
+              <span className="hidden sm:inline">Start a hub</span>
               <Icon name="arrowRight" size={12} />
             </Link>
           </Button>

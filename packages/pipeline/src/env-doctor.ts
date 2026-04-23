@@ -29,6 +29,16 @@ function requiredEnv(name: string) {
   return value;
 }
 
+function optionalEnv(name: string) {
+  const value = process.env[name];
+  if (!value) {
+    record(`env:${name}`, 'warn', `${name} is not set.`);
+    return undefined;
+  }
+  record(`env:${name}`, 'pass', `${name} is present.`);
+  return value;
+}
+
 function isTestStripeSecret(value: string | undefined) {
   return Boolean(value?.startsWith('sk_test_'));
 }
@@ -81,6 +91,7 @@ async function main() {
     process.env.ARTIFACT_STORAGE === 'local' ||
     process.env.DEV_AUTH_BYPASS_ENABLED === 'true';
   const strictAlphaMode = process.env.ALPHA_ENV_DOCTOR_STRICT === 'true';
+  const hostedUrlCheck = process.env.ALPHA_HOSTED_URL_CHECK === 'true';
 
   if (isLocalSmokeMode) {
     record(
@@ -123,19 +134,97 @@ async function main() {
   if (appUrlRaw) {
     try {
       const appUrl = new URL(appUrlRaw);
+      const isLocalAppUrl = appUrl.hostname === 'localhost' || appUrl.hostname === '127.0.0.1';
       if (appUrl.protocol !== 'https:' && appUrl.hostname !== 'localhost') {
         record('env:app-url', 'warn', 'NEXT_PUBLIC_APP_URL should be https outside localhost.');
       } else {
         record('env:app-url', 'pass', `App URL is ${appUrl.origin}.`);
+      }
+      if (hostedUrlCheck && isLocalAppUrl) {
+        record('hosted:app-url', 'fail', 'Hosted URL check cannot use localhost NEXT_PUBLIC_APP_URL.');
+      } else if (strictAlphaMode && isLocalAppUrl) {
+        record(
+          'hosted:app-url',
+          'warn',
+          'Strict alpha env uses localhost NEXT_PUBLIC_APP_URL; this is acceptable for Stripe CLI/manual alpha but not hosted deploy proof.',
+        );
+      } else if (!isLocalAppUrl) {
+        record('hosted:app-url', 'pass', 'NEXT_PUBLIC_APP_URL targets a hosted origin.');
       }
       record(
         'auth:google-callback',
         'warn',
         `Google OAuth redirect URI must include ${appUrl.origin}/api/auth/callback/google in Google Cloud.`,
       );
+      record(
+        'stripe:webhook-endpoint',
+        'warn',
+        `Stripe test webhook endpoint must point to ${appUrl.origin}/api/stripe/webhook.`,
+      );
+      if (hostedUrlCheck) {
+        try {
+          const response = await fetch(new URL('/healthcheck', appUrl), {
+            headers: { accept: 'application/json' },
+          });
+          if (!response.ok) {
+            record('hosted:healthcheck', 'fail', `Hosted healthcheck returned HTTP ${response.status}.`);
+          } else {
+            const body = await response.json() as { ok?: unknown; service?: unknown };
+            if (body.ok === true) {
+              record('hosted:healthcheck', 'pass', `Hosted healthcheck responded for ${body.service ?? 'web'}.`);
+            } else {
+              record('hosted:healthcheck', 'fail', 'Hosted healthcheck response did not include ok:true.');
+            }
+          }
+        } catch (error) {
+          record(
+            'hosted:healthcheck',
+            'fail',
+            formatError(error, 'Hosted healthcheck request failed.'),
+          );
+        }
+      } else {
+        record(
+          'hosted:healthcheck',
+          'warn',
+          'Skipped hosted healthcheck. Set ALPHA_HOSTED_URL_CHECK=true to verify NEXT_PUBLIC_APP_URL/healthcheck.',
+        );
+      }
     } catch {
       record('env:app-url', 'fail', 'NEXT_PUBLIC_APP_URL is not a valid URL.');
     }
+  }
+
+  const hubRootDomain = optionalEnv('NEXT_PUBLIC_HUB_ROOT_DOMAIN');
+  if (hubRootDomain && appUrlRaw) {
+    try {
+      const appHost = new URL(appUrlRaw).hostname;
+      if (hubRootDomain === 'creatorcanon.local') {
+        record(
+          'hosted:hub-domain',
+          hostedUrlCheck ? 'fail' : 'warn',
+          'NEXT_PUBLIC_HUB_ROOT_DOMAIN still uses local placeholder.',
+        );
+      } else if (hubRootDomain === appHost || appHost.endsWith(`.${hubRootDomain}`)) {
+        record('hosted:hub-domain', 'pass', 'Hub root domain is compatible with the app host.');
+      } else {
+        record(
+          'hosted:hub-domain',
+          'warn',
+          `Hub root domain ${hubRootDomain} differs from app host ${appHost}; verify intended hosted routing.`,
+        );
+      }
+    } catch {
+      record('hosted:hub-domain', 'warn', 'Could not compare hub root domain with app URL.');
+    }
+  }
+
+  if (strictAlphaMode && process.env.DEV_AUTH_BYPASS_ENABLED === 'true') {
+    record('auth:dev-bypass', 'fail', 'DEV_AUTH_BYPASS_ENABLED must be false for strict hosted alpha readiness.');
+  } else if (process.env.DEV_AUTH_BYPASS_ENABLED === 'true') {
+    record('auth:dev-bypass', 'warn', 'Dev auth bypass is enabled; do not deploy this to hosted alpha.');
+  } else {
+    record('auth:dev-bypass', 'pass', 'Dev auth bypass is disabled.');
   }
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -152,6 +241,8 @@ async function main() {
 
   if (process.env.TRIGGER_SECRET_KEY) {
     record('trigger:config', 'pass', 'Trigger secret key is present.');
+  } else if (strictAlphaMode) {
+    record('trigger:config', 'fail', 'Trigger secret key is missing in strict alpha mode.');
   } else {
     record('trigger:config', 'warn', 'Trigger secret key is missing; local fallback must be used for alpha runs.');
   }
