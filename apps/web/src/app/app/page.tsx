@@ -126,6 +126,13 @@ export default async function AppHomePage() {
 
         <hr className="border-rule" />
 
+        <Link
+          href="/app/alpha-guide"
+          className="inline-flex text-body-sm text-ink-3 underline transition hover:text-ink"
+        >
+          Private alpha guide
+        </Link>
+
         <div className="flex items-center justify-between text-caption text-ink-4">
           <span>
             {session.user.name ?? session.user.email}

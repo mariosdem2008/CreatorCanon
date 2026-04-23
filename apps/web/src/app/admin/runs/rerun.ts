@@ -4,6 +4,7 @@ import { tasks } from '@trigger.dev/sdk/v3';
 import { revalidatePath } from 'next/cache';
 
 import { runGenerationPipeline, type RunGenerationPipelinePayload } from '@creatorcanon/pipeline';
+import { publishRunAsHub } from '@creatorcanon/pipeline';
 import { PIPELINE_VERSION } from '@creatorcanon/core';
 import { and, eq, getDb, inArray } from '@creatorcanon/db';
 import {
@@ -135,6 +136,135 @@ export async function rerunStage(formData: FormData): Promise<void> {
     workspaceId: run.workspaceId,
     videoSetId: run.videoSetId,
     pipelineVersion: run.pipelineVersion || PIPELINE_VERSION,
+  });
+
+  revalidatePath('/admin/runs');
+  revalidatePath(`/admin/runs/${runId}`);
+  revalidatePath(`/app/projects/${run.projectId}`);
+}
+
+export async function redispatchRun(formData: FormData): Promise<void> {
+  const adminUser = await requireAdminUser();
+
+  const runId = (formData.get('runId') as string | null)?.trim();
+  if (!runId) throw new Error('Missing run id.');
+
+  const db = getDb();
+  const runs = await db
+    .select({
+      id: generationRun.id,
+      workspaceId: generationRun.workspaceId,
+      projectId: generationRun.projectId,
+      videoSetId: generationRun.videoSetId,
+      status: generationRun.status,
+      pipelineVersion: generationRun.pipelineVersion,
+      stripePaymentIntentId: generationRun.stripePaymentIntentId,
+    })
+    .from(generationRun)
+    .where(eq(generationRun.id, runId))
+    .limit(1);
+
+  const run = runs[0];
+  if (!run) throw new Error(`Run ${runId} was not found.`);
+  if (run.status === 'awaiting_payment') {
+    throw new Error('Unpaid runs cannot be dispatched from admin.');
+  }
+  if (run.status === 'published' || run.status === 'awaiting_review') {
+    throw new Error(`Run ${run.status} does not need pipeline dispatch.`);
+  }
+
+  await db
+    .update(generationRun)
+    .set({
+      status: 'queued',
+      completedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(generationRun.id, runId));
+
+  await db.insert(auditLog).values({
+    id: crypto.randomUUID(),
+    workspaceId: run.workspaceId,
+    actorUserId: adminUser.id,
+    action: 'admin.redispatch_run',
+    targetType: 'generation_run',
+    targetId: runId,
+    beforeJson: {
+      status: run.status,
+      stripePaymentIntentId: run.stripePaymentIntentId,
+    },
+    afterJson: {
+      status: 'queued',
+      pipelineVersion: run.pipelineVersion || PIPELINE_VERSION,
+    },
+  });
+
+  await dispatchPipeline({
+    runId: run.id,
+    projectId: run.projectId,
+    workspaceId: run.workspaceId,
+    videoSetId: run.videoSetId,
+    pipelineVersion: run.pipelineVersion || PIPELINE_VERSION,
+  });
+
+  revalidatePath('/admin/runs');
+  revalidatePath(`/admin/runs/${runId}`);
+  revalidatePath(`/app/projects/${run.projectId}`);
+}
+
+export async function publishRunFromAdmin(formData: FormData): Promise<void> {
+  const adminUser = await requireAdminUser();
+
+  const runId = (formData.get('runId') as string | null)?.trim();
+  if (!runId) throw new Error('Missing run id.');
+
+  const db = getDb();
+  const runs = await db
+    .select({
+      id: generationRun.id,
+      workspaceId: generationRun.workspaceId,
+      projectId: generationRun.projectId,
+      status: generationRun.status,
+    })
+    .from(generationRun)
+    .where(eq(generationRun.id, runId))
+    .limit(1);
+
+  const run = runs[0];
+  if (!run) throw new Error(`Run ${runId} was not found.`);
+  if (run.status !== 'awaiting_review' && run.status !== 'published') {
+    throw new Error(`Cannot publish a run with status ${run.status}.`);
+  }
+
+  const draftPages = await db
+    .select({ id: page.id })
+    .from(page)
+    .where(eq(page.runId, runId))
+    .limit(1);
+  if (!draftPages[0]) throw new Error('Cannot publish before draft pages exist.');
+
+  const result = await publishRunAsHub({
+    workspaceId: run.workspaceId,
+    projectId: run.projectId,
+    runId: run.id,
+    actorUserId: adminUser.id,
+  });
+
+  await db.insert(auditLog).values({
+    id: crypto.randomUUID(),
+    workspaceId: run.workspaceId,
+    actorUserId: adminUser.id,
+    action: 'admin.publish_run',
+    targetType: 'generation_run',
+    targetId: runId,
+    beforeJson: {
+      status: run.status,
+    },
+    afterJson: {
+      releaseId: result.releaseId,
+      publicPath: result.publicPath,
+      pageCount: result.pageCount,
+    },
   });
 
   revalidatePath('/admin/runs');

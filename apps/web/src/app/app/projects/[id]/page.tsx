@@ -71,11 +71,11 @@ const RUN_STATUS_COLOR: Record<string, string> = {
 const RUN_STATUS_LABEL: Record<string, string> = {
   draft: 'Draft',
   awaiting_payment: 'Awaiting payment',
-  queued: 'Queued',
-  running: 'Running',
-  awaiting_review: 'Ready for review',
+  queued: 'Payment received, queued',
+  running: 'Processing',
+  awaiting_review: 'Draft ready',
   published: 'Published',
-  failed: 'Failed',
+  failed: 'Failed / needs support',
   canceled: 'Canceled',
 };
 
@@ -214,8 +214,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           {run?.status === 'queued' && (
             <p className="text-body-sm text-ink-3 rounded-md border border-rule bg-paper-2 px-3 py-2">
               {hasStageRuns
-                ? 'Your run is queued and has started writing stage progress.'
-                : 'Your run is queued and waiting for worker execution. In local development, CreatorCanon will fall back to in-process execution if Trigger.dev is unavailable.'}
+                ? 'Payment is confirmed. Your run is queued and has started writing stage progress.'
+                : 'Payment received, preparing your run. If this stays here for more than a few minutes, send the support ids below.'}
+            </p>
+          )}
+
+          {run?.status === 'running' && (
+            <p className="text-body-sm text-ink-3 rounded-md border border-rule bg-paper-2 px-3 py-2">
+              CreatorCanon is processing your source library now. This page refreshes while the worker advances through the pipeline stages.
             </p>
           )}
 
@@ -241,9 +247,25 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           {run?.status === 'failed' && (
             <p className="text-body-sm text-rose rounded-md border border-rose/30 bg-rose/10 px-3 py-2">
               {hasStageRuns
-                ? 'This run failed during processing. Review the local server logs or rerun after fixing the failing stage.'
-                : 'This run failed before any pipeline work began. Check your worker or Trigger.dev configuration and try again.'}
+                ? 'This run failed during processing. Send the support ids below so we can inspect the failed stage and retry it.'
+                : 'This run failed before pipeline work began. Send the support ids below so we can inspect payment, worker, and dispatch state.'}
             </p>
+          )}
+
+          {run && (
+            <div className="rounded-md border border-rule bg-paper-2 px-4 py-3">
+              <p className="text-caption uppercase tracking-widest text-ink-4">Support ids</p>
+              <dl className="mt-2 space-y-1 text-caption text-ink-4">
+                <div className="flex gap-2">
+                  <dt className="w-20 shrink-0">Project</dt>
+                  <dd className="break-all font-mono text-ink-3">{proj.id}</dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-20 shrink-0">Run</dt>
+                  <dd className="break-all font-mono text-ink-3">{run.id}</dd>
+                </div>
+              </dl>
+            </div>
           )}
 
           {transcriptOutput && (transcriptOutput.skippedCount ?? 0) > 0 && (

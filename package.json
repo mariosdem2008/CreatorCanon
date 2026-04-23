@@ -22,6 +22,7 @@
     "smoke:audio-fixtures": "pnpm --filter @creatorcanon/pipeline smoke:audio-fixtures",
     "smoke:audio-publish": "pnpm --filter @creatorcanon/pipeline smoke:audio-publish",
     "smoke:review-edit": "pnpm --filter @creatorcanon/pipeline smoke:review-edit",
+    "inspect:alpha-run": "pnpm --filter @creatorcanon/pipeline inspect:alpha-run",
     "smoke:browser:local": "pnpm --filter @creatorcanon/pipeline smoke:browser:local",
     "smoke:all:local": "pnpm dev:db:reset && pnpm smoke:local && pnpm smoke:browser:local",
     "smoke:alpha": "pnpm db:migrate && pnpm --filter @creatorcanon/pipeline smoke:alpha",

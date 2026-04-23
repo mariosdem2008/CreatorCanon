@@ -9,7 +9,7 @@ not to add product scope.
 ### Vercel Web App
 
 - Root directory: `apps/web`.
-- Install command: `cd ../.. && pnpm install --frozen-lockfile`.
+- Install command: `cd ../.. && pnpm install --frozen-lockfile --prod=false`.
 - Build command: `cd ../.. && pnpm --filter @creatorcanon/web build`.
 - Output directory: `.next`.
 - Required app URL: `NEXT_PUBLIC_APP_URL=https://<hosted-app-domain>`.
