@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@creatorcanon/auth';
-import { estimateRunPriceCents, formatUsdCents } from '@creatorcanon/core';
+import { FLAT_PRICE_CENTS, formatUsdCents } from '@creatorcanon/core';
 import { eq, getDb, inArray } from '@creatorcanon/db';
 import { video, workspaceMember } from '@creatorcanon/db/schema';
 import { getSourceCoverage, type SourceCoverageSummary } from '@creatorcanon/pipeline';
@@ -92,7 +92,7 @@ export default async function ConfigurePage({
     .where(inArray(video.id, videoIds));
 
   const totalSeconds = selectedVideos.reduce((acc, v) => acc + (v.durationSeconds ?? 0), 0);
-  const price = formatUsdCents(estimateRunPriceCents(totalSeconds));
+  const price = formatUsdCents(FLAT_PRICE_CENTS);
   const sourceCoverage = await getSourceCoverage({ workspaceId: members[0].workspaceId, videoIds });
   const coverageCopy = sourceCoverageCopy(sourceCoverage);
   const hasUnknownVideos = sourceCoverage.unknownCount > 0;

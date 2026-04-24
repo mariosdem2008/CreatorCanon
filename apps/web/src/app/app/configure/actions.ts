@@ -12,7 +12,7 @@ import {
   videoSetItem,
   workspaceMember,
 } from '@creatorcanon/db/schema';
-import { PIPELINE_VERSION, estimateRunPriceCents } from '@creatorcanon/core';
+import { PIPELINE_VERSION, FLAT_PRICE_CENTS } from '@creatorcanon/core';
 import { getSourceCoverage, preflightSourceCoverage } from '@creatorcanon/pipeline';
 
 const PRESENTATION_PRESETS = new Set(['paper', 'midnight', 'field']);
@@ -119,7 +119,7 @@ export async function createProject(formData: FormData): Promise<{ error: string
     chatEnabled,
     videoIds,
   });
-  const priceCents = estimateRunPriceCents(totalDurationSeconds);
+  const priceCents = FLAT_PRICE_CENTS;
   await db.insert(generationRun).values({
     id: runId,
     workspaceId,

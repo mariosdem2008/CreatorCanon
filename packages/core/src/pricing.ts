@@ -1,9 +1,25 @@
+/**
+ * Private-alpha pricing: a single flat price per generated hub.
+ *
+ * The previous tiered implementation (`estimateRunPriceCents` returning
+ * 2900/7900/14900/29900 based on total video duration) is retained as a
+ * backwards-compatible alias returning the flat price so legacy callers
+ * (configure/actions.ts, checkout/actions.ts) continue to compile. New
+ * callers should use `getFlatPriceCents`.
+ *
+ * Tiered pricing will be reintroduced only after 10+ real payments.
+ */
+export const FLAT_PRICE_CENTS = 2900;
+
+export function getFlatPriceCents(_totalSeconds: number): number {
+  return FLAT_PRICE_CENTS;
+}
+
+/**
+ * @deprecated Use `getFlatPriceCents`. Tiered pricing is cut during private alpha.
+ */
 export function estimateRunPriceCents(totalSeconds: number): number {
-  const hours = totalSeconds / 3600;
-  if (hours < 2) return 2_900;
-  if (hours < 8) return 7_900;
-  if (hours < 20) return 14_900;
-  return 29_900;
+  return getFlatPriceCents(totalSeconds);
 }
 
 export function formatUsdCents(priceCents: number): string {

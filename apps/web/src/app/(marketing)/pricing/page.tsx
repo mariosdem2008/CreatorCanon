@@ -1,72 +1,60 @@
 import type { Metadata } from 'next';
-
-import { CTA } from '@/components/marketing/CTA';
-import { FAQItem } from '@/components/marketing/FAQItem';
-import { PricingTable } from '@/components/marketing/PricingTable';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Pricing — CreatorCanon',
   description:
-    'Starter, Pro, and Concierge tiers for turning a YouTube archive into a hosted knowledge hub.',
+    'One flat price per hub — $29 during private alpha. No subscriptions, no seat fees.',
   openGraph: {
     title: 'Pricing — CreatorCanon',
     description:
-      'Starter (€29), Pro (€149), and Concierge (€349+) tiers. Pay for structure, publish a business product.',
+      'One flat price per hub — $29 during private alpha. No subscriptions, no seat fees.',
     url: 'https://www.creatorcanon.com/pricing',
   },
   twitter: {
     title: 'Pricing — CreatorCanon',
     description:
-      'Starter (€29), Pro (€149), and Concierge (€349+) tiers. Pay for structure, publish a business product.',
+      'One flat price per hub — $29 during private alpha. No subscriptions, no seat fees.',
   },
 };
 
-const PRICING_FAQS = [
-  {
-    q: 'What am I paying for, exactly?',
-    a: 'A one-time fee per hub generation. You connect your channel, pick the strongest teaching videos, and CreatorCanon produces structured lessons, frameworks, playbooks, citations, and optional grounded chat — all yours to edit and publish.',
-  },
-  {
-    q: 'Why is there a 20-hour cap on self-serve?',
-    a: 'It keeps cost, pipeline time, and quality predictable. Above 20 hours of selected video, an operator reviews the archive for transcript gaps and cluster overrides before running — that work happens in Concierge.',
-  },
-  {
-    q: 'Do I pay a revenue share if my hub is paywalled?',
-    a: 'CreatorCanon takes 15% on paywalled hubs in addition to Stripe fees (2.9% + €0.30). Concierge and custom deployments can negotiate this down.',
-  },
-  {
-    q: 'Can I edit the output after generation?',
-    a: 'Yes. Every section is editable, and you can regenerate any single section as many times as you want after the first generation charge.',
-  },
-  {
-    q: 'What if the output quality is not good enough?',
-    a: 'You review a draft before publishing. If support on a section is weak, CreatorCanon labels it and suggests a rerun or operator help. Nothing ships without your explicit publish click.',
-  },
-];
-
 export default function PricingPage() {
   return (
-    <>
-      <PricingTable />
+    <main className="mx-auto max-w-[720px] px-4 py-24">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+        Pricing
+      </p>
+      <h1 className="mt-3 font-serif text-[44px] leading-[1.05] tracking-[-0.025em] md:text-[56px]">
+        One hub. One price.
+      </h1>
+      <p className="mt-6 max-w-[60ch] text-body-lg leading-relaxed text-ink-2">
+        CreatorCanon is in private alpha. Every generated hub is a flat{' '}
+        <strong>$29</strong> — unlimited section regenerations after publish,
+        unlimited edits, your own URL. No subscription, no seat fees.
+      </p>
 
-      <section className="border-t border-rule bg-paper-2">
-        <div className="mx-auto max-w-[820px] px-6 py-24">
-          <div className="text-eyebrow uppercase text-ink-4">Pricing FAQ</div>
-          <h2 className="mt-3 font-serif text-display-md text-ink">
-            Common questions before you start.
-          </h2>
-          <div className="mt-10">
-            {PRICING_FAQS.map((f) => (
-              <FAQItem key={f.q} q={f.q} a={f.a} />
-            ))}
-          </div>
-        </div>
-      </section>
+      <div className="mt-10 rounded-xl border border-rule bg-paper-2 p-8">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+          Included
+        </p>
+        <ul className="mt-4 space-y-2 text-ink-2">
+          <li>LLM-grounded prose with citation moments linked to the source video timestamps.</li>
+          <li>Three premium hub templates: Editorial Atlas, Playbook OS, Studio Vault.</li>
+          <li>Full review + edit workflow before you publish.</li>
+          <li>Hub hosted at a public URL you own.</li>
+        </ul>
+        <Link
+          href="/request-access"
+          className="mt-8 inline-flex h-11 items-center rounded-md bg-ink px-5 font-semibold text-paper transition hover:bg-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+        >
+          Request alpha access →
+        </Link>
+      </div>
 
-      <CTA
-        heading="Ready to see your archive as a paid product?"
-        subheading="Connect your channel and preview the structure before paying."
-      />
-    </>
+      <p className="mt-10 text-sm text-ink-3">
+        Higher-volume tiers are post-alpha. Reach out if you have a 50+ video
+        archive and want to be first.
+      </p>
+    </main>
   );
 }
