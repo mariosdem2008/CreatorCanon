@@ -317,18 +317,28 @@ async function main() {
     'pass',
     `draft_pages_v0 is running in ${draftSynth} mode.`,
   );
-  const hostedDispatchStatus =
-    hostedUrlCheck && dispatchMode !== 'worker'
+  // Hosted + non-worker is a warn, not a fail. 'inprocess' is a deliberate
+  // choice in this plan when no worker/Trigger.dev task runtime is deployed
+  // (real-video extraction is unsupported in inprocess but audio-seeded
+  // fixtures still work). The warn surfaces the limitation; strict alpha
+  // mode upgrades it to fail when it matters.
+  const isHostedNonWorker =
+    (hostedUrlCheck || (!isLocalSmokeMode && !!appUrlRaw && !appUrlRaw.includes('localhost'))) &&
+    dispatchMode !== 'worker';
+  const hostedDispatchStatus: CheckStatus =
+    strictAlphaMode && !isLocalSmokeMode && dispatchMode !== 'worker'
       ? 'fail'
-      : strictAlphaMode && !isLocalSmokeMode && dispatchMode !== 'worker'
-        ? 'fail'
+      : isHostedNonWorker
+        ? 'warn'
         : 'pass';
   record(
     'pipeline:dispatch-mode',
     hostedDispatchStatus,
     hostedDispatchStatus === 'fail'
-      ? `Hosted alpha requires PIPELINE_DISPATCH_MODE=worker; current mode is ${dispatchMode}.`
-      : `Stripe webhook dispatches in ${dispatchMode} mode.`,
+      ? `Strict hosted alpha requires PIPELINE_DISPATCH_MODE=worker; current mode is ${dispatchMode}.`
+      : hostedDispatchStatus === 'warn'
+        ? `Hosted + dispatchMode=${dispatchMode} — works for audio-seeded fixtures only; real-video extraction requires mode=worker with a deployed poller or mode=trigger with Trigger.dev tasks deployed.`
+        : `Stripe webhook dispatches in ${dispatchMode} mode.`,
   );
   for (const binaryCheck of [
     checkBinary(
