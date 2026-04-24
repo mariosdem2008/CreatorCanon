@@ -242,9 +242,29 @@ async function main() {
     }
   }
 
-  if (strictAlphaMode && process.env.DEV_AUTH_BYPASS_ENABLED === 'true') {
+  const bypassEnabled = process.env.DEV_AUTH_BYPASS_ENABLED === 'true';
+  // Compute "prod URL" independently of strictAlphaMode — any non-localhost
+  // NEXT_PUBLIC_APP_URL combined with bypass=true is a sign-in bypass
+  // vulnerability and must fail unconditionally.
+  let isProdAppUrl = false;
+  if (appUrlRaw) {
+    try {
+      const host = new URL(appUrlRaw).hostname;
+      isProdAppUrl = host !== 'localhost' && host !== '127.0.0.1';
+    } catch {
+      isProdAppUrl = false;
+    }
+  }
+
+  if (isProdAppUrl && bypassEnabled) {
+    record(
+      'auth:dev-bypass-in-prod',
+      'fail',
+      'DEV_AUTH_BYPASS_ENABLED=true with a non-localhost NEXT_PUBLIC_APP_URL is a sign-in-bypass vulnerability. Unset DEV_AUTH_BYPASS_ENABLED in production before continuing.',
+    );
+  } else if (strictAlphaMode && bypassEnabled) {
     record('auth:dev-bypass', 'fail', 'DEV_AUTH_BYPASS_ENABLED must be false for strict hosted alpha readiness.');
-  } else if (process.env.DEV_AUTH_BYPASS_ENABLED === 'true') {
+  } else if (bypassEnabled) {
     record('auth:dev-bypass', 'warn', 'Dev auth bypass is enabled; do not deploy this to hosted alpha.');
   } else {
     record('auth:dev-bypass', 'pass', 'Dev auth bypass is disabled.');
