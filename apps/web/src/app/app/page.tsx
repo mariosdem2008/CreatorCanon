@@ -98,6 +98,12 @@ export default async function AppHomePage() {
                           Browse library
                         </Link>
                       ) : null}
+                      <Link
+                        href="/app/hubs"
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-rule bg-paper px-4 text-body-sm font-medium text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                      >
+                        My hubs →
+                      </Link>
                     </div>
                   </div>
                 </div>
