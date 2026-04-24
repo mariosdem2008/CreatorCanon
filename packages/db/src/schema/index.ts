@@ -6,6 +6,7 @@ export * from './enums';
 
 // Identity + tenancy
 export * from './auth';
+export * from './allowlist';
 export * from './workspace';
 
 // Source media

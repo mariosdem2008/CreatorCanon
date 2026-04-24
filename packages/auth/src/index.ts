@@ -15,6 +15,8 @@ import Credentials from 'next-auth/providers/credentials';
 import { getDb } from '@creatorcanon/db';
 import {
   account,
+  allowlistEmail,
+  isAllowlistApproved,
   session,
   user,
   verificationToken,
@@ -90,6 +92,35 @@ function getInstance(): NextAuthResult {
     }),
     callbacks: {
       ...authConfig.callbacks,
+      // Allowlist gate: email must be present with approved=true in
+      // `allowlist_email`. Dev bypass short-circuits this for local work.
+      // Returning false → NextAuth redirects to /sign-in?error=AccessDenied.
+      async signIn({ user: signedInUser }) {
+        const email = signedInUser?.email?.trim().toLowerCase();
+        if (!email) return false;
+        if (process.env.DEV_AUTH_BYPASS_ENABLED === 'true') return true;
+
+        const db = getDb();
+        const rows = await db
+          .select({
+            email: allowlistEmail.email,
+            approved: allowlistEmail.approved,
+            invitedByUserId: allowlistEmail.invitedByUserId,
+            requestedByIp: allowlistEmail.requestedByIp,
+            note: allowlistEmail.note,
+            createdAt: allowlistEmail.createdAt,
+            approvedAt: allowlistEmail.approvedAt,
+          })
+          .from(allowlistEmail)
+          .where(eq(allowlistEmail.email, email))
+          .limit(1);
+
+        if (!isAllowlistApproved(rows[0])) {
+          console.warn('[auth] sign-in rejected — not on allowlist:', email);
+          return false;
+        }
+        return true;
+      },
       // DB-aware jwt override: hydrates isAdmin from the DB on first sign-in.
       async jwt({ token, user: signedInUser, trigger, account: oauthAccount }) {
         if (signedInUser?.id) {

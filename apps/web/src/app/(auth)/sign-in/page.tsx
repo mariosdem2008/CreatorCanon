@@ -28,7 +28,9 @@ export default async function SignInPage({
 
   if (session?.user) redirect(callbackUrl);
 
-  const hasError = searchParams?.error != null;
+  const errorCode = typeof searchParams?.error === 'string' ? searchParams.error : null;
+  const hasError = errorCode != null;
+  const isAccessDenied = errorCode === 'AccessDenied';
 
   async function signInWithGoogle() {
     'use server';
@@ -94,9 +96,23 @@ export default async function SignInPage({
             <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           <div>
-            <p className="text-body-sm font-semibold text-rose">Sign-in failed</p>
+            <p className="text-body-sm font-semibold text-rose">
+              {isAccessDenied ? 'Not on the alpha allowlist' : 'Sign-in failed'}
+            </p>
             <p className="mt-0.5 text-caption text-rose/80 leading-relaxed">
-              Your account may not have alpha access, or the sign-in was canceled. Try again or contact the team.
+              {isAccessDenied ? (
+                <>
+                  This Google account isn&apos;t approved for alpha yet.{' '}
+                  <a
+                    href="/request-access"
+                    className="underline underline-offset-2 font-medium hover:text-rose"
+                  >
+                    Request access →
+                  </a>
+                </>
+              ) : (
+                <>Your account may not have alpha access, or the sign-in was canceled. Try again or contact the team.</>
+              )}
             </p>
           </div>
         </div>
