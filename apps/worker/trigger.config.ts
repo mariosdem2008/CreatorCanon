@@ -1,9 +1,11 @@
 import { defineConfig } from '@trigger.dev/sdk/v3';
 
-const project = process.env.TRIGGER_PROJECT_ID;
-if (!project) {
-  throw new Error('Set TRIGGER_PROJECT_ID to the real Trigger.dev project id before running trigger dev/deploy.');
-}
+// CreatorCanon Trigger.dev cloud project (organization creatorcanon-92c0).
+// Hardcoded default so the cloud runtime (which re-evaluates this file at
+// task-boot) doesn't need TRIGGER_PROJECT_ID set in its env; local dev /
+// CI can override via the env var for multi-project setups.
+const DEFAULT_PROJECT_REF = 'proj_yzrjadqegzegmkeernox';
+const project = process.env.TRIGGER_PROJECT_ID ?? DEFAULT_PROJECT_REF;
 
 export default defineConfig({
   project,
