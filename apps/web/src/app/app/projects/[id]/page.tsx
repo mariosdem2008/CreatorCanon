@@ -15,6 +15,7 @@ import {
 } from '@creatorcanon/db/schema';
 import { getHubTemplate } from '@/components/hub/templates';
 import { CopyUrlButton } from './CopyUrlButton';
+import { LiveRefresh } from './LiveRefresh';
 import { PublishButton } from './PublishButton';
 import { RefreshButton } from './RefreshButton';
 import { publishCurrentRun } from './publish';
@@ -184,6 +185,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   return (
     <main className="min-h-screen bg-paper-studio">
+      {isActive && <LiveRefresh intervalMs={5000} />}
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
