@@ -315,31 +315,6 @@ importers:
         specifier: 5.6.2
         version: 5.6.2
 
-  packages/marketing:
-    dependencies:
-      '@creatorcanon/core':
-        specifier: workspace:*
-        version: link:../core
-      '@creatorcanon/cost-ledger':
-        specifier: workspace:*
-        version: link:../cost-ledger
-      '@creatorcanon/db':
-        specifier: workspace:*
-        version: link:../db
-      zod:
-        specifier: 3.23.8
-        version: 3.23.8
-    devDependencies:
-      '@creatorcanon/config':
-        specifier: workspace:*
-        version: link:../config
-      tsx:
-        specifier: 4.19.1
-        version: 4.19.1
-      typescript:
-        specifier: 5.6.2
-        version: 5.6.2
-
   packages/pipeline:
     dependencies:
       '@creatorcanon/adapters':
