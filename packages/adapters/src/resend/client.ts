@@ -39,12 +39,24 @@ export interface ResendAdapterClient {
   send(input: SendEmailInput): Promise<SendEmailResult>;
 }
 
-const notImplemented = (op: string): CanonError =>
-  new CanonError({
-    code: 'not_implemented',
-    category: 'internal',
-    message: `ResendClient.${op} is not implemented yet (lands in Epic 5).`,
-  });
+const DEFAULT_FROM = 'CreatorCanon <noreply@creatorcanon.app>';
+
+/**
+ * Shape-only helper (pure, testable): converts our camelCase SendEmailInput
+ * into the snake_case shape the Resend SDK expects. Exposed so tests can
+ * lock the mapping without a live Resend key.
+ */
+export function buildSendPayload(input: SendEmailInput) {
+  sendEmailInputSchema.parse(input);
+  return {
+    from: input.from ?? DEFAULT_FROM,
+    to: input.to,
+    subject: input.subject,
+    react: input.react,
+    ...(input.replyTo ? { reply_to: input.replyTo } : {}),
+    ...(input.headers ? { headers: input.headers } : {}),
+  };
+}
 
 /**
  * NOTE (contract ambiguity): `RESEND_API_KEY` is optional in
@@ -68,8 +80,18 @@ export const createResendClient = (env: ServerEnv): ResendAdapterClient => {
   return {
     raw,
     async send(input) {
-      sendEmailInputSchema.parse(input);
-      throw notImplemented('send');
+      const payload = buildSendPayload(input);
+      const result = await raw.emails.send(
+        payload as Parameters<typeof raw.emails.send>[0],
+      );
+      if (result.error) {
+        throw new CanonError({
+          code: 'resend_send_failed',
+          category: 'internal',
+          message: `Resend send failed: ${result.error.message}`,
+        });
+      }
+      return { id: result.data?.id ?? 'unknown' };
     },
   };
 };
