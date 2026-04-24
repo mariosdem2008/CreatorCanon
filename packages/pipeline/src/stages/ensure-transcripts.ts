@@ -22,7 +22,10 @@ const FORCE_SSL_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
  * scope. Returns null on any failure so callers can fall through to the
  * public-endpoint strategies.
  */
-async function fetchOwnerCaptions(input: {
+// Preserved post-audit for reference. The owner-captions lane was disabled
+// when youtube.force-ssl was dropped from sign-in scope. If you re-enable it,
+// rename back to fetchOwnerCaptions and restore the call site in the try/catch.
+async function _fetchOwnerCaptions(input: {
   workspaceId: string;
   youtubeVideoId: string;
 }): Promise<{ vtt: string; lang: string; isAuto: boolean } | null> {
@@ -359,19 +362,13 @@ export async function ensureTranscripts(
     let provider: TranscriptResult['provider'] = 'youtube_timedtext';
 
     try {
-      // Strategy 0: Owner-OAuth captions.list + captions.download.
-      // Only succeeds for videos the workspace owner authenticated with the
-      // `youtube.force-ssl` scope. Bypasses YouTube's 2024 public-endpoint
-      // po_token gate for captioned videos on the owner's own channel.
-      const owned = await fetchOwnerCaptions({
-        workspaceId: input.workspaceId,
-        youtubeVideoId: vid.youtubeVideoId,
-      });
-      if (owned) {
-        vttContent = owned.vtt;
-        chosenLang = owned.lang;
-        isAutoCaption = owned.isAuto;
-      }
+      // Strategy 0 (disabled post-audit): Owner-OAuth captions.list +
+      // captions.download. Required the `youtube.force-ssl` scope, which
+      // was dropped from sign-in because this lane never fired successfully
+      // in production. fetchOwnerCaptions() remains in the module for
+      // reference; we no longer call it. All transcription goes through
+      // Strategy 1-3 (public timedtext) or the audio-extraction + whisper
+      // fallback below.
 
       // Strategy 1: Use the track-list API to discover available tracks.
       let tracks: Array<{ lang: string; name: string; kind: string }> = [];

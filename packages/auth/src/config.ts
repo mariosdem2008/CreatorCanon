@@ -28,17 +28,18 @@ export const authConfig = {
           prompt: 'consent',
           access_type: 'offline',
           response_type: 'code',
-          // `youtube.force-ssl` is required to call captions.download (via the
-          // video-owner's OAuth token); `youtube.readonly` remains for the
-          // lighter captions.list / videos.list reads. Having both requested
-          // means a single consent pass covers everything the pipeline needs
-          // to produce canonical transcripts from an owner's own videos.
+          // `youtube.readonly` covers channel + videos.list reads. The
+          // `youtube.force-ssl` scope (write+delete on channel, required for
+          // owner-OAuth captions.download) was dropped post-audit: the
+          // owner-captions lane never fired successfully in production, so
+          // all transcripts now come from public timedtext OR the audio-
+          // extraction + whisper fallback. Scoping down reduces sign-in
+          // consent friction.
           scope: [
             'openid',
             'email',
             'profile',
             'https://www.googleapis.com/auth/youtube.readonly',
-            'https://www.googleapis.com/auth/youtube.force-ssl',
           ].join(' '),
         },
       },
