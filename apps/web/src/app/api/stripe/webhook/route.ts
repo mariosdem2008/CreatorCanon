@@ -6,17 +6,21 @@ import {
   parseServerEnv,
   PIPELINE_VERSION,
 } from '@creatorcanon/core';
-import { and, eq, getDb } from '@creatorcanon/db';
+import { and, eq, getDb, inArray } from '@creatorcanon/db';
 import {
   customer,
   generationRun,
+  mediaAsset,
   project,
   stripeEvent,
+  videoSetItem,
 } from '@creatorcanon/db/schema';
 import {
   runGenerationPipeline,
   type RunGenerationPipelinePayload,
 } from '@creatorcanon/pipeline';
+
+import { buildDispatchPlan, type DispatchMode } from './dispatch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,25 +31,81 @@ function runInProcess(payload: RunGenerationPipelinePayload): void {
   });
 }
 
+function parseDispatchMode(raw: string | undefined): DispatchMode {
+  if (raw === 'trigger' || raw === 'worker') return raw;
+  return 'inprocess';
+}
+
+async function hasAudioForAllVideos(videoSetId: string, workspaceId: string): Promise<boolean> {
+  const db = getDb();
+  const items = await db
+    .select({ videoId: videoSetItem.videoId })
+    .from(videoSetItem)
+    .where(eq(videoSetItem.videoSetId, videoSetId));
+  if (items.length === 0) return false;
+  const videoIds = items.map((i) => i.videoId);
+  const audio = await db
+    .select({ videoId: mediaAsset.videoId })
+    .from(mediaAsset)
+    .where(
+      and(
+        eq(mediaAsset.workspaceId, workspaceId),
+        eq(mediaAsset.type, 'audio_m4a'),
+        inArray(mediaAsset.videoId, videoIds),
+      ),
+    );
+  const have = new Set(audio.map((r) => r.videoId));
+  return items.every((i) => have.has(i.videoId));
+}
+
 async function dispatchPipeline(payload: RunGenerationPipelinePayload): Promise<void> {
-  const mode = process.env.PIPELINE_DISPATCH_MODE ?? 'inprocess';
-  if (mode === 'worker') {
-    console.info('[stripe-webhook] Worker queue mode enabled; leaving run queued for hosted worker.', {
-      runId: payload.runId,
-      projectId: payload.projectId,
-      workspaceId: payload.workspaceId,
-    });
+  const mode = parseDispatchMode(process.env.PIPELINE_DISPATCH_MODE);
+  const allAudio = await hasAudioForAllVideos(payload.videoSetId, payload.workspaceId);
+  const plan = buildDispatchPlan({ mode, hasAudioForAllVideos: allAudio });
+
+  console.info('[stripe-webhook] dispatch plan', {
+    runId: payload.runId,
+    mode,
+    allAudio,
+    planKind: plan.kind,
+  });
+
+  if (plan.kind === 'worker-queued') {
+    // Long-running queue-runner polls for queued runs; webhook does nothing.
     return;
   }
-  if (mode === 'trigger') {
+
+  if (plan.kind === 'inprocess') {
+    runInProcess(payload);
+    return;
+  }
+
+  if (plan.kind === 'trigger-direct') {
     try {
       await tasks.trigger('run-pipeline', payload);
-      return;
-    } catch (error) {
-      console.warn('[stripe-webhook] Failed to trigger pipeline task, falling back in-process:', error);
+    } catch (err) {
+      console.warn('[stripe-webhook] trigger.run-pipeline failed, falling back in-process:', err);
+      runInProcess(payload);
     }
+    return;
   }
-  runInProcess(payload);
+
+  // plan.kind === 'trigger-chain' — fire extract-run-audio; the task
+  // self-dispatches run-pipeline via extractAlphaAudio({ dispatch: true }).
+  try {
+    await tasks.trigger('extract-run-audio', {
+      runId: payload.runId,
+      force: false,
+      dispatch: true,
+    });
+  } catch (err) {
+    console.warn(
+      '[stripe-webhook] trigger.extract-run-audio failed, falling back in-process ' +
+        '(audio must already exist or be extracted manually):',
+      err,
+    );
+    runInProcess(payload);
+  }
 }
 
 export async function POST(req: Request) {
