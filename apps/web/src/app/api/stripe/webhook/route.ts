@@ -29,6 +29,14 @@ function runInProcess(payload: RunGenerationPipelinePayload): void {
 
 async function dispatchPipeline(payload: RunGenerationPipelinePayload): Promise<void> {
   const mode = process.env.PIPELINE_DISPATCH_MODE ?? 'inprocess';
+  if (mode === 'worker') {
+    console.info('[stripe-webhook] Worker queue mode enabled; leaving run queued for hosted worker.', {
+      runId: payload.runId,
+      projectId: payload.projectId,
+      workspaceId: payload.workspaceId,
+    });
+    return;
+  }
   if (mode === 'trigger') {
     try {
       await tasks.trigger('run-pipeline', payload);

@@ -60,6 +60,12 @@ const RUN_STATUS_LABEL: Record<string, string> = {
   canceled: 'Canceled',
 };
 
+function supportToneClass(label: string) {
+  if (label === 'strong') return 'border-sage/30 bg-sage/10 text-sage';
+  if (label === 'limited') return 'border-amber/30 bg-amber-wash text-amber-ink';
+  return 'border-rule bg-paper-3 text-ink-4';
+}
+
 function statusBadgeClass(status: string) {
   if (status === 'approved') return 'border-sage/30 bg-sage/10 text-sage';
   if (status === 'reviewed') return 'border-amber/30 bg-amber-wash text-amber-ink';
@@ -144,6 +150,8 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
   const publishedTemplate = getHubTemplate(publishedHubs[0]?.theme ?? selectedTemplate.id);
   const approvedCount = pages.filter((item) => item.status === 'approved').length;
   const allPagesApproved = pages.length > 0 && approvedCount === pages.length;
+  const reviewedCount = pages.filter((item) => item.status === 'reviewed').length;
+  const strongSupportCount = pages.filter((item) => item.supportLabel === 'strong').length;
 
   const currentVersionIds = pages
     .map((p) => p.currentVersionId)
@@ -216,6 +224,64 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
       </div>
 
       <div className="mx-auto max-w-[920px] space-y-6 px-4 py-6 sm:px-8 sm:py-10">
+        <section className="overflow-hidden rounded-[28px] border border-rule bg-paper shadow-1">
+          <div className="border-b border-rule bg-[linear-gradient(135deg,rgba(168,138,75,0.14),rgba(250,247,239,0.96)_48%,rgba(248,241,224,0.98))] px-4 py-6 sm:px-6 sm:py-7">
+            <p className="text-eyebrow uppercase tracking-widest text-ink-4">
+              Creator review workspace
+            </p>
+            <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-[560px]">
+                <h2 className="font-serif text-heading-lg text-ink">
+                  Shape the public hub before it goes live.
+                </h2>
+                <p className="mt-2 text-body-sm leading-6 text-ink-3">
+                  Tighten the headline, refine the summary, and keep the grounded
+                  source moments intact. Publishing uses the current page version,
+                  so this screen is the final pass before the hub becomes the
+                  product.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center sm:max-w-[340px]">
+                <div className="rounded-2xl border border-rule bg-paper px-3 py-3">
+                  <div className="text-eyebrow uppercase tracking-widest text-ink-4">Approved</div>
+                  <div className="mt-2 font-serif text-heading-md text-ink">{approvedCount}</div>
+                </div>
+                <div className="rounded-2xl border border-rule bg-paper px-3 py-3">
+                  <div className="text-eyebrow uppercase tracking-widest text-ink-4">Reviewed</div>
+                  <div className="mt-2 font-serif text-heading-md text-ink">{reviewedCount}</div>
+                </div>
+                <div className="rounded-2xl border border-rule bg-paper px-3 py-3">
+                  <div className="text-eyebrow uppercase tracking-widest text-ink-4">Strong</div>
+                  <div className="mt-2 font-serif text-heading-md text-ink">{strongSupportCount}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-px bg-rule sm:grid-cols-3">
+            {[
+              {
+                title: '1. Review structure',
+                body: 'Confirm page order, headings, and summaries read like a coherent premium hub.',
+              },
+              {
+                title: '2. Keep evidence visible',
+                body: 'Section edits preserve attached source moments, so improve prose without losing trust signals.',
+              },
+              {
+                title: '3. Publish intentionally',
+                body: allPagesApproved
+                  ? 'All pages are approved. You can publish a creator-reviewed hub.'
+                  : 'Unapproved pages can still publish, but the cleaner alpha move is to approve them first.',
+              },
+            ].map((item) => (
+              <div key={item.title} className="bg-paper px-4 py-4 sm:px-5">
+                <p className="text-body-sm font-semibold text-ink">{item.title}</p>
+                <p className="mt-1.5 text-caption leading-5 text-ink-4">{item.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Run summary */}
         <div className="overflow-hidden rounded-xl border border-rule bg-paper">
           <div className="border-b border-rule bg-paper-2 px-4 py-4 sm:px-6">
@@ -234,16 +300,17 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
               <span>{selectedTemplate.tagline}</span>
             </p>
             {pages.length > 0 && (
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <p className="text-body-sm text-ink-4">
                   Review progress:{' '}
                   <span className="font-semibold text-ink">{approvedCount}</span>
-                  {' of '}
-                  <span className="font-semibold text-ink">{pages.length}</span>
-                  {' pages approved'}
+                  {' approved, '}
+                  <span className="font-semibold text-ink">{reviewedCount}</span>
+                  {' reviewed, '}
+                  <span className="font-semibold text-ink">{pages.length - approvedCount - reviewedCount}</span>
+                  {' still in draft'}
                 </p>
-                {/* Progress bar */}
-                <div className="flex-1 max-w-[160px]">
+                <div className="flex-1 max-w-[220px]">
                   <div className="h-1.5 rounded-full bg-paper-3 overflow-hidden">
                     <div
                       className="h-full rounded-full bg-sage transition-all"
@@ -368,6 +435,10 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
           const version = item.currentVersionId ? versionMap.get(item.currentVersionId) : undefined;
           const blockTree = (version?.blockTreeJson ?? { blocks: [] }) as BlockTree;
           const sections = blockTree.blocks.filter((block) => block.type === 'section');
+          const sourceRefCount = sections.reduce((sum, section) => {
+            const content = section.content as SectionContent;
+            return sum + (content.sourceRefs?.length ?? 0);
+          }, 0);
 
           return (
             <article key={item.id} className="overflow-hidden rounded-xl border border-rule bg-paper">
@@ -388,8 +459,32 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                   <span className={`rounded-full border px-2.5 py-1 text-eyebrow uppercase tracking-widest ${statusBadgeClass(item.status)}`}>
                     {statusLabel(item.status)}
                   </span>
-                  <span className="text-caption text-ink-4 capitalize">{item.supportLabel.replace('_', ' ')}</span>
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize ${supportToneClass(item.supportLabel)}`}>
+                    {item.supportLabel.replace('_', ' ')}
+                  </span>
                 </div>
+              </div>
+
+              <div className="grid gap-px border-b border-rule bg-rule sm:grid-cols-3">
+                {[
+                  {
+                    label: 'Sections',
+                    value: sections.length,
+                  },
+                  {
+                    label: 'Source moments',
+                    value: sourceRefCount,
+                  },
+                  {
+                    label: 'Live status',
+                    value: item.status === 'approved' ? 'Ready' : item.status === 'reviewed' ? 'Close' : 'Needs pass',
+                  },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-paper px-4 py-3 sm:px-6">
+                    <p className="text-eyebrow uppercase tracking-widest text-ink-4">{stat.label}</p>
+                    <p className="mt-1.5 text-body-sm font-semibold text-ink">{stat.value}</p>
+                  </div>
+                ))}
               </div>
 
               {/* Summary */}
@@ -499,7 +594,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                   <ApprovePageButton />
                 </form>
                 <p className="text-caption text-ink-4">
-                  Edits create a new version while keeping source evidence attached.
+                  Every edit creates a fresh version while keeping source evidence attached to the block.
                 </p>
               </div>
             </article>

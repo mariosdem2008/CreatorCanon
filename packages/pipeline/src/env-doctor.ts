@@ -2,6 +2,7 @@ import { createR2Client } from '@creatorcanon/adapters';
 import { createStripeClient } from '@creatorcanon/adapters/stripe';
 import { closeDb, getDb, sql } from '@creatorcanon/db';
 import { parseServerEnv, publicEnvSchema, serverEnvSchema } from '@creatorcanon/core';
+import { spawnSync } from 'node:child_process';
 
 import { loadDefaultEnvFiles } from './env-files';
 
@@ -62,6 +63,28 @@ function formatError(error: unknown, fallback: string): string {
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function checkBinary(
+  name: string,
+  command: string,
+  args: string[],
+): DoctorCheck {
+  const result = spawnSync(command, args, {
+    stdio: 'ignore',
+  });
+  if (result.status === 0) {
+    return {
+      name,
+      status: 'pass',
+      message: `${command} is available.`,
+    };
+  }
+  return {
+    name,
+    status: 'warn',
+    message: `${command} is not available in this environment.`,
+  };
 }
 
 async function withRetry<T>(
@@ -239,18 +262,31 @@ async function main() {
     record('stripe:webhook-secret', 'warn', 'Stripe webhook secret is present but does not start with whsec_.');
   }
 
+  const dispatchMode = process.env.PIPELINE_DISPATCH_MODE ?? 'inprocess';
+  const requiresTrigger = dispatchMode === 'trigger';
   if (process.env.TRIGGER_SECRET_KEY) {
     record('trigger:config', 'pass', 'Trigger secret key is present.');
-  } else if (strictAlphaMode) {
-    record('trigger:config', 'fail', 'Trigger secret key is missing in strict alpha mode.');
+  } else if (strictAlphaMode && requiresTrigger) {
+    record('trigger:config', 'fail', 'Trigger secret key is missing while PIPELINE_DISPATCH_MODE=trigger.');
   } else {
-    record('trigger:config', 'warn', 'Trigger secret key is missing; local fallback must be used for alpha runs.');
+    record('trigger:config', requiresTrigger ? 'warn' : 'pass', requiresTrigger
+      ? 'Trigger secret key is missing; fallback execution would be required.'
+      : 'Trigger secret key is optional in worker/inprocess dispatch mode.');
+  }
+  const triggerProjectId = process.env.TRIGGER_PROJECT_ID?.trim();
+  if (triggerProjectId) {
+    record('trigger:project-id', 'pass', 'Trigger project id is present.');
+  } else if ((strictAlphaMode || hostedUrlCheck) && requiresTrigger) {
+    record('trigger:project-id', 'fail', 'TRIGGER_PROJECT_ID is required for hosted Trigger dispatch readiness.');
+  } else {
+    record('trigger:project-id', requiresTrigger ? 'warn' : 'pass', requiresTrigger
+      ? 'TRIGGER_PROJECT_ID is not set.'
+      : 'TRIGGER_PROJECT_ID is optional in worker/inprocess dispatch mode.');
   }
   record('trigger:local-fallback', 'pass', 'Shared pipeline runner is available for local fallback.');
 
   const reviewSynth = process.env.PIPELINE_REVIEW_SYNTH ?? 'deterministic';
   const draftSynth = process.env.PIPELINE_DRAFT_SYNTH ?? 'deterministic';
-  const dispatchMode = process.env.PIPELINE_DISPATCH_MODE ?? 'inprocess';
   record(
     'pipeline:review-synth',
     'pass',
@@ -261,11 +297,38 @@ async function main() {
     'pass',
     `draft_pages_v0 is running in ${draftSynth} mode.`,
   );
+  const hostedDispatchStatus =
+    hostedUrlCheck && dispatchMode !== 'worker'
+      ? 'fail'
+      : strictAlphaMode && !isLocalSmokeMode && dispatchMode !== 'worker'
+        ? 'fail'
+        : 'pass';
   record(
     'pipeline:dispatch-mode',
-    'pass',
-    `Stripe webhook dispatches in ${dispatchMode} mode.`,
+    hostedDispatchStatus,
+    hostedDispatchStatus === 'fail'
+      ? `Hosted alpha requires PIPELINE_DISPATCH_MODE=worker; current mode is ${dispatchMode}.`
+      : `Stripe webhook dispatches in ${dispatchMode} mode.`,
   );
+  for (const binaryCheck of [
+    checkBinary(
+      'audio-extraction:yt-dlp',
+      process.env.AUDIO_EXTRACTION_YTDLP_BIN?.trim() || 'yt-dlp',
+      ['--version'],
+    ),
+    checkBinary(
+      'audio-extraction:ffmpeg',
+      process.env.AUDIO_EXTRACTION_FFMPEG_BIN?.trim() || 'ffmpeg',
+      ['-version'],
+    ),
+    checkBinary(
+      'audio-extraction:challenge-runtime',
+      process.env.AUDIO_EXTRACTION_CHALLENGE_RUNTIME_BIN?.trim() || 'deno',
+      ['--version'],
+    ),
+  ]) {
+    record(binaryCheck.name, binaryCheck.status, binaryCheck.message);
+  }
 
   if (serverParsed.success) {
     try {

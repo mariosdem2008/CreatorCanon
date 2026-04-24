@@ -51,6 +51,27 @@ with `videoId`, `filename`, and optional `durationSeconds` fields.
 Then run `pnpm smoke:audio-fixtures` to force one audio-backed video through
 transcription, normalization, segmentation, and source-ready transcript storage.
 
+To turn a real selected alpha run into an audio-backed run, use:
+
+```powershell
+$env:ALPHA_AUDIO_EXTRACT_CONFIRM="true"
+pnpm extract:alpha-audio --run "<paid-or-review-ready-run-id>"
+```
+
+This is an operator-owned alpha lane. It downloads selected YouTube audio with
+`yt-dlp`, normalizes it to `.m4a`, uploads it to artifact storage, and writes
+`media_asset(type='audio_m4a')` rows so the existing transcript pipeline can
+continue through the OpenAI transcription path. Add `--dispatch` only when you
+want the command to hand off to the shared pipeline immediately after
+extraction. `env:doctor` checks `yt-dlp`, `ffmpeg`, and the challenge runtime
+(`deno` by default) before you rely on this path.
+
+For hosted self-serve real-video runs, set `PIPELINE_DISPATCH_MODE=worker` and
+run the containerized worker. In worker mode, paid runs stay `queued` after the
+webhook, the hosted worker claims them, and `ensure_transcripts` will
+automatically extract YouTube audio when captions are unavailable and no
+`audio_m4a` asset exists yet.
+
 ## Private-Alpha Smoke
 
 Use this after real test/preview env keys are configured:
@@ -103,7 +124,9 @@ source-positive hub publishing.
 | `pnpm smoke:all:local` | Resets DB, runs local pipeline smoke, then browser smoke |
 | `pnpm dev:seed:audio-fixtures` | Seeds local `.m4a` fixtures as reusable audio assets |
 | `pnpm smoke:audio-fixtures` | Verifies audio fixture transcription reaches segments |
+| `pnpm extract:alpha-audio` | Operator extraction lane for real selected alpha videos |
 | `pnpm inspect:alpha-run` | Read-only operator diagnostics for one alpha run |
+| `pnpm inspect:alpha-content` | Read-only content-quality summary for one alpha run |
 | `pnpm rescue:alpha-run` | Audited operator rescue for one paid stuck alpha run |
 | `pnpm smoke:trigger-dispatch` | Dispatches one paid queued alpha run through Trigger and waits for draft readiness |
 | `pnpm env:doctor`   | Read-only alpha environment readiness check      |
@@ -126,10 +149,15 @@ Required private-alpha/test mode values:
 - `AUTH_SECRET`, `AUTH_GOOGLE_ID`, and `AUTH_GOOGLE_SECRET`.
 - `YOUTUBE_OAUTH_CLIENT_ID` and `YOUTUBE_OAUTH_CLIENT_SECRET`.
 - `STRIPE_SECRET_KEY=sk_test_...` and `STRIPE_WEBHOOK_SECRET=whsec_...`.
-- `TRIGGER_SECRET_KEY` for worker dispatch, with local fallback still available
-  when Trigger dispatch fails.
-- `TRIGGER_PROJECT_ID` for Trigger worker deploys. The worker config refuses to
-  deploy against the placeholder project id.
+- Optional `TRIGGER_SECRET_KEY` and `TRIGGER_PROJECT_ID` if you still want the
+  Trigger task path available. The hosted binary-capable worker path does not
+  require Trigger.
+- Optional extraction overrides: `AUDIO_EXTRACTION_YTDLP_BIN`,
+  `AUDIO_EXTRACTION_FFMPEG_BIN`, and
+  `AUDIO_EXTRACTION_CHALLENGE_RUNTIME_BIN`. If omitted, the operator extraction
+  lane uses `yt-dlp`, `ffmpeg`, and `deno` from `PATH`.
+- `ALPHA_AUDIO_EXTRACT_CONFIRM=true` when running the extraction lane against a
+  non-local environment.
 - `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_HUB_ROOT_DOMAIN`.
 
 Production uses the same keys, but Stripe must move from test mode to live mode
@@ -138,10 +166,10 @@ only after the private-alpha smoke passes.
 ## Deployment
 
 - Web deploys to Vercel from `apps/web`.
-- Worker deploys through Trigger.dev from `apps/worker`. Use
-  `pnpm --filter @creatorcanon/worker trigger:deploy` after setting
-  `TRIGGER_PROJECT_ID` and logging in with the Trigger CLI.
-- Trigger.dev is the production async runner. Vercel in-process dispatch remains
-  a local/emergency mode only because hosted serverless functions can truncate
-  long pipeline runs.
+- Binary-capable hosted worker deploys from `apps/worker` using the provided
+  Dockerfile and Railway config. It installs `yt-dlp`, `ffmpeg`, and `deno`,
+  claims queued runs when `PIPELINE_DISPATCH_MODE=worker`, and executes the
+  shared pipeline end to end.
+- Trigger.dev remains available for task-driven fallback and operator smokes,
+  but worker mode is the durable hosted path for real-video runs.
 - Hosted private-alpha readiness is tracked in `docs/hosted-alpha-readiness.md`.

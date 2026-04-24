@@ -47,7 +47,10 @@ ENV NODE_ENV=production
 ENV NODE_OPTIONS=--enable-source-maps
 WORKDIR /app
 
-RUN corepack enable \
+RUN apk add --no-cache bash curl ffmpeg python3 py3-pip unzip \
+    && pip3 install --no-cache-dir yt-dlp \
+    && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
+    && corepack enable \
     && addgroup -S creatorcanon \
     && adduser -S creatorcanon -G creatorcanon
 

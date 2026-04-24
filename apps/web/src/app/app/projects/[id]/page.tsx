@@ -169,6 +169,18 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const publishedTemplate = getHubTemplate(publishedHubs[0]?.theme ?? selectedTemplate.id);
 
   const runStatus = (run?.status ?? '') as RunStatus;
+  const completedStageCount = stageRuns.filter((stage) => stage.status === 'succeeded').length;
+  const failedStageCount = stageRuns.filter((stage) => stage.status.startsWith('failed')).length;
+  const supportTone =
+    run?.status === 'failed'
+      ? 'This run needs operator attention. Share the support IDs below.'
+      : run?.status === 'published'
+        ? 'The hub is live. Any future creator edits should be republished from the pages workspace.'
+        : run?.status === 'awaiting_review'
+          ? 'Draft pages are ready for creator review, approval, and publish.'
+          : run?.status === 'running' || run?.status === 'queued'
+            ? 'Payment is in. The worker is progressing this run through the pipeline.'
+            : 'Use this page as the operator-style source of truth for payment, processing, and publish state.';
 
   return (
     <main className="min-h-screen bg-paper-studio">
@@ -197,6 +209,51 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       </div>
 
       <div className="mx-auto max-w-[720px] space-y-5 px-4 py-6 sm:px-8 sm:py-10">
+        <section className="overflow-hidden rounded-[28px] border border-rule bg-paper shadow-1">
+          <div className="border-b border-rule bg-[linear-gradient(135deg,rgba(168,138,75,0.14),rgba(250,247,239,0.96)_45%,rgba(248,241,224,0.98))] px-4 py-6 sm:px-6 sm:py-7">
+            <p className="text-eyebrow uppercase tracking-widest text-ink-4">
+              Run command center
+            </p>
+            <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="max-w-[520px]">
+                <h2 className="font-serif text-heading-lg text-ink">
+                  Track payment, generation, review, and publish in one place.
+                </h2>
+                <p className="mt-2 text-body-sm leading-6 text-ink-3">
+                  {supportTone}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center sm:max-w-[300px]">
+                <div className="rounded-2xl border border-rule bg-paper px-3 py-3">
+                  <div className="text-eyebrow uppercase tracking-widest text-ink-4">Stages</div>
+                  <div className="mt-2 font-serif text-heading-md text-ink">{stageRuns.length}</div>
+                </div>
+                <div className="rounded-2xl border border-rule bg-paper px-3 py-3">
+                  <div className="text-eyebrow uppercase tracking-widest text-ink-4">Done</div>
+                  <div className="mt-2 font-serif text-heading-md text-ink">{completedStageCount}</div>
+                </div>
+                <div className="rounded-2xl border border-rule bg-paper px-3 py-3">
+                  <div className="text-eyebrow uppercase tracking-widest text-ink-4">Risk</div>
+                  <div className="mt-2 font-serif text-heading-md text-ink">{failedStageCount}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-px bg-rule sm:grid-cols-4">
+            {[
+              ['Awaiting payment', 'Stripe checkout exists, but the run should not move until payment is confirmed.'],
+              ['Queued / processing', 'A healthy paid run should quickly move from queued into stage progress.'],
+              ['Draft ready', 'Open review and pages to tighten the generated hub before it goes public.'],
+              ['Published', 'Once live, creator edits need a deliberate republish to update the public hub.'],
+            ].map(([title, body]) => (
+              <div key={title} className="bg-paper px-4 py-4">
+                <p className="text-body-sm font-semibold text-ink">{title}</p>
+                <p className="mt-1.5 text-caption leading-5 text-ink-4">{body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Status card */}
         <div className="overflow-hidden rounded-xl border border-rule bg-paper">
           <div className="flex items-center justify-between border-b border-rule bg-paper-2 px-4 py-4 sm:px-6">

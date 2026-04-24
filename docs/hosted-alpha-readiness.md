@@ -17,19 +17,24 @@ not to add product scope.
 
 ### Worker / Trigger
 
-- Trigger is the hosted async runner for paid generation runs. Vercel
-  in-process dispatch is not production-safe because serverless functions can
-  truncate long pipeline execution.
+- The binary-capable hosted worker is the normal runner for paid real-video
+  generation runs. Vercel in-process dispatch is not production-safe because
+  serverless functions can truncate long pipeline execution.
 - Set `TRIGGER_PROJECT_ID` to the real Trigger project id before running
   `trigger dev` or `trigger deploy`. The worker config intentionally refuses to
   use the old placeholder project id.
 - The worker must have the same provider envs as the web app for pipeline access:
   Neon/Postgres, R2, OpenAI, Google/YouTube where needed, and Trigger secrets.
-- `PIPELINE_DISPATCH_MODE=trigger` should be enabled on Vercel only after the
-  `run-pipeline` task is visible in Trigger and a paid queued run completes via
-  `pnpm smoke:trigger-dispatch`.
+- If you are using the real-video extraction lane, the operator/worker machine
+  also needs `yt-dlp`, `ffmpeg`, and the challenge runtime (`deno` by default)
+  available on `PATH` or via the `AUDIO_EXTRACTION_*_BIN` overrides.
+- `PIPELINE_DISPATCH_MODE=worker` should be enabled on Vercel once the hosted
+  worker is deployed and connected to the same database/artifact env.
+- In worker mode, the webhook only verifies payment and leaves the run queued.
+  The hosted worker claims queued runs and executes the full pipeline,
+  including automatic audio extraction fallback inside `ensure_transcripts`.
 - App-side rescue remains available for alpha recovery, but hosted alpha
-  readiness treats a missing `TRIGGER_SECRET_KEY` as a blocker.
+  readiness no longer depends on Vercel in-process execution.
 
 ### Provider Consoles
 
@@ -54,8 +59,13 @@ pipeline code executes:
 - YouTube: `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET`.
 - AI: `OPENAI_API_KEY`, `GEMINI_API_KEY`.
 - Billing: `STRIPE_SECRET_KEY=sk_test_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`.
-- Runner: `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID`, optional
-  `TRIGGER_API_URL`, and `PIPELINE_DISPATCH_MODE=trigger` after worker proof.
+- Runner: optional `TRIGGER_SECRET_KEY`, `TRIGGER_PROJECT_ID`, optional
+  `TRIGGER_API_URL`, and `PIPELINE_DISPATCH_MODE=worker` for the hosted path.
+- Extraction lane overrides if needed:
+  `AUDIO_EXTRACTION_YTDLP_BIN`, `AUDIO_EXTRACTION_FFMPEG_BIN`,
+  `AUDIO_EXTRACTION_CHALLENGE_RUNTIME_BIN`, and
+  `ALPHA_AUDIO_EXTRACT_CONFIRM=true` when running operator extraction against
+  hosted/test infrastructure.
 - Observability if used: Sentry/PostHog keys.
 
 Do not set `DEV_AUTH_BYPASS_ENABLED=true` or `DEV_AUTH_BYPASS_EMAIL` in hosted
@@ -100,27 +110,41 @@ Remove-Item Env:ALPHA_SMOKE_RUN_ID
 Deploy and verify the worker before relying on hosted payment dispatch:
 
 ```powershell
-$env:TRIGGER_PROJECT_ID="<real-trigger-project-id>"
-pnpm --filter @creatorcanon/worker exec trigger whoami
-pnpm --filter @creatorcanon/worker trigger:deploy
-
-$env:ALPHA_TRIGGER_RUN_ID="<paid-queued-run-id>"
-pnpm smoke:trigger-dispatch
-Remove-Item Env:ALPHA_TRIGGER_RUN_ID
+$env:PIPELINE_DISPATCH_MODE="worker"
+# deploy the apps/worker container with the same DATABASE_URL/R2/OpenAI envs
+# then create one fresh paid hosted run and inspect it:
+pnpm inspect:alpha-run <queued-run-id>
 ```
 
-`smoke:trigger-dispatch` refuses unpaid runs, triggers the `run-pipeline` task,
-polls the database until `awaiting_review` or failure, and never publishes. Use
+Use `pnpm inspect:alpha-run <run-id>` to confirm the run leaves `queued`,
+reaches `awaiting_review`, and records succeeded stage rows. Use
 `pnpm smoke:alpha` or the creator UI after the worker has completed the run.
 
-If `trigger whoami` says login is required, run:
+For a read-only quality summary after a run completes, use:
 
 ```powershell
-pnpm --filter @creatorcanon/worker exec trigger login --profile default
+pnpm inspect:alpha-content <run-id>
 ```
 
-Do not set hosted `PIPELINE_DISPATCH_MODE=trigger` until the deploy and smoke
-both pass.
+This reports transcript provider mix, whether audio extraction was used, segment
+count and duration range, synth modes, release/public path, and manifest-level
+evidence density.
+
+Do not set hosted `PIPELINE_DISPATCH_MODE=worker` until the worker container is
+deployed with the extraction binaries and shared provider envs.
+
+If a selected hosted run needs the real-video audio fallback before transcript
+generation can proceed, run:
+
+```powershell
+$env:ALPHA_AUDIO_EXTRACT_CONFIRM="true"
+pnpm extract:alpha-audio --run "<run-id>"
+Remove-Item Env:ALPHA_AUDIO_EXTRACT_CONFIRM
+```
+
+By default this only creates `audio_m4a` media assets. Add `--dispatch` if you
+want the operator command to resume the shared pipeline immediately after
+extraction.
 
 ## Hosted Browser Proof
 

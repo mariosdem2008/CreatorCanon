@@ -2,14 +2,15 @@
 
 import { useFormStatus } from 'react-dom';
 
-// ── Continue to payment / Continue with limited-source hub ───────────────────
-
 interface ConfigureSubmitButtonProps {
   label: string;
   pendingLabel?: string;
 }
 
-export function ConfigureSubmitButton({ label, pendingLabel = 'Processing…' }: ConfigureSubmitButtonProps) {
+export function ConfigureSubmitButton({
+  label,
+  pendingLabel = 'Processing...',
+}: ConfigureSubmitButtonProps) {
   const { pending } = useFormStatus();
 
   return (
@@ -22,7 +23,7 @@ export function ConfigureSubmitButton({ label, pendingLabel = 'Processing…' }:
       {pending ? (
         <>
           <span
-            className="h-4 w-4 rounded-full border-2 border-paper/30 border-t-paper animate-spin"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-paper/30 border-t-paper"
             aria-hidden="true"
           />
           {pendingLabel}
@@ -30,14 +31,12 @@ export function ConfigureSubmitButton({ label, pendingLabel = 'Processing…' }:
       ) : (
         <>
           {label}
-          <span aria-hidden="true">→</span>
+          <span aria-hidden="true">&rarr;</span>
         </>
       )}
     </button>
   );
 }
-
-// ── Check transcript support button ──────────────────────────────────────────
 
 export function CheckSourceButton() {
   const { pending } = useFormStatus();
@@ -52,10 +51,10 @@ export function CheckSourceButton() {
       {pending ? (
         <>
           <span
-            className="h-3.5 w-3.5 rounded-full border-2 border-ink-4/30 border-t-ink-4 animate-spin"
+            className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-4/30 border-t-ink-4"
             aria-hidden="true"
           />
-          Checking…
+          Checking...
         </>
       ) : (
         'Check transcript support'

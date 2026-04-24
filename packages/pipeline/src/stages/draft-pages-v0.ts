@@ -516,6 +516,35 @@ function pickRefForAnchor(
   return bestScore >= 0.4 ? best : null;
 }
 
+function scoreRefForSection(
+  section: DraftPagesV0Section,
+  ref: SourceReferenceV0,
+): number {
+  const sectionText = `${section.heading} ${section.body}`;
+  const overlap = scoreQuoteAgainstSegment(sectionText, ref.quote);
+  const anchors = section.anchorQuotes ?? [];
+  const anchorScore = anchors.length > 0
+    ? Math.max(...anchors.map((anchor) => scoreQuoteAgainstSegment(anchor, ref.quote)))
+    : 0;
+  return overlap + anchorScore * 1.5;
+}
+
+function pickBestRefForSection(
+  refs: SourceReferenceV0[],
+  section: DraftPagesV0Section,
+): SourceReferenceV0 | null {
+  let best: SourceReferenceV0 | null = null;
+  let bestScore = -1;
+  for (const ref of refs) {
+    const score = scoreRefForSection(section, ref);
+    if (score > bestScore) {
+      best = ref;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 function attachSourceRefs(
   pagesToPersist: DraftPagesV0Page[],
   refsByVideo: SourceRefByVideo,
@@ -544,7 +573,11 @@ function attachSourceRefs(
 
       if (sourceRefs.length === 0) {
         const fallback = section.sourceVideoIds
-          .flatMap((videoId) => refsByVideo.get(videoId)?.slice(0, 1) ?? [])
+          .flatMap((videoId) => {
+            const refs = refsByVideo.get(videoId) ?? [];
+            const picked = pickBestRefForSection(refs, section);
+            return picked ? [picked] : [];
+          })
           .slice(0, 3);
         for (const ref of fallback) {
           if (!seen.has(ref.segmentId)) {
@@ -555,10 +588,10 @@ function attachSourceRefs(
       } else if (sourceRefs.length < section.sourceVideoIds.length) {
         for (const videoId of section.sourceVideoIds) {
           if (sourceRefs.length >= 3) break;
-          const firstRef = refsByVideo.get(videoId)?.[0];
-          if (firstRef && !seen.has(firstRef.segmentId)) {
-            sourceRefs.push(firstRef);
-            seen.add(firstRef.segmentId);
+          const picked = pickBestRefForSection(refsByVideo.get(videoId) ?? [], section);
+          if (picked && !seen.has(picked.segmentId)) {
+            sourceRefs.push(picked);
+            seen.add(picked.segmentId);
           }
         }
       }

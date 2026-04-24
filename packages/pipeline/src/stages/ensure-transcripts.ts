@@ -8,6 +8,7 @@ import {
   type Transcript,
 } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
+import { extractVideoAudioAssets } from '../audio-extraction';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
 
 const FORCE_SSL_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
@@ -99,6 +100,17 @@ export interface EnsureTranscriptsOutput {
   transcripts: TranscriptResult[];
   fetchedCount: number;
   skippedCount: number;
+  providerCounts: Record<string, number>;
+  audioFallback: {
+    usedCount: number;
+    extractedCount: number;
+    reusedCount: number;
+    failedCount: number;
+  };
+}
+
+function shouldAttemptAutomaticExtraction() {
+  return (process.env.PIPELINE_DISPATCH_MODE ?? 'inprocess') === 'worker';
 }
 
 async function listTimedtextTracks(
@@ -300,6 +312,17 @@ export async function ensureTranscripts(
   const openai = createOpenAIClient(env);
 
   const results: TranscriptResult[] = [];
+  const providerCounts: Record<string, number> = {
+    existing: 0,
+    youtube_timedtext: 0,
+    'gpt-4o-mini-transcribe': 0,
+  };
+  const audioFallback = {
+    usedCount: 0,
+    extractedCount: 0,
+    reusedCount: 0,
+    failedCount: 0,
+  };
 
   for (const vid of input.videos) {
     const existing = await db
@@ -323,6 +346,7 @@ export async function ensureTranscripts(
         language: existing[0].language ?? 'en',
         skipped: false,
       });
+      providerCounts.existing = (providerCounts.existing ?? 0) + 1;
       await db.update(video).set({ captionStatus: 'available' }).where(eq(video.id, vid.id));
       continue;
     }
@@ -406,7 +430,7 @@ export async function ensureTranscripts(
     }
 
     if (!vttContent) {
-      const audioRows = await db
+      let audioRows = await db
         .select({ r2Key: mediaAsset.r2Key })
         .from(mediaAsset)
         .where(and(
@@ -415,6 +439,35 @@ export async function ensureTranscripts(
           eq(mediaAsset.type, 'audio_m4a'),
         ))
         .limit(1);
+      const hadAudioAssetBeforeExtraction = Boolean(audioRows[0]);
+
+      if (!audioRows[0] && shouldAttemptAutomaticExtraction()) {
+        try {
+          const extraction = await extractVideoAudioAssets({
+            workspaceId: input.workspaceId,
+            runId: input.runId,
+            videos: [{
+              videoId: vid.id,
+              youtubeVideoId: vid.youtubeVideoId,
+              title: vid.title,
+            }],
+            requireConfirmation: false,
+          });
+          audioFallback.extractedCount += extraction.extractedCount;
+          audioFallback.reusedCount += extraction.reusedCount;
+          audioRows = extraction.items.length > 0
+            ? [{ r2Key: extraction.items[0]!.audioR2Key }]
+            : audioRows;
+        } catch (error) {
+          audioFallback.failedCount += 1;
+          const extractionReason = error instanceof Error
+            ? error.message
+            : 'unknown automatic extraction error';
+          skipReason = skipReason
+            ? `${skipReason} Automatic audio extraction failed: ${extractionReason}`
+            : `Automatic audio extraction failed: ${extractionReason}`;
+        }
+      }
 
       const audioR2Key = audioRows[0]?.r2Key;
       if (audioR2Key) {
@@ -429,6 +482,10 @@ export async function ensureTranscripts(
           chosenLang = transcript.language ?? 'en';
           provider = 'gpt-4o-mini-transcribe';
           skipReason = '';
+          audioFallback.usedCount += 1;
+          if (hadAudioAssetBeforeExtraction) {
+            audioFallback.reusedCount += 1;
+          }
         } catch (error) {
           skipReason = error instanceof Error
             ? `Audio transcription failed: ${error.message}`
@@ -490,11 +547,14 @@ export async function ensureTranscripts(
       language: chosenLang,
       skipped: false,
     });
+    providerCounts[provider] = (providerCounts[provider] ?? 0) + 1;
   }
 
   return {
     transcripts: results,
     fetchedCount: results.filter((r) => !r.skipped).length,
     skippedCount: results.filter((r) => r.skipped).length,
+    providerCounts,
+    audioFallback,
   };
 }

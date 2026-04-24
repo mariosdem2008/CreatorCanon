@@ -112,6 +112,45 @@ function cleanText(text: string): string {
     .trim();
 }
 
+function splitCoarseSentence(input: {
+  startMs: number;
+  endMs: number;
+  text: string;
+}): Array<{ startMs: number; endMs: number; text: string }> {
+  const parts = input.text.match(/[^.!?]+(?:[.!?]+|$)/g)
+    ?.map((part) => part.trim())
+    .filter(Boolean) ?? [];
+
+  if (parts.length <= 1) {
+    return [{ startMs: input.startMs, endMs: input.endMs, text: input.text }];
+  }
+
+  const totalChars = parts.reduce((sum, part) => sum + part.length, 0);
+  const totalDuration = Math.max(1, input.endMs - input.startMs);
+  let cursor = input.startMs;
+
+  return parts.map((part, index) => {
+    const allocatedDuration =
+      index === parts.length - 1
+        ? input.endMs - cursor
+        : Math.max(
+            500,
+            Math.round(totalDuration * (part.length / Math.max(1, totalChars))),
+          );
+    const endMs =
+      index === parts.length - 1
+        ? input.endMs
+        : Math.min(input.endMs, cursor + allocatedDuration);
+    const sentence = {
+      startMs: cursor,
+      endMs: Math.max(endMs, cursor + 500),
+      text: part,
+    };
+    cursor = sentence.endMs;
+    return sentence;
+  });
+}
+
 export async function normalizeTranscripts(
   input: NormalizeTranscriptsInput,
 ): Promise<NormalizeTranscriptsOutput> {
@@ -158,7 +197,12 @@ export async function normalizeTranscripts(
 
     const chunks = parseVtt(vttText);
     const sentences = mergeIntoSentences(chunks);
-    const cleaned = sentences.map((s) => ({ ...s, text: cleanText(s.text) })).filter((s) => s.text);
+    const cleaned = sentences
+      .map((s) => ({ ...s, text: cleanText(s.text) }))
+      .filter((s) => s.text)
+      .flatMap(splitCoarseSentence)
+      .map((s) => ({ ...s, text: cleanText(s.text) }))
+      .filter((s) => s.text);
 
     const normalizedJson = {
       videoId: transcript.videoId,

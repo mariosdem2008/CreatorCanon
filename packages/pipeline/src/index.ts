@@ -4,4 +4,6 @@ export * from './harness';
 export * from './run-generation-pipeline';
 export * from './publish-run-as-hub';
 export * from './source-coverage';
+export * from './audio-extraction';
+export * from './extract-alpha-audio';
 export * from './stages';

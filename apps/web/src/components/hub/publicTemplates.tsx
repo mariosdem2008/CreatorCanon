@@ -142,6 +142,15 @@ function firstSection(page: ReleaseManifestV0Page): SectionContent | undefined {
   return block ? sectionContent(block) : undefined;
 }
 
+function pageLead(page: ReleaseManifestV0Page): string | null {
+  return firstSection(page)?.body ?? page.summary ?? null;
+}
+
+function sourcedSectionCount(page: ReleaseManifestV0Page): number {
+  return sectionBlocks(page).filter((block) => (sectionContent(block).sourceRefs ?? []).length > 0)
+    .length;
+}
+
 function overviewPage(manifest: ReleaseManifestV0): ReleaseManifestV0Page {
   return manifest.pages.find((page) => page.slug === 'overview') ?? manifest.pages[0]!;
 }
@@ -160,6 +169,18 @@ function readMinutes(page: ReleaseManifestV0Page): number {
     .split(/\s+/)
     .filter(Boolean).length;
   return Math.max(1, Math.ceil(words / 180));
+}
+
+function formatCalendarDate(value: Date | string | null | undefined, month: 'short' | 'long' = 'short') {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month,
+    day: 'numeric',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +221,7 @@ export function SourceMomentCard({
 
   return (
     <div
-      className={`rounded-lg border p-4 transition-all duration-200 ${activated ? cls.cardActive : cls.soft}`}
+      className={`rounded-xl border p-4 transition-all duration-200 sm:p-5 ${activated ? cls.cardActive : cls.soft}`}
     >
       <div className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.accent}`}>
         {formatTime(source.startMs)}–{formatTime(source.endMs)}
@@ -252,14 +273,14 @@ export function SourceRail({
 
   if (refs.length === 0) {
     return (
-      <aside aria-label="Source moments">
+      <aside aria-label="Source moments" className="lg:sticky lg:top-5">
         <div
-          className={`rounded-lg border px-4 py-6 text-[13px] leading-relaxed ${cls.soft} ${cls.muted}`}
+          className={`rounded-2xl border px-4 py-6 text-[13px] leading-relaxed sm:px-5 ${cls.soft} ${cls.muted}`}
         >
-          <span className="block text-[10px] font-semibold uppercase tracking-[0.1em] mb-2">
+          <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.12em]">
             Source moments
           </span>
-          No source moments were linked to this page.
+          This page is published without linked source moments yet.
         </div>
       </aside>
     );
@@ -269,37 +290,45 @@ export function SourceRail({
   const hasMore = refs.length > SOURCE_RAIL_INITIAL;
 
   return (
-    <aside aria-label={`Source moments (${refs.length})`}>
-      <div className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.muted} mb-3`}>
-        Source moments / {refs.length}
-      </div>
-      {/* R2: on mobile this is inline below content; on lg it's a sticky aside column */}
-      <div
-        className="space-y-2.5 max-h-[60vh] overflow-y-auto lg:max-h-none lg:overflow-y-visible pr-0.5"
-        aria-label="Source moment cards"
-      >
-        {visible.map((ref) => (
-          <SourceMomentCard key={ref.segmentId} source={ref} variant={variant} />
-        ))}
-      </div>
-      {hasMore && !expanded && (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className={`mt-3 w-full rounded-md border px-3 py-2 text-[12px] font-medium transition-opacity duration-150 hover:opacity-80 ${cls.soft} ${cls.muted}`}
+    <aside aria-label={`Source moments (${refs.length})`} className="lg:sticky lg:top-5">
+      <div className={`rounded-2xl border p-4 sm:p-5 ${cls.panel}`}>
+        <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}>
+          Source moments
+        </div>
+        <div className="mt-2 flex items-end justify-between gap-3">
+          <p className="font-serif text-[24px] leading-none tracking-tight">{refs.length}</p>
+          <p className={`text-right text-[11px] leading-[1.5] ${cls.muted}`}>
+            Reader-visible clips linked to this page.
+          </p>
+        </div>
+        <div className={`mt-4 border-t ${cls.rule}`} />
+        <div
+          className="mt-4 space-y-2.5 max-h-[70vh] overflow-y-auto pr-0.5 lg:max-h-[calc(100vh-220px)]"
+          aria-label="Source moment cards"
         >
-          Show {refs.length - SOURCE_RAIL_INITIAL} more source moments
-        </button>
-      )}
-      {hasMore && expanded && (
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          className={`mt-3 w-full rounded-md border px-3 py-2 text-[12px] font-medium transition-opacity duration-150 hover:opacity-80 ${cls.soft} ${cls.muted}`}
-        >
-          Show fewer
-        </button>
-      )}
+          {visible.map((ref) => (
+            <SourceMomentCard key={ref.segmentId} source={ref} variant={variant} />
+          ))}
+        </div>
+        {hasMore && !expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className={`mt-3 w-full rounded-md border px-3 py-2 text-[12px] font-medium transition-opacity duration-150 hover:opacity-80 ${cls.soft} ${cls.muted}`}
+          >
+            Show {refs.length - SOURCE_RAIL_INITIAL} more moments
+          </button>
+        )}
+        {hasMore && expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className={`mt-3 w-full rounded-md border px-3 py-2 text-[12px] font-medium transition-opacity duration-150 hover:opacity-80 ${cls.soft} ${cls.muted}`}
+          >
+            Show fewer
+          </button>
+        )}
+      </div>
     </aside>
   );
 }
@@ -318,10 +347,11 @@ export function PageIndexItem({
 }) {
   const cls = styles[variant];
   const refs = pageSourceRefs(page);
+  const sourcedSections = sourcedSectionCount(page);
   return (
     <Link
       href={`/h/${manifest.subdomain}/${page.slug}`}
-      className={`block rounded-lg border p-4 ${cls.card}`}
+      className={`block rounded-xl border p-4 sm:p-5 ${cls.card}`}
       aria-label={`${page.title} — ${readMinutes(page)} min read`}
     >
       <div className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.muted}`}>
@@ -337,15 +367,18 @@ export function PageIndexItem({
       >
         {page.title}
       </h3>
-      {!compact && page.summary && (
-        // R2: line-clamp for long summaries in dense lists
-        <p className={`mt-2 line-clamp-3 max-w-prose text-[13px] leading-[1.65] ${cls.body}`}>
-          {page.summary}
+      {!compact && pageLead(page) && (
+        <p className={`mt-2 line-clamp-3 max-w-prose text-[13px] leading-[1.7] ${cls.body}`}>
+          {pageLead(page)}
         </p>
       )}
-      <div className="mt-3.5 flex flex-wrap items-center gap-2">
+      {compact && page.summary && (
+        <p className={`mt-2 line-clamp-2 text-[12px] leading-[1.65] ${cls.body}`}>{page.summary}</p>
+      )}
+      <div className="mt-3.5 flex flex-wrap items-center gap-2 gap-y-1.5">
         <SupportLabel sourceCount={refs.length} variant={variant} />
         <span className={`text-[11px] ${cls.muted}`}>{refs.length} moments</span>
+        <span className={`text-[11px] ${cls.muted}`}>{sourcedSections} sourced sections</span>
       </div>
     </Link>
   );
@@ -355,18 +388,20 @@ export function PageIndexItem({
 export function TemplateEmptyState({
   variant,
   message,
+  label = 'Published state',
 }: {
   variant: TemplateVariant;
   message: string;
+  label?: string;
 }) {
   const cls = styles[variant];
   return (
     <div
       role="status"
-      className={`rounded-lg border px-5 py-8 text-center text-[13px] leading-relaxed ${cls.soft} ${cls.muted}`}
+      className={`rounded-2xl border px-5 py-7 text-center text-[13px] leading-relaxed sm:px-6 ${cls.soft} ${cls.muted}`}
     >
-      <span className="block text-[10px] font-semibold uppercase tracking-[0.1em] mb-2 opacity-60">
-        Note
+      <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
+        {label}
       </span>
       {message}
     </div>
@@ -415,6 +450,9 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
     (sum, p) => sum + pageSourceRefs(p).length,
     0,
   );
+  const sourcedPages = manifest.pages.filter((page) => pageSourceRefs(page).length > 0).length;
+  const publishedLabel = formatCalendarDate(release.liveAt, 'short') ?? 'Live';
+  const updatedLabel = formatCalendarDate(manifest.generatedAt, 'long');
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
@@ -448,23 +486,40 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
         <h1 className="mt-4 max-w-[820px] [text-wrap:balance] font-serif text-[36px] leading-[1.06] tracking-[-0.03em] sm:text-[48px] md:text-[60px] lg:text-[68px]">
           {manifest.title}
         </h1>
-        <p className={`mt-5 max-w-[640px] text-[15px] leading-[1.7] sm:text-[16px] ${cls.body}`}>
+        <p className={`mt-5 max-w-[640px] text-[15px] leading-[1.78] sm:text-[16px] ${cls.body}`}>
           {overview.summary ?? 'A source-linked subject atlas generated from the creator archive.'}
         </p>
+        <div className={`mt-8 max-w-[320px] rounded-2xl border p-5 sm:p-6 ${cls.panel}`}>
+          <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}>
+            Reading note
+          </div>
+          <p className="mt-3 font-serif text-[18px] leading-[1.45] tracking-[-0.01em]">
+            {sourcedPages} of {manifest.pages.length} pages already carry linked source moments.
+          </p>
+          <div className={`mt-4 border-t ${cls.rule}`} />
+          <dl className={`mt-4 space-y-2.5 text-[12px] ${cls.muted}`}>
+            <div className="flex justify-between gap-4">
+              <dt>Published</dt>
+              <dd className="text-right text-ink">{publishedLabel}</dd>
+            </div>
+            {updatedLabel && (
+              <div className="flex justify-between gap-4">
+                <dt>Manifest</dt>
+                <dd className="text-right text-ink">{updatedLabel}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
         {/* Stats strip — R2: 2-col on mobile, 4-col on md */}
         <dl className={`mt-8 grid gap-px border-y md:mt-10 ${cls.rule}`}>
           <div className={`grid grid-cols-2 gap-px md:grid-cols-4 ${cls.rule}`}>
             {[
               { label: 'Pages', value: manifest.pages.length },
               { label: 'Source moments', value: totalSources },
-              { label: 'Format', value: 'Subject atlas' },
+              { label: 'Sourced pages', value: sourcedPages },
               {
                 label: 'Published',
-                value: release.liveAt?.toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                }) ?? 'Live',
+                value: publishedLabel,
               },
             ].map(({ label, value }) => (
               <div key={label} className="bg-paper px-4 py-3 sm:px-5 sm:py-4">
@@ -502,8 +557,8 @@ function EditorialAtlasHome({ manifest, release }: HubHomeProps) {
               <h2 className="[text-wrap:balance] font-serif text-[20px] leading-[1.25] tracking-[-0.01em] sm:text-[22px]">
                 {overview.title}
               </h2>
-              <p className={`mt-3 max-w-[640px] text-[14px] leading-[1.75] ${cls.body}`}>
-                {firstSection(overview)?.body ?? overview.summary}
+              <p className={`mt-3 max-w-[640px] text-[14px] leading-[1.82] ${cls.body}`}>
+                {pageLead(overview)}
               </p>
               <Link
                 href={`/h/${manifest.subdomain}/${overview.slug}`}
@@ -643,32 +698,43 @@ function EditorialAtlasDetail({ manifest, page }: HubDetailProps) {
             <span className={`text-[12px] ${cls.muted}`}>{refs.length} source moments</span>
           </div>
 
-          <div className="mt-8 space-y-10">
+          <div className="mt-8 space-y-6 sm:space-y-8">
             {sections.length > 0 ? (
-              sections.map((block) => {
+              sections.map((block, index) => {
                 const content = sectionContent(block);
                 return (
-                  <section key={block.id}>
-                    {/* R2: text-balance on section headings */}
-                    <h2 className="[text-wrap:balance] font-serif text-[20px] leading-[1.3] tracking-[-0.01em]">
+                  <section key={block.id} className={`rounded-2xl border p-5 sm:p-6 ${cls.panel}`}>
+                    <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
+                      Section {(index + 1).toString().padStart(2, '0')}
+                    </div>
+                    <h2 className="mt-2 [text-wrap:balance] font-serif text-[20px] leading-[1.3] tracking-[-0.01em]">
                       {content.heading ?? 'Untitled section'}
                     </h2>
                     <p
-                      className={`mt-3 max-w-[65ch] text-[15px] leading-[1.78] ${cls.body}`}
+                      className={`mt-3 max-w-[65ch] text-[15px] leading-[1.82] ${cls.body}`}
                     >
                       {content.body ?? 'No section body was generated.'}
                     </p>
-                    {(content.sourceRefs ?? []).slice(0, 1).map((ref) => (
-                      <div key={ref.segmentId} className="mt-5">
-                        <SourceMomentCard source={ref} variant="paper" />
+                    {(content.sourceRefs ?? []).length > 0 ? (
+                      <div className="mt-5">
+                        <SourceMomentCard source={(content.sourceRefs ?? [])[0]!} variant="paper" />
                       </div>
-                    ))}
+                    ) : (
+                      <div className="mt-5">
+                        <TemplateEmptyState
+                          variant="paper"
+                          label="Source status"
+                          message="This section reads cleanly, but no source moment is linked to it yet."
+                        />
+                      </div>
+                    )}
                   </section>
                 );
               })
             ) : (
               <TemplateEmptyState
                 variant="paper"
+                label="Page structure"
                 message="This published page does not contain generated sections."
               />
             )}
@@ -694,6 +760,8 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
     (sum, p) => sum + pageSourceRefs(p).length,
     0,
   );
+  const sourcedPages = manifest.pages.filter((page) => pageSourceRefs(page).length > 0).length;
+  const publishedLabel = formatCalendarDate(release.liveAt, 'short') ?? 'Live';
   // R2: mobile sidebar toggle
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -759,7 +827,7 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
           {/* Hero card */}
           <div className={`rounded-2xl border p-5 sm:p-6 md:p-10 ${cls.panel}`}>
             <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
-              Command center &middot; {release.liveAt?.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) ?? 'Live'}
+              Command center &middot; {publishedLabel}
             </div>
             {/* R2: text-balance + responsive scale */}
             <h2 className="mt-4 max-w-[700px] [text-wrap:balance] font-serif text-[28px] leading-[1.06] tracking-[-0.02em] sm:text-[38px] md:text-[52px]">
@@ -774,12 +842,20 @@ function PlaybookOsHome({ manifest, release }: HubHomeProps) {
             >
               Open first module
             </Link>
+            <div className={`mt-6 rounded-xl border px-4 py-3 sm:mt-7 ${cls.soft}`}>
+              <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}>
+                Signal
+              </div>
+              <p className="mt-2 max-w-[52ch] text-[13px] leading-[1.65] text-[#d9e4de]">
+                {sourcedPages} of {manifest.pages.length} modules already expose source-linked moments for verification.
+              </p>
+            </div>
             {/* Stats row — R2: 2-col on mobile, 3-col on sm */}
             <dl className="mt-6 grid grid-cols-2 gap-2.5 sm:mt-8 sm:grid-cols-3 sm:gap-3">
               {[
                 { label: 'Modules', value: manifest.pages.length },
                 { label: 'Source moments', value: totalSources },
-                { label: 'Mode', value: 'Read-only' },
+                { label: 'Sourced modules', value: sourcedPages },
               ].map(({ label, value }) => (
                 <div key={label} className={`rounded-lg border px-3 py-2.5 sm:px-4 sm:py-3 ${cls.soft}`}>
                   <dt className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${cls.muted}`}>
@@ -903,13 +979,19 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
                 const content = sectionContent(block);
                 return (
                   <section key={block.id} className={`rounded-xl border p-4 sm:p-5 ${cls.soft}`}>
-                    <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
-                      Step {(index + 1).toString().padStart(2, '0')}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${cls.accent}`}>
+                          Step {(index + 1).toString().padStart(2, '0')}
+                        </div>
+                        <h2 className="mt-2 [text-wrap:balance] text-[15px] font-semibold leading-[1.3] tracking-[-0.005em] sm:text-[16px]">
+                          {content.heading ?? 'Untitled section'}
+                        </h2>
+                      </div>
+                      <span className={`shrink-0 rounded-full border border-current/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${cls.muted}`}>
+                        {(content.sourceRefs ?? []).length} moments
+                      </span>
                     </div>
-                    {/* R2: text-balance on section headings */}
-                    <h2 className="mt-2 [text-wrap:balance] text-[15px] font-semibold leading-[1.3] tracking-[-0.005em] sm:text-[16px]">
-                      {content.heading ?? 'Untitled section'}
-                    </h2>
                     <p className={`mt-3 max-w-[60ch] text-[13px] leading-[1.72] sm:text-[14px] ${cls.body}`}>
                       {content.body ?? 'No section body was generated.'}
                     </p>
@@ -923,7 +1005,8 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
                       <div className="mt-3 sm:mt-4">
                         <TemplateEmptyState
                           variant="midnight"
-                          message="Limited source support for this block."
+                          label="Evidence status"
+                          message="This step is published, but it does not yet expose a linked source moment."
                         />
                       </div>
                     )}
@@ -933,6 +1016,7 @@ function PlaybookOsDetail({ manifest, page }: HubDetailProps) {
             ) : (
               <TemplateEmptyState
                 variant="midnight"
+                label="Module structure"
                 message="This published page does not contain generated sections."
               />
             )}
@@ -959,6 +1043,8 @@ function StudioVaultHome({ manifest, release }: HubHomeProps) {
     (sum, p) => sum + pageSourceRefs(p).length,
     0,
   );
+  const sourcedPages = manifest.pages.filter((page) => pageSourceRefs(page).length > 0).length;
+  const publishedLabel = formatCalendarDate(release.liveAt, 'long') ?? 'Live';
 
   return (
     <div className={`min-h-screen ${cls.page}`}>
@@ -990,16 +1076,16 @@ function StudioVaultHome({ manifest, release }: HubHomeProps) {
         <p className={`mt-5 max-w-[600px] text-[15px] leading-[1.75] sm:text-[16px] ${cls.body}`}>
           {overview.summary ?? 'A warm source-forward vault generated from the creator archive.'}
         </p>
+        <p className={`mt-3 text-[12px] ${cls.muted}`}>Published {publishedLabel}</p>
 
         {/* Archive note card */}
         <div className={`mt-8 rounded-2xl border p-5 sm:p-6 md:p-8 ${cls.panel}`}>
           <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${cls.muted}`}>
             Archive note
           </div>
-          <p className={`mt-3 max-w-[680px] font-serif text-[16px] italic leading-[1.65] sm:text-[17px] ${cls.body}`}>
-            This preview contains {manifest.pages.length} generated pages and{' '}
-            {totalSources} source moments. Built as a read-only knowledge vault from the creator
-            archive.
+          <p className={`mt-3 max-w-[680px] font-serif text-[16px] italic leading-[1.72] sm:text-[17px] ${cls.body}`}>
+            This preview contains {manifest.pages.length} generated pages, {totalSources} source
+            moments, and {sourcedPages} pages with linked evidence already in place.
           </p>
           <p className={`mt-4 text-[12px] ${cls.muted}`}>
             Published{' '}
@@ -1096,6 +1182,10 @@ function StudioVaultDetail({ manifest, page }: HubDetailProps) {
                 <dt className={cls.muted}>Source moments</dt>
                 <dd className="font-semibold">{refs.length}</dd>
               </div>
+              <div className="flex justify-between gap-4">
+                <dt className={cls.muted}>Sourced sections</dt>
+                <dd className="font-semibold">{sourcedSectionCount(page)}</dd>
+              </div>
             </dl>
             <div className="mt-4">
               <SupportLabel sourceCount={refs.length} variant="field" />
@@ -1128,7 +1218,8 @@ function StudioVaultDetail({ manifest, page }: HubDetailProps) {
                       <div className="mt-4 sm:mt-5">
                         <TemplateEmptyState
                           variant="field"
-                          message="Limited source support for this section."
+                          label="Evidence status"
+                          message="This section is published without a linked source moment yet."
                         />
                       </div>
                     )}
@@ -1138,6 +1229,7 @@ function StudioVaultDetail({ manifest, page }: HubDetailProps) {
             ) : (
               <TemplateEmptyState
                 variant="field"
+                label="Page structure"
                 message="This published page does not contain generated sections."
               />
             )}

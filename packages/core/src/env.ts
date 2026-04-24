@@ -43,12 +43,17 @@ export const serverEnvSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   SENTRY_DSN: z.string().url().optional(),
 
-  TRIGGER_SECRET_KEY: z.string().min(1),
+  TRIGGER_SECRET_KEY: z.string().min(1).optional(),
+  TRIGGER_PROJECT_ID: z.string().min(1).optional(),
   TRIGGER_API_URL: z.string().url().optional(),
+
+  AUDIO_EXTRACTION_YTDLP_BIN: z.string().min(1).optional(),
+  AUDIO_EXTRACTION_FFMPEG_BIN: z.string().min(1).optional(),
+  AUDIO_EXTRACTION_CHALLENGE_RUNTIME_BIN: z.string().min(1).optional(),
 
   PIPELINE_DRAFT_SYNTH: z.enum(['deterministic', 'llm']).default('deterministic'),
   PIPELINE_REVIEW_SYNTH: z.enum(['deterministic', 'llm']).default('deterministic'),
-  PIPELINE_DISPATCH_MODE: z.enum(['inprocess', 'trigger']).default('inprocess'),
+  PIPELINE_DISPATCH_MODE: z.enum(['inprocess', 'trigger', 'worker']).default('inprocess'),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

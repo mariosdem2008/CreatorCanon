@@ -20,8 +20,9 @@ export interface SegmentTranscriptsOutput {
   totalSegments: number;
 }
 
-const TARGET_SEGMENT_MS = 5 * 60 * 1000;
-const MIN_SEGMENT_MS = 60 * 1000;
+const TARGET_SEGMENT_MS = 30 * 1000;
+const MIN_SEGMENT_MS = 8 * 1000;
+const MAX_SEGMENT_MS = 60 * 1000;
 
 interface Sentence {
   startMs: number;
@@ -47,8 +48,9 @@ function buildSegments(
   for (const sentence of sentences) {
     buffer.push(sentence);
     const duration = sentence.endMs - bufferStart;
+    const endsAtBoundary = /[.!?](\s*["'])?$/.test(sentence.text.trim());
 
-    if (duration >= TARGET_SEGMENT_MS) {
+    if (duration >= MAX_SEGMENT_MS || (duration >= TARGET_SEGMENT_MS && endsAtBoundary)) {
       const text = buffer.map((s) => s.text).join(' ');
       segs.push({ startMs: bufferStart, endMs: sentence.endMs, text });
       buffer = [];
