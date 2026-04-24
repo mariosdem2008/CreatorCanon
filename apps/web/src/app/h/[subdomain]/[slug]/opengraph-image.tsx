@@ -3,7 +3,10 @@ import { ImageResponse } from 'next/og';
 import { loadHubManifest } from '../manifest';
 import { normalizeHubTemplateId } from '@/components/hub/templates';
 
-export const runtime = 'edge';
+// Node runtime: loadHubManifest imports @creatorcanon/adapters whose barrel
+// exports googleapis / google-auth-library — these require node:net/http/https
+// which are unavailable in Vercel's edge runtime.
+export const runtime = 'nodejs';
 export const alt = 'CreatorCanon hub page';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
