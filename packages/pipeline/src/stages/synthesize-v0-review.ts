@@ -8,7 +8,14 @@ import {
   type V0ReviewStageOutput,
   v0ReviewArtifactSchema,
 } from '../contracts/artifacts';
+import { recordCost } from '../cost-ledger-write';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
+
+// gpt-4o-mini pricing as of 2025: $0.15 / 1M input tokens, $0.60 / 1M output.
+// Convert to USD cents: input = tokens * 0.000015; output = tokens * 0.00006.
+function gpt4oMiniCostCents(inputTokens: number, outputTokens: number): number {
+  return inputTokens * 0.000015 + outputTokens * 0.00006;
+}
 
 export interface SynthesizeV0ReviewInput {
   runId: string;
@@ -142,6 +149,8 @@ interface LlmReviewVideoInput {
 async function generateLlmReview(args: {
   videos: LlmReviewVideoInput[];
   openai: OpenAIClient;
+  runId: string;
+  workspaceId: string;
 }): Promise<LlmReview | null> {
   const corpus = args.videos
     .map((video, idx) => {
@@ -181,6 +190,19 @@ async function generateLlmReview(args: {
         schema: llmReviewJsonSchema as unknown as Record<string, unknown>,
         strict: true,
       },
+    });
+    await recordCost({
+      runId: args.runId,
+      workspaceId: args.workspaceId,
+      stageName: 'synthesize_v0_review',
+      provider: 'openai',
+      model: completion.model ?? 'gpt-4o-mini',
+      inputTokens: completion.usage?.promptTokens ?? null,
+      outputTokens: completion.usage?.completionTokens ?? null,
+      costCents: gpt4oMiniCostCents(
+        completion.usage?.promptTokens ?? 0,
+        completion.usage?.completionTokens ?? 0,
+      ),
     });
     if (!completion.content) return null;
     const parsed = llmReviewSchema.safeParse(JSON.parse(completion.content));
@@ -247,6 +269,8 @@ export async function synthesizeV0Review(
         segmentTexts: video.segmentTexts,
       })),
       openai: createOpenAIClient(env),
+      runId: input.runId,
+      workspaceId: input.workspaceId,
     });
     if (llmReview) {
       archiveSummary = llmReview.archiveSummary;

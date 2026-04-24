@@ -21,6 +21,12 @@ import {
   v0ReviewArtifactSchema,
   v0ReviewStageOutputSchema,
 } from '../contracts';
+import { recordCost } from '../cost-ledger-write';
+
+// gpt-4o-mini pricing: $0.15 / 1M input tokens, $0.60 / 1M output.
+function gpt4oMiniCostCents(inputTokens: number, outputTokens: number): number {
+  return inputTokens * 0.000015 + outputTokens * 0.00006;
+}
 
 export interface DraftPagesV0Config {
   tone?: string | null;
@@ -382,6 +388,8 @@ async function generateLlmPage(args: {
   config: DraftPagesV0Config;
   segmentContext: PageSegmentContext[];
   openai: OpenAIClient;
+  runId: string;
+  workspaceId: string;
 }): Promise<DraftPagesV0Page | null> {
   if (args.segmentContext.length === 0) return null;
 
@@ -407,6 +415,21 @@ async function generateLlmPage(args: {
       },
     });
 
+    await recordCost({
+      runId: args.runId,
+      workspaceId: args.workspaceId,
+      stageName: 'draft_pages_v0',
+      provider: 'openai',
+      model: completion.model ?? 'gpt-4o-mini',
+      inputTokens: completion.usage?.promptTokens ?? null,
+      outputTokens: completion.usage?.completionTokens ?? null,
+      costCents: gpt4oMiniCostCents(
+        completion.usage?.promptTokens ?? 0,
+        completion.usage?.completionTokens ?? 0,
+      ),
+      metadata: { pageSlug: args.skeleton.slug },
+    });
+
     if (!completion.content) return null;
     const parsedJson = JSON.parse(completion.content) as unknown;
     const parsed = llmPageSchema.safeParse(parsedJson);
@@ -426,6 +449,8 @@ async function buildLlmPages(args: {
   config: DraftPagesV0Config;
   refsByVideo: SourceRefByVideo;
   openai: OpenAIClient;
+  runId: string;
+  workspaceId: string;
 }): Promise<DraftPagesV0Page[]> {
   const result: DraftPagesV0Page[] = [];
   for (const skeleton of args.skeleton) {
@@ -435,6 +460,8 @@ async function buildLlmPages(args: {
       config: args.config,
       segmentContext,
       openai: args.openai,
+      runId: args.runId,
+      workspaceId: args.workspaceId,
     });
     result.push(llmPage ?? skeleton);
   }
@@ -757,6 +784,8 @@ export async function draftPagesV0(
         config: input.config!,
         refsByVideo,
         openai: createOpenAIClient(env),
+        runId: input.runId,
+        workspaceId: input.workspaceId,
       })
     : skeleton;
 

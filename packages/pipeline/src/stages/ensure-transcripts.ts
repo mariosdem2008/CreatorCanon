@@ -9,6 +9,7 @@ import {
 } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import { extractVideoAudioAssets } from '../audio-extraction';
+import { recordCost } from '../cost-ledger-write';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
 
 const FORCE_SSL_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
@@ -477,6 +478,18 @@ export async function ensureTranscripts(
             bytes: audioObject.body,
             filename: `${vid.id}.m4a`,
             language: 'en',
+          });
+          // Cost log — whisper-1 priced $0.006 per minute as of 2025.
+          // 0.006 USD/min = 0.6 cents/min, so costCents = seconds / 60 * 0.6.
+          await recordCost({
+            runId: input.runId,
+            workspaceId: input.workspaceId,
+            stageName: 'ensure_transcripts',
+            provider: 'openai',
+            model: 'whisper-1',
+            inputSecondsVideo: transcript.durationSeconds ?? null,
+            costCents: ((transcript.durationSeconds ?? 0) / 60) * 0.6,
+            metadata: { videoId: vid.id, via: 'audio_fallback' },
           });
           vttContent = transcriptToVtt(transcript);
           chosenLang = transcript.language ?? 'en';
