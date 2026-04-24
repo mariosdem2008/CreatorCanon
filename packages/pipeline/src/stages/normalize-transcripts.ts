@@ -3,6 +3,9 @@ import { normalizedTranscriptVersion, transcriptAsset } from '@creatorcanon/db/s
 import { createR2Client, artifactKey } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import type { TranscriptResult } from './ensure-transcripts';
+import { splitSegment } from '../segment-splitter';
+
+const SENTENCE_MAX_DURATION_MS = 12_000;
 
 export interface NormalizeTranscriptsInput {
   runId: string;
@@ -201,6 +204,7 @@ export async function normalizeTranscripts(
       .map((s) => ({ ...s, text: cleanText(s.text) }))
       .filter((s) => s.text)
       .flatMap(splitCoarseSentence)
+      .flatMap((s) => splitSegment(s, { maxDurationMs: SENTENCE_MAX_DURATION_MS }))
       .map((s) => ({ ...s, text: cleanText(s.text) }))
       .filter((s) => s.text);
 
