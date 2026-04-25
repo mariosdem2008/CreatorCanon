@@ -104,3 +104,54 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    name: e2e (prod smokes)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: SaaS
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: SaaS/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @creatorcanon/web exec playwright install --with-deps chromium
+
+      # Runs against creatorcanon-saas.vercel.app — only the prod-compatible
+      # specs (no dev-bypass sign-in, no local DB writes). Task 9's
+      # edit-then-publish spec is gated behind a sign-in and stays excluded
+      # here; CI will pick it up when we add an authenticated-prod harness.
+      - name: Run prod-safe specs against creatorcanon-saas.vercel.app
+        env:
+          E2E_EXTERNAL: 'true'
+          E2E_BASE_URL: 'https://creatorcanon-saas.vercel.app'
+        run: |
+          pnpm --filter @creatorcanon/web exec playwright test \
+            --grep "Request access page accepts an email|Public /pricing renders single-tier copy"
+
+      - name: Upload Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: SaaS/apps/web/test-results/
+          retention-days: 7

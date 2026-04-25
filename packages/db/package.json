@@ -14,7 +14,7 @@
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'db: no tests yet'",
+    "test": "node --import \"../../node_modules/.pnpm/tsx@4.19.1/node_modules/tsx/dist/loader.mjs\" --test src/*.test.ts",
     "build": "echo 'db: source-only, no build'",
     "generate": "drizzle-kit generate",
     "migrate": "tsx ./src/migrate.ts",

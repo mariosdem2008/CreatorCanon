@@ -14,7 +14,7 @@
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'pipeline: no tests yet'",
+    "test": "node --import \"../../node_modules/.pnpm/tsx@4.19.1/node_modules/tsx/dist/loader.mjs\" --test src/*.test.ts",
     "build": "echo 'pipeline: source-only, no build'",
     "env:doctor": "tsx ./src/env-doctor.ts",
     "smoke:alpha": "tsx ./src/smoke-alpha.ts",
