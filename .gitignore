@@ -49,9 +49,6 @@ Thumbs.db
 # Trigger.dev
 .trigger/
 
-# Drizzle
-drizzle/out/
-
 # Playwright
 playwright-report/
 test-results/
