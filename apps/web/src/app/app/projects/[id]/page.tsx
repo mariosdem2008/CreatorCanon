@@ -18,6 +18,7 @@ import { CopyUrlButton } from './CopyUrlButton';
 import { LiveRefresh } from './LiveRefresh';
 import { PublishButton } from './PublishButton';
 import { RefreshButton } from './RefreshButton';
+import { StalledRunBanner } from './StalledRunBanner';
 import { publishCurrentRun } from './publish';
 
 export const dynamic = 'force-dynamic';
@@ -186,6 +187,20 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   return (
     <main className="min-h-screen bg-paper-studio">
       {isActive && <LiveRefresh intervalMs={5000} />}
+      {isActive && run && (
+        <StalledRunBanner
+          runCreatedAtIso={new Date(run.createdAt).toISOString()}
+          lastStageUpdateAtIso={
+            stageRuns.length > 0
+              ? new Date(
+                  stageRuns[stageRuns.length - 1]!.updatedAt ??
+                    stageRuns[stageRuns.length - 1]!.createdAt,
+                ).toISOString()
+              : null
+          }
+          runStatus={run.status === 'queued' ? 'queued' : 'running'}
+        />
+      )}
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-rule-dark bg-paper px-4 py-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
