@@ -113,7 +113,22 @@ If any of those fail, stop and resolve before starting Task 1.
 
 ---
 
-### Task 1: Validate the full hosted chain on an audio-seeded fixture
+### Task 1: Validate the full hosted chain on an audio-seeded fixture ✅ DONE 2026-04-25
+
+**Validation evidence (Step 10 record):**
+- `validationProjectId`: `17d34099-9ff4-4674-8b7c-9293fcce8151`
+- `validationRunId`: `d9338745-7863-463b-bbc0-0728ee59fbab`
+- `paymentIntentId`: `pi_3TPoI4PQQMTo0Wkr0bSUhAF1`
+- `triggerRunId` (worker dispatch that completed): `run_cmoe04xah6h2i0iobgt6slakh` on worker `v20260424.9`
+- Pipeline stages: 6/6 done, risk 0, "1 page persisted from the current run"
+- Final status: `awaiting_review` (UI: "Draft ready")
+- `costLedgerRowCount`: not verified (local Neon ECONNRESET; deferred)
+- `emailArrived`: not yet (Resend not configured for this validation)
+- `hubSubdomain`: not yet (Publish step deferred to Task 9 spec)
+- Duration from payment to awaiting_review: ~14 hours (because Task 2 surfaced 3 cascading bugs that needed fixes, see commit `70ab27e`); the working chain itself completes the run in 3.4 s once the worker boots cleanly.
+- 3 deps cascade-fixed under Task 2 below.
+
+
 
 **Purpose:** Prove that a real Stripe test-card payment triggers the Vercel webhook, which triggers the Trigger.dev v4 `extract-run-audio` task, which chains to `run-pipeline`, which completes all 6 pipeline stages and lands the run at `awaiting_review`. This has never been tested end-to-end on hosted.
 
@@ -356,7 +371,26 @@ That record is the only artifact of Task 1. It's the "we shipped end-to-end once
 
 ---
 
-### Task 2 (CONDITIONAL): Diagnose Trigger.dev v4 task-API breakage
+### Task 2 (CONDITIONAL): Diagnose Trigger.dev v4 task-API breakage ✅ DONE 2026-04-25
+
+**Outcome:** Three cascading bugs fixed (see commit `70ab27e` for the code change; the other two were runtime config). Plan was right that something was wrong; the actual classification didn't match Class A/B/C — it was misconfiguration on three layers.
+
+| # | Bug | Fix | Where |
+| - | --- | --- | ----- |
+| 1 | Vercel prod env had `TRIGGER_SECRET_KEY=tr_dev_…`, dispatching to the dev Trigger env (which had no machine attached) | Patched to `tr_prod_sTJlsj4HSzmWeMEorsqj` via Vercel REST API; redeployed prod | Vercel env vars |
+| 2 | Default `small-1x` (512 MB) machine OOM'd at module-init (V8 heap limit) | Added `machine: 'medium-1x'` to `run-pipeline` and `extract-run-audio` | code (this commit) |
+| 3 | Trigger.dev prod env had **zero** env vars set, so `parseServerEnv` threw at module-init | Bulk-pushed 21 env vars (DATABASE_URL, R2_*, OPENAI/GEMINI, AUTH_*, STRIPE_*, REDIS_URL, YOUTUBE_OAUTH_*, NODE_ENV=production) via Trigger Management API | Trigger.dev cloud env |
+
+Re-validated end-to-end on Trigger run `run_cmoe04xah6h2i0iobgt6slakh` (status COMPLETED, durationMs=3417). Generation_run row `d9338745-7863-463b-bbc0-0728ee59fbab` reached `awaiting_review` with all 6 stages done.
+
+**Followups noted, deliberately not done in this sprint** (so Task 1 stays unblocked and we don't bleed scope):
+- `parseServerEnv` should be split into `webOnlyServerEnv` (AUTH_*, STRIPE_WEBHOOK_SECRET, NEXT_PUBLIC_*) and `pipelineServerEnv` (DATABASE_URL, R2_*, OPENAI_API_KEY, etc). The worker shouldn't need `STRIPE_WEBHOOK_SECRET`. Would let us drop ~9 env vars from the Trigger.dev prod env.
+- The Trigger.dev env-set step belongs in `apps/worker/scripts/sync-prod-env.ts` so future env additions are deterministic.
+- Vercel + Trigger.dev env vars should both be pulled from a single `.env.prod.encrypted` so we never end up with `tr_dev_*` in prod again.
+
+---
+
+**ORIGINAL PLAN BELOW** (kept for reference; mostly skipped because the actual class of failure differed):
 
 **SKIP THIS TASK IF TASK 1 PASSED.**
 
