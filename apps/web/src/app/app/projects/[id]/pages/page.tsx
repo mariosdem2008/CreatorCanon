@@ -441,7 +441,11 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
           }, 0);
 
           return (
-            <article key={item.id} className="overflow-hidden rounded-xl border border-rule bg-paper">
+            <article
+              key={item.id}
+              data-testid="page-version-block"
+              className="overflow-hidden rounded-xl border border-rule bg-paper"
+            >
               {/* Page header */}
               <div className="flex items-start justify-between gap-3 border-b border-rule bg-paper-2 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
                 <div className="min-w-0">
