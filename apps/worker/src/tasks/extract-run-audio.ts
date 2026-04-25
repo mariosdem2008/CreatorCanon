@@ -8,6 +8,10 @@ import {
 export const extractRunAudioTask = task({
   id: 'extract-run-audio',
   maxDuration: 3600,
+  // Default small-1x (512 MB) will OOM when ffmpeg / yt-dlp are in the same
+  // process group as the pipeline bootstrap. Match run-pipeline at medium-1x
+  // (2 GB). If we ever extract long videos we'll bump to large-1x.
+  machine: 'medium-1x',
   run: async (payload: ExtractAlphaAudioInput) => {
     logger.info('Audio extraction starting', {
       runId: payload.runId,
