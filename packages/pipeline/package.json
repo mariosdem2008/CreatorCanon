@@ -36,6 +36,7 @@
   "dependencies": {
     "@creatorcanon/adapters": "workspace:*",
     "@creatorcanon/core": "workspace:*",
+    "@creatorcanon/cost-ledger": "workspace:*",
     "@creatorcanon/db": "workspace:*",
     "zod": "3.23.8"
   },

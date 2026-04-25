@@ -8,7 +8,7 @@ import {
   type V0ReviewStageOutput,
   v0ReviewArtifactSchema,
 } from '../contracts/artifacts';
-import { recordCost } from '../cost-ledger-write';
+import { recordCost } from '@creatorcanon/cost-ledger';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
 
 // gpt-4o-mini pricing as of 2025: $0.15 / 1M input tokens, $0.60 / 1M output.

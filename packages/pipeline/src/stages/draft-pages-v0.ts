@@ -21,7 +21,7 @@ import {
   v0ReviewArtifactSchema,
   v0ReviewStageOutputSchema,
 } from '../contracts';
-import { recordCost } from '../cost-ledger-write';
+import { recordCost } from '@creatorcanon/cost-ledger';
 
 // gpt-4o-mini pricing: $0.15 / 1M input tokens, $0.60 / 1M output.
 function gpt4oMiniCostCents(inputTokens: number, outputTokens: number): number {

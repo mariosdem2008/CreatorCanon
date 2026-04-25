@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { buildCostRow } from './cost-ledger-write';
+import { buildCostRow } from './index';
 
 test('buildCostRow populates required fields', () => {
   const row = buildCostRow({

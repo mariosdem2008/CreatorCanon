@@ -326,6 +326,9 @@ importers:
       '@creatorcanon/core':
         specifier: workspace:*
         version: link:../core
+      '@creatorcanon/cost-ledger':
+        specifier: workspace:*
+        version: link:../cost-ledger
       '@creatorcanon/db':
         specifier: workspace:*
         version: link:../db

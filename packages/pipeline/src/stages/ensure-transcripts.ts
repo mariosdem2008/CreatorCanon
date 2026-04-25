@@ -9,7 +9,7 @@ import {
 } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import { extractVideoAudioAssets } from '../audio-extraction';
-import { recordCost } from '../cost-ledger-write';
+import { recordCost } from '@creatorcanon/cost-ledger';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
 
 const FORCE_SSL_SCOPE = 'https://www.googleapis.com/auth/youtube.force-ssl';
