@@ -47,6 +47,32 @@ describe('searchSegments BM25', () => {
     assert.ok(out.length <= 50);
   });
 
+  it('clamps negative topK to 1 (does not crash Postgres)', async () => {
+    const out = await searchSegmentsTool.handler({ query: 'focus', topK: -5 }, makeCtx(seed));
+    // -5 should be clamped to 1, returning at most one match.
+    assert.ok(out.length >= 0 && out.length <= 1);
+  });
+
+  it('returns [] on tsquery syntax error (does not throw)', async () => {
+    // Stub the db.execute on this ctx to throw a PostgresError with code 22P02.
+    const ctx = makeCtx(seed);
+    const realExecute = ctx.db.execute.bind(ctx.db);
+    let throwCount = 0;
+    ctx.db.execute = (async (...args: unknown[]) => {
+      throwCount++;
+      const err = new Error('mocked tsquery syntax error') as Error & { code: string };
+      err.code = '22P02';
+      throw err;
+    }) as typeof ctx.db.execute;
+    try {
+      const out = await searchSegmentsTool.handler({ query: 'focus pomodoro' }, ctx);
+      assert.deepEqual(out, []);
+      assert.equal(throwCount, 1);
+    } finally {
+      ctx.db.execute = realExecute;
+    }
+  });
+
   it('does not return segments from other workspaces', async () => {
     // Seed a SECOND fully-isolated graph with the same query string.
     const otherSeed = await seedTestRun({

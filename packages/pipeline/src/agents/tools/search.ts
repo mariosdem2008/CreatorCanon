@@ -37,14 +37,14 @@ export const searchSegmentsTool: ToolDef<
   }).strict(),
   output: z.array(matchSchema),
   handler: async ({ query, videoIds, topK }, ctx) => {
-    const k = Math.min(topK ?? 20, 50);
+    const k = Math.max(1, Math.min(topK ?? 20, 50));
     const tokens = tokenize(query);
     if (tokens.length === 0) return [];
 
     // tsquery: every token as a prefix-match, AND-combined.
-    // Tokens come from a regex-filtered tokenizer (a-z0-9 only, with stop-words
-    // removed), so they are safe to interpolate as a string. Drizzle still
-    // parameterises the resulting tsQuery string via the bind below.
+    // The `${tsQuery}` expression below produces a Drizzle bind parameter, not inline SQL.
+    // The regex tokenizer is a quality filter, not a security boundary — DO NOT switch
+    // to `sql.raw(tsQuery)` thinking the tokenizer is sufficient protection.
     const tsQuery = tokens.map((t) => `${t}:*`).join(' & ');
 
     const hasVideoFilter = videoIds && videoIds.length > 0;
@@ -56,22 +56,34 @@ export const searchSegmentsTool: ToolDef<
       ? sql`AND video_id IN (${sql.join(videoIds!.map((id) => sql`${id}`), sql`, `)})`
       : sql``;
 
-    const result = await ctx.db.execute(sql`
-      SELECT
-        id,
-        video_id,
-        start_ms,
-        end_ms,
-        text,
-        ts_rank(to_tsvector('english', text), to_tsquery('english', ${tsQuery})) AS score
-      FROM segment
-      WHERE run_id = ${ctx.runId}
-        AND workspace_id = ${ctx.workspaceId}
-        ${videoFilterClause}
-        AND to_tsvector('english', text) @@ to_tsquery('english', ${tsQuery})
-      ORDER BY score DESC
-      LIMIT ${k}
-    `);
+    let result;
+    try {
+      result = await ctx.db.execute(sql`
+        SELECT
+          id,
+          video_id,
+          start_ms,
+          end_ms,
+          text,
+          ts_rank(to_tsvector('english', text), to_tsquery('english', ${tsQuery})) AS score
+        FROM segment
+        WHERE run_id = ${ctx.runId}
+          AND workspace_id = ${ctx.workspaceId}
+          ${videoFilterClause}
+          AND to_tsvector('english', text) @@ to_tsquery('english', ${tsQuery})
+        ORDER BY score DESC
+        LIMIT ${k}
+      `);
+    } catch (err) {
+      // Postgres tsquery syntax errors should yield empty results, not crash the agent.
+      // Codes: 22P02 invalid_text_representation, 42601 syntax_error.
+      const code = (err as { code?: string }).code;
+      if (code === '22P02' || code === '42601') {
+        console.warn(`searchSegments: tsquery error (${code}) for query "${query}"; returning []`);
+        return [];
+      }
+      throw err;
+    }
 
     type Row = { id: string; video_id: string; start_ms: number; end_ms: number; text: string; score: number | string };
     // With postgres-js driver, db.execute returns the row array directly.
