@@ -246,24 +246,16 @@ export const proposeAhaMomentTool: ToolDef<ProposeAhaMomentInput, ProposeResult>
 // 7. proposeSourceRanking
 // ---------------------------------------------------------------------------
 
-const proposeSourceRankingInput = sourceRankingPayload.extend({
-  /** Evidence is optional for source rankings — the ranking is structural, not
-   *  extracted from a specific passage. Pass an empty array if no segment applies. */
-  evidence: z.array(segmentRefSchema).optional().default([]),
-});
-type ProposeSourceRankingInput = z.infer<typeof proposeSourceRankingInput>;
-
-export const proposeSourceRankingTool: ToolDef<ProposeSourceRankingInput, ProposeResult> = {
+export const proposeSourceRankingTool: ToolDef<z.infer<typeof sourceRankingPayload>, ProposeResult> = {
   name: 'proposeSourceRanking',
   description:
     'Record a source-ranking finding that orders videos by relevance to a topic. ' +
-    'topicId is the finding ID of the topic being ranked against. Evidence segments are optional — ' +
-    'this is a structural finding. Returns a findingId on success.',
-  input: proposeSourceRankingInput,
+    'topicId is the finding ID of the topic being ranked against. ' +
+    'This is a structural finding — no evidence segments are required. Returns a findingId on success.',
+  input: sourceRankingPayload,
   output: proposeResultSchema,
   handler: async (input, ctx) => {
-    const { evidence, ...payload } = input;
-    return insertFinding('source_ranking', payload, evidence, ctx);
+    return insertFinding('source_ranking', input, [], ctx);
   },
 };
 

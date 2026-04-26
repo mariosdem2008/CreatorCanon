@@ -45,14 +45,14 @@ export function _resetRegistryForTests(): void {
  * Throws if any tool name is already registered (idempotent only via
  * `_resetRegistryForTests`).
  */
+const ALL_TOOLS: ToolDef<any, any>[] = [
+  listVideosTool, getVideoSummaryTool, searchSegmentsTool, listSegmentsForVideoTool, getSegmentTool,
+  listFindingsTool,
+  proposeTopicTool, proposeFrameworkTool, proposeLessonTool, proposePlaybookTool,
+  proposeQuoteTool, proposeAhaMomentTool, proposeSourceRankingTool, proposeRelationTool,
+  markFindingEvidenceTool,
+];
+
 export function registerAllTools(): void {
-  for (const t of [
-    listVideosTool, getVideoSummaryTool, searchSegmentsTool, listSegmentsForVideoTool, getSegmentTool,
-    listFindingsTool,
-    proposeTopicTool, proposeFrameworkTool, proposeLessonTool, proposePlaybookTool,
-    proposeQuoteTool, proposeAhaMomentTool, proposeSourceRankingTool, proposeRelationTool,
-    markFindingEvidenceTool,
-  ]) {
-    registerTool(t);
-  }
+  for (const t of ALL_TOOLS) registerTool(t);
 }

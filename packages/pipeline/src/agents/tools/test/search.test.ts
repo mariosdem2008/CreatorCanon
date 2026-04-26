@@ -58,12 +58,12 @@ describe('searchSegments BM25', () => {
     const ctx = makeCtx(seed);
     const realExecute = ctx.db.execute.bind(ctx.db);
     let throwCount = 0;
-    ctx.db.execute = (async (...args: unknown[]) => {
+    ctx.db.execute = ((async (..._args: unknown[]) => {
       throwCount++;
       const err = new Error('mocked tsquery syntax error') as Error & { code: string };
       err.code = '22P02';
       throw err;
-    }) as typeof ctx.db.execute;
+    }) as unknown) as typeof ctx.db.execute;
     try {
       const out = await searchSegmentsTool.handler({ query: 'focus pomodoro' }, ctx);
       assert.deepEqual(out, []);
