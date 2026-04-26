@@ -1,4 +1,4 @@
-import { eq, getDb } from '@creatorcanon/db';
+import { and, eq, getDb } from '@creatorcanon/db';
 import { archiveFinding, archiveRelation, page, pageVersion, segment } from '@creatorcanon/db/schema';
 import { composePage, type ComposedPage } from '../mergers/page-composer';
 import { aggregateEvidence } from '../mergers/evidence-aggregator';
@@ -51,6 +51,12 @@ export async function runMergeStage(input: MergeStageInput): Promise<MergeStageO
     .select()
     .from(archiveRelation)
     .where(eq(archiveRelation.runId, input.runId));
+
+  // Clear prior dedup relations for idempotency before re-running.
+  await db.delete(archiveRelation).where(and(
+    eq(archiveRelation.runId, input.runId),
+    eq(archiveRelation.agent, 'page_composer_dedup'),
+  ));
 
   // Dedup lesson↔framework.
   const dedup = dedupeLessonFramework(allFindings);

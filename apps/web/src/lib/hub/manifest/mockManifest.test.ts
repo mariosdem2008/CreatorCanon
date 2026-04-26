@@ -60,6 +60,14 @@ test('mock manifest: stats.pageCount matches pages.length', () => {
   assert.equal(mockManifest.stats.pageCount, mockManifest.pages.length);
 });
 
+test('mock manifest: highlights source IDs resolve to real sources', () => {
+  const sourceIds = new Set(mockManifest.sources.map((s) => s.id));
+  for (const h of mockManifest.highlights ?? []) {
+    assert.ok(sourceIds.has(h.evidence.sourceVideoId),
+      `highlight ${h.id} references unknown source '${h.evidence.sourceVideoId}'`);
+  }
+});
+
 test('mock manifest: structural integrity (topic slugs and relatedPageIds resolve)', () => {
   const topicSlugs = new Set(mockManifest.topics.map((t) => t.slug));
   const pageIds = new Set(mockManifest.pages.map((p) => p.id));

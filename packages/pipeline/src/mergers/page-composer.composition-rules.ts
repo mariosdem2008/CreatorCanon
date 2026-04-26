@@ -20,11 +20,11 @@ export const COMPOSITION_RULES: Record<PageType, PageRule> = {
       (ctx) => ({ kind: 'paragraph', body: (ctx.primary.payload as any).idea }),
       (ctx) => {
         const aha = ctx.related.find((r) => r.type === 'aha_moment');
-        return aha ? { kind: 'quote', text: (aha.payload as any).quote, attribution: (aha.payload as any).attribution } : null;
+        return aha ? { kind: 'quote', text: (aha.payload as any).quote, attribution: (aha.payload as any).attribution, _sourceFindingType: 'aha_moment' as const } : null;
       },
       (ctx) => {
         const q = ctx.related.find((r) => r.type === 'quote');
-        return q ? { kind: 'quote', text: (q.payload as any).text, attribution: (q.payload as any).attribution } : null;
+        return q ? { kind: 'quote', text: (q.payload as any).text, attribution: (q.payload as any).attribution, _sourceFindingType: 'quote' as const } : null;
       },
     ],
   },
@@ -55,7 +55,7 @@ export const COMPOSITION_RULES: Record<PageType, PageRule> = {
       },
       (ctx) => {
         const wf = (ctx.primary.payload as any).workflow;
-        return wf && wf.length > 0 ? { kind: 'workflow', items: wf } : null;
+        return wf && wf.length > 0 ? { kind: 'workflow', schedule: wf } : null;
       },
       (ctx) => {
         const fp = (ctx.primary.payload as any).failurePoints;

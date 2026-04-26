@@ -1,4 +1,4 @@
-import { and, eq, getDb } from '@creatorcanon/db';
+import { and, eq, getDb, sql } from '@creatorcanon/db';
 import { project, hub, release } from '@creatorcanon/db/schema';
 import { runStage, transitionRun } from './harness';
 import {
@@ -132,25 +132,25 @@ export async function runGenerationPipeline(
       let releaseId = releaseRows[0]?.id;
       if (!releaseId) {
         releaseId = `rel_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
-        // Determine next releaseNumber for this hub.
-        const all = await db
-          .select({ n: release.releaseNumber })
-          .from(release)
-          .where(eq(release.hubId, hubRow.id));
-        const nextNumber = (all.reduce((max, r) => Math.max(max, r.n), 0) ?? 0) + 1;
-        await db.insert(release).values({
-          id: releaseId,
-          workspaceId: payload.workspaceId,
-          hubId: hubRow.id,
-          runId: payload.runId,
-          releaseNumber: nextNumber,
-          status: 'building',
-        });
+        // Atomically compute and claim the next release number. Using a single
+        // INSERT...SELECT means the MAX subquery and the INSERT are evaluated
+        // together, preventing a concurrent-run race from assigning the same number.
+        await db.execute(sql`
+          INSERT INTO release (id, workspace_id, hub_id, run_id, release_number, status)
+          VALUES (
+            ${releaseId},
+            ${payload.workspaceId},
+            ${hubRow.id},
+            ${payload.runId},
+            (SELECT COALESCE(MAX(release_number), 0) + 1 FROM release WHERE hub_id = ${hubRow.id}),
+            'building'
+          )
+        `);
       }
 
       // Phase 1: discovery.
       await assertWithinRunBudget(payload.runId);
-      await runStage({
+      const discovery = await runStage({
         ctx,
         stage: 'discovery',
         input: { runId: payload.runId, workspaceId: payload.workspaceId },
@@ -159,7 +159,7 @@ export async function runGenerationPipeline(
 
       // Phase 2: synthesis.
       await assertWithinRunBudget(payload.runId);
-      await runStage({
+      const synthesis = await runStage({
         ctx,
         stage: 'synthesis',
         input: { runId: payload.runId, workspaceId: payload.workspaceId },
@@ -202,7 +202,7 @@ export async function runGenerationPipeline(
         transcriptsFetched: transcriptsResult.fetchedCount,
         transcriptsSkipped: transcriptsResult.skippedCount,
         segmentsCreated: segmentResult.totalSegments,
-        findingCount: 0, // queried by callers who need it; leave as 0 for now
+        findingCount: (discovery.findingCount ?? 0) + (synthesis.findingCount ?? 0),
         pageCount: merge.pageCount,
         manifestR2Key: adapt.manifestR2Key,
       };

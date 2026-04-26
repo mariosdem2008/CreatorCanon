@@ -63,10 +63,15 @@ export async function composePage(input: ComposePageInput): Promise<ComposedPage
   const sections = rawSections.map((sec) => {
     const baseCitations = [...input.primary.evidenceSegmentIds];
     if ((sec as any).kind === 'quote') {
-      const linkedQuote = input.related.find((r) => r.type === 'quote' || r.type === 'aha_moment');
+      const wantType = (sec as any)._sourceFindingType as 'quote' | 'aha_moment' | undefined;
+      const linkedQuote = wantType
+        ? input.related.find((r) => r.type === wantType)
+        : input.related.find((r) => r.type === 'quote' || r.type === 'aha_moment');
       if (linkedQuote) for (const id of linkedQuote.evidenceSegmentIds) baseCitations.push(id);
     }
-    return { ...sec, citations: [...new Set(baseCitations)] } as ComposedPage['sections'][number];
+    // Strip the private hint before returning.
+    const { _sourceFindingType: _hint, ...clean } = sec as any;
+    return { ...clean, citations: [...new Set(baseCitations)] } as ComposedPage['sections'][number];
   });
 
   let summary = (input.primary.payload as any).summary as string;

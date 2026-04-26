@@ -16,8 +16,8 @@ import {
   makeCtx,
   type SeedResult,
 } from '../../../test-helpers/fixtures';
-import { eq, getDb } from '@creatorcanon/db';
-import { page, pageVersion } from '@creatorcanon/db/schema';
+import { and, eq, getDb } from '@creatorcanon/db';
+import { archiveRelation, page, pageVersion } from '@creatorcanon/db/schema';
 
 describe('runMergeStage', () => {
   let seed: SeedResult;
@@ -139,5 +139,28 @@ describe('runMergeStage', () => {
       polishProvider: null,
     });
     assert.ok(result.highlightCount >= 1);
+  });
+
+  it('dedup-relation count is identical on re-run (idempotency)', async () => {
+    const db = getDb();
+
+    await runMergeStage({ runId: seed.runId, workspaceId: seed.workspaceId, polishProvider: null });
+    const countAfterFirst = (
+      await db
+        .select()
+        .from(archiveRelation)
+        .where(and(eq(archiveRelation.runId, seed.runId), eq(archiveRelation.agent, 'page_composer_dedup')))
+    ).length;
+
+    await runMergeStage({ runId: seed.runId, workspaceId: seed.workspaceId, polishProvider: null });
+    const countAfterSecond = (
+      await db
+        .select()
+        .from(archiveRelation)
+        .where(and(eq(archiveRelation.runId, seed.runId), eq(archiveRelation.agent, 'page_composer_dedup')))
+    ).length;
+
+    assert.equal(countAfterSecond, countAfterFirst,
+      `dedup relations should not accumulate on re-run (first=${countAfterFirst}, second=${countAfterSecond})`);
   });
 });

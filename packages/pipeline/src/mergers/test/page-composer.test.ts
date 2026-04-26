@@ -48,6 +48,46 @@ describe('composePage', () => {
     }
   });
 
+  it('disambiguates citations for quote vs aha_moment quote sections', async () => {
+    const page = await composePage({
+      primary: {
+        id: 'fnd_5', runId: 'r', type: 'lesson', agent: 'le', model: 'gpt-5.5',
+        evidenceQuality: 'strong', evidenceSegmentIds: ['s_primary'],
+        payload: { title: 'Disambiguation', summary: 'Test', idea: 'Idea text here.' },
+        costCents: '0' as any, durationMs: 0, createdAt: new Date(),
+      } as any,
+      related: [
+        {
+          id: 'fnd_q', runId: 'r', type: 'quote', agent: 'quote_finder', model: 'gpt-5.5',
+          evidenceQuality: 'strong', evidenceSegmentIds: ['s_q'],
+          payload: { text: 'A plain quote', attribution: 'Someone' },
+          costCents: '0' as any, durationMs: 0, createdAt: new Date(),
+        } as any,
+        {
+          id: 'fnd_a', runId: 'r', type: 'aha_moment', agent: 'aha_detector', model: 'gpt-5.5',
+          evidenceQuality: 'strong', evidenceSegmentIds: ['s_a'],
+          payload: { quote: 'An aha moment', attribution: 'Creator' },
+          costCents: '0' as any, durationMs: 0, createdAt: new Date(),
+        } as any,
+      ],
+      relations: [], polishProvider: null,
+    });
+    const quoteSections = page.sections.filter((s) => s.kind === 'quote') as any[];
+    // There should be two quote sections (one for aha_moment, one for quote).
+    assert.equal(quoteSections.length, 2);
+    // The aha_moment quote section should cite s_a; the plain quote section should cite s_q.
+    const ahaSec = quoteSections.find((s) => s.citations.includes('s_a'));
+    const qSec   = quoteSections.find((s) => s.citations.includes('s_q'));
+    assert.ok(ahaSec, 'aha_moment quote section must include s_a in citations');
+    assert.ok(qSec,   'plain quote section must include s_q in citations');
+    // Each section should NOT bleed into the other's evidence.
+    assert.ok(!ahaSec.citations.includes('s_q'), 'aha section should not include s_q');
+    assert.ok(!qSec.citations.includes('s_a'),   'quote section should not include s_a');
+    // Neither should carry the private hint.
+    assert.equal((ahaSec as any)._sourceFindingType, undefined);
+    assert.equal((qSec as any)._sourceFindingType, undefined);
+  });
+
   it('emits exploratory callout when evidenceQuality is not strong (framework)', async () => {
     const page = await composePage({
       primary: {

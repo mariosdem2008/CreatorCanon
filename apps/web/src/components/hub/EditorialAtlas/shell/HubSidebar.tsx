@@ -77,7 +77,7 @@ export function HubSidebar({ hubSlug, title, creator, navigation, activePathname
             })}
             {highlights && highlights.length > 0 && (() => {
               const href = getHighlightsRoute(hubSlug);
-              const active = activePathname === href || activePathname.startsWith(href);
+              const active = activePathname === href || activePathname.startsWith(href + '/');
               return (
                 <li>
                   <Link
