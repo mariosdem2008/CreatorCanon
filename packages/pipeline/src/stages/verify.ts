@@ -5,7 +5,7 @@ import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
 import { createOpenAIProvider } from '../agents/providers/openai';
 import { createGeminiProvider } from '../agents/providers/gemini';
-import { registerAllTools } from '../agents/tools/registry';
+import { ensureToolsRegistered } from '../agents/tools/registry';
 import type { AgentProvider } from '../agents/providers';
 import { parseServerEnv } from '@creatorcanon/core';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
@@ -26,7 +26,7 @@ export interface VerifyStageOutput {
 }
 
 export async function runVerifyStage(input: VerifyStageInput): Promise<VerifyStageOutput> {
-  try { registerAllTools(); } catch { /* already registered */ }
+  ensureToolsRegistered();
 
   const env = parseServerEnv(process.env);
   const r2 = input.r2Override ?? createR2Client(env);

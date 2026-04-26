@@ -30,12 +30,26 @@ export function listTools(names: string[]): ToolDef<any, any>[] {
   });
 }
 
+let registered = false;
+
+/**
+ * Idempotent wrapper around registerAllTools. Safe to call concurrently from
+ * multiple stages — only the first caller actually registers; subsequent
+ * callers are no-ops.
+ */
+export function ensureToolsRegistered(): void {
+  if (registered) return;
+  registerAllTools();
+  registered = true;
+}
+
 /** Test-only: clear the registry so each test sees a clean state. */
 export function _resetRegistryForTests(): void {
   if (process.env.NODE_ENV !== 'test' && !process.env.PIPELINE_TEST_PROVIDER) {
     throw new Error('_resetRegistryForTests called outside test context');
   }
   REGISTRY.clear();
+  registered = false;
 }
 
 /**
@@ -55,4 +69,5 @@ const ALL_TOOLS: ToolDef<any, any>[] = [
 
 export function registerAllTools(): void {
   for (const t of ALL_TOOLS) registerTool(t);
+  registered = true;
 }

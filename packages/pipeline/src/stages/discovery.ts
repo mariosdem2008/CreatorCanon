@@ -3,7 +3,7 @@ import { SPECIALISTS } from '../agents/specialists';
 import { selectModel, type AgentName } from '../agents/providers/selectModel';
 import { createOpenAIProvider } from '../agents/providers/openai';
 import { createGeminiProvider } from '../agents/providers/gemini';
-import { registerAllTools } from '../agents/tools/registry';
+import { ensureToolsRegistered } from '../agents/tools/registry';
 import { listVideosTool } from '../agents/tools/universal';
 import type { AgentProvider } from '../agents/providers';
 import type { ToolCtx } from '../agents/tools/types';
@@ -32,8 +32,7 @@ export interface DiscoveryStageOutput {
 }
 
 export async function runDiscoveryStage(input: DiscoveryStageInput): Promise<DiscoveryStageOutput> {
-  // Make sure tools are registered. Idempotent in test contexts after _resetRegistryForTests.
-  try { registerAllTools(); } catch { /* already registered — fine */ }
+  ensureToolsRegistered();
 
   const env = parseServerEnv(process.env);
   const r2 = input.r2Override ?? createR2Client(env);
