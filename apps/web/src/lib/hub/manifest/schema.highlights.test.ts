@@ -32,4 +32,27 @@ describe('manifest.highlights', () => {
     m.highlights = [{ id: 'hl_1', type: 'quote', text: 'x' }];
     assert.equal(editorialAtlasManifestSchema.safeParse(m).success, false);
   });
+
+  it('rejects a highlight with text over 280 chars', () => {
+    const m = clone();
+    m.highlights = [
+      {
+        id: 'hl_1', type: 'quote',
+        text: 'x'.repeat(281),
+        evidence: { sourceVideoId: 'vid_1', timestampStart: 0, timestampLabel: '0:00' },
+      },
+    ];
+    assert.equal(editorialAtlasManifestSchema.safeParse(m).success, false);
+  });
+
+  it('rejects a highlight with empty sourceVideoId', () => {
+    const m = clone();
+    m.highlights = [
+      {
+        id: 'hl_1', type: 'quote', text: 'ok',
+        evidence: { sourceVideoId: '', timestampStart: 0, timestampLabel: '0:00' },
+      },
+    ];
+    assert.equal(editorialAtlasManifestSchema.safeParse(m).success, false);
+  });
 });

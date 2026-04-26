@@ -129,7 +129,7 @@ export const highlightSchema = z.object({
   attribution: z.string().optional(),
   evidence: z.object({
     sourceVideoId: z.string().min(1),
-    timestampStart: z.number().int().nonnegative(),
+    timestampStart: z.number().int().min(0),
     timestampLabel: z.string().min(1),
   }),
 });
