@@ -33,6 +33,9 @@ export * from './chat';
 // Publish / release
 export * from './release';
 
+// Multi-agent pipeline findings
+export * from './archive_finding';
+
 // Billing + cost
 export * from './billing';
 

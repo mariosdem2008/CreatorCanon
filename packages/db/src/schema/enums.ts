@@ -267,6 +267,7 @@ export const inboxItemKindEnum = pgEnum('inbox_item_kind', [
 ]);
 
 // ----- Multi-agent pipeline -----
+/** Multi-agent pipeline finding category. Stored in `archive_finding.type`. */
 export const findingTypeEnum = pgEnum('finding_type', [
   'topic',
   'framework',
@@ -277,6 +278,8 @@ export const findingTypeEnum = pgEnum('finding_type', [
   'source_ranking',
 ]);
 
+/** Per-finding grounding verdict assigned by `citation_grounder`. Distinct from
+ *  the user-facing `supportLabelEnum` and the visual-lane `confidenceEnum`. */
 export const evidenceQualityEnum = pgEnum('evidence_quality', [
   'strong',
   'moderate',
@@ -284,6 +287,8 @@ export const evidenceQualityEnum = pgEnum('evidence_quality', [
   'unverified',
 ]);
 
+/** Edges between findings produced by the multi-agent pipeline. Distinct from
+ *  `knowledgeEdgeKindEnum` (atom-level edges from the legacy v0 stages). */
 export const relationTypeEnum = pgEnum('relation_type', [
   'supports',
   'builds_on',
