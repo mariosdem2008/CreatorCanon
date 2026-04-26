@@ -14,6 +14,11 @@ export const PIPELINE_STAGES = [
   'segment_transcripts', // 6
   'synthesize_v0_review', // v0 review artifact
   'draft_pages_v0', // v0 persisted draft pages
+  'discovery',          // multi-agent v2: Phase 1
+  'synthesis',          // multi-agent v2: Phase 2
+  'verify',             // multi-agent v2: Phase 3
+  'merge',              // multi-agent v2: Phase 4
+  'adapt',              // multi-agent v2: Phase 5
   'extract_text_atoms', // 7
   'extract_visual_observations', // 8
   'merge_multimodal_atoms', // 9
