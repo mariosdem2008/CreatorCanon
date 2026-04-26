@@ -6,8 +6,13 @@ node_modules/
 .next/
 dist/
 build/
+# `out/` here is intentional — it covers Next.js static export. The Drizzle
+# migration directory `packages/db/drizzle/out/` is unignored below.
 out/
 *.tsbuildinfo
+
+# Drizzle migration output is checked in (overrides the broader `out/` rule above)
+!packages/db/drizzle/out/
 
 # Turbo
 .turbo/
