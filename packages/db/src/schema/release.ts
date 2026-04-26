@@ -21,6 +21,19 @@ import { workspace } from './workspace';
 import { project } from './project';
 import { generationRun } from './run';
 
+/** Per-hub freeform override bag. See spec § 5.2 + § 12.2. Empty object is the no-op. */
+export interface HubMetadata {
+  /** Optional display tagline shown on the hub home; falls back to a template default. */
+  tagline?: string;
+  /** Per-hub override of the template's trust block. Adapter shallow-merges per top-level key. */
+  trust?: {
+    methodologySummary?: string;
+    qualityPrinciples?: { title: string; body: string }[];
+    creationProcess?: { stepNumber: number; title: string; body: string }[];
+    faq?: { question: string; answer: string }[];
+  };
+}
+
 /**
  * `hub` (a.k.a. `published_hub`) — one hub per project for MVP. Keyed by subdomain.
  *
@@ -46,7 +59,7 @@ export const hub = pgTable(
     templateKey: hubTemplateKeyEnum('template_key').notNull().default('legacy_v0'),
     accessMode: hubAccessModeEnum('access_mode').notNull().default('public'),
     paywallPriceCents: integer('paywall_price_cents'),
-    metadata: jsonb('metadata').notNull().default({}),
+    metadata: jsonb('metadata').$type<HubMetadata>().notNull().default({}),
     freePreview: hubFreePreviewEnum('free_preview').notNull().default('first_lesson'),
     /** Forward ref; FK added post-migration (avoids import cycle with release). */
     liveReleaseId: text('live_release_id'),
