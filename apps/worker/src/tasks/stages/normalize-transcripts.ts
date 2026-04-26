@@ -2,7 +2,18 @@ import { eq, getDb } from '@creatorcanon/db';
 import { normalizedTranscriptVersion, transcriptAsset } from '@creatorcanon/db/schema';
 import { createR2Client, artifactKey } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
-import type { TranscriptResult } from './ensure-transcripts';
+// Mirrors packages/pipeline/src/stages/ensure-transcripts.ts — kept local to
+// avoid a subpath import that isn't in the pipeline's exports map.
+export interface TranscriptResult {
+  videoId: string;
+  youtubeVideoId: string | null;
+  r2Key: string;
+  provider: 'youtube_captions' | 'gpt-4o-mini-transcribe' | 'existing';
+  wordCount: number;
+  language: string;
+  skipped: boolean;
+  skipReason?: string;
+}
 
 export interface NormalizeTranscriptsInput {
   runId: string;

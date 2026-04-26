@@ -58,7 +58,7 @@ function nextAction(input: {
       : 'Run failed before stage rows. Use admin re-dispatch after checking worker logs.';
   }
   if (input.status === 'awaiting_review') {
-    return input.draftPageCount > 0 ? 'Draft pages are ready. Review/approve/publish.' : 'Review status without draft pages. Rerun draft_pages_v0.';
+    return input.draftPageCount > 0 ? 'Draft pages are ready. Review/approve/publish.' : 'Review status without draft pages. Re-dispatch the run from the adapt stage.';
   }
   if (input.status === 'published') {
     return input.liveReleaseId ? 'Published hub is live.' : 'Run is published but no live release is attached. Use admin publish if draft pages exist.';

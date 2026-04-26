@@ -51,8 +51,6 @@ export const serverEnvSchema = z.object({
   AUDIO_EXTRACTION_FFMPEG_BIN: z.string().min(1).optional(),
   AUDIO_EXTRACTION_CHALLENGE_RUNTIME_BIN: z.string().min(1).optional(),
 
-  PIPELINE_DRAFT_SYNTH: z.enum(['deterministic', 'llm']).default('deterministic'),
-  PIPELINE_REVIEW_SYNTH: z.enum(['deterministic', 'llm']).default('deterministic'),
   PIPELINE_DISPATCH_MODE: z.enum(['inprocess', 'trigger', 'worker']).default('inprocess'),
 });
 

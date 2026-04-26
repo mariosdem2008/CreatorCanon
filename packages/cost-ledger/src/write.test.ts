@@ -6,7 +6,7 @@ test('buildCostRow populates required fields', () => {
   const row = buildCostRow({
     runId: 'run-1',
     workspaceId: 'ws-1',
-    stageName: 'synthesize_v0_review',
+    stageName: 'synthesis',
     provider: 'openai',
     model: 'gpt-4o-mini',
     inputTokens: 1200,
@@ -15,7 +15,7 @@ test('buildCostRow populates required fields', () => {
   });
   assert.equal(row.runId, 'run-1');
   assert.equal(row.workspaceId, 'ws-1');
-  assert.equal(row.stageName, 'synthesize_v0_review');
+  assert.equal(row.stageName, 'synthesis');
   assert.equal(row.provider, 'openai');
   assert.equal(row.model, 'gpt-4o-mini');
   assert.equal(row.inputTokens, 1200);
@@ -41,7 +41,7 @@ test('buildCostRow null defaults for optional fields', () => {
   const row = buildCostRow({
     runId: 'run-1',
     workspaceId: 'ws-1',
-    stageName: 'draft_pages_v0',
+    stageName: 'discovery',
     provider: 'openai',
     costCents: 0,
   });
