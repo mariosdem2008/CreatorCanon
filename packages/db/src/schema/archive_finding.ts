@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, numeric, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { generationRun } from './run';
 import {
@@ -25,7 +25,7 @@ export const archiveFinding = pgTable(
     evidenceQuality: evidenceQualityEnum('evidence_quality')
       .notNull()
       .default('unverified'),
-    costCents: integer('cost_cents').default(0),
+    costCents: numeric('cost_cents', { precision: 12, scale: 4 }).notNull().default('0'),
     durationMs: integer('duration_ms').default(0),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
       .defaultNow()
