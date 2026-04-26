@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import {
   ChannelHeaderCard,
   EmptyState,
+  LinkButton,
   NoticeBanner,
   PageHeader,
   Panel,
@@ -34,6 +35,8 @@ export interface VideoRow {
   viewCount: number | null;
   thumbnailUrl: string | null;
   captionStatus: 'available' | 'auto_only' | 'none' | 'unknown';
+  transcribeStatus: 'pending' | 'transcribing' | 'ready' | 'failed' | null;
+  sourceKind: 'youtube' | 'manual_upload';
   hasCanonicalTranscript: boolean;
   hasAudioAsset: boolean;
   categories: string[];
@@ -122,6 +125,11 @@ export default function LibraryClient({
           eyebrow="Source library"
           title="Videos"
           body="Select source videos from your YouTube channel to build your knowledge hub."
+          actions={
+            <LinkButton href="/app/uploads" variant="secondary" size="sm">
+              + Add uploads
+            </LinkButton>
+          }
         />
         <ChannelHeaderCard
           channel={{
@@ -150,6 +158,11 @@ export default function LibraryClient({
         eyebrow="Source library"
         title="Videos"
         body="Select source videos from your YouTube channel to build your knowledge hub."
+        actions={
+          <LinkButton href="/app/uploads" variant="secondary" size="sm">
+            + Add uploads
+          </LinkButton>
+        }
       />
 
       <ChannelHeaderCard
@@ -317,9 +330,20 @@ export default function LibraryClient({
                         {video.viewCount ? fmtNumber(video.viewCount) : '—'}
                       </td>
                       <td className="px-2 py-2.5">
-                        <StatusPill tone={ready ? 'success' : 'warn'}>
-                          {ready ? 'Ready' : sourceLabelFor(video)}
-                        </StatusPill>
+                        {video.sourceKind === 'manual_upload' ? (
+                          <div className="flex items-center gap-1.5">
+                            <StatusPill tone="accent" withDot={false}>
+                              Uploaded
+                            </StatusPill>
+                            <StatusPill tone={uploadedSourceTone(video)}>
+                              {uploadedSourceLabel(video)}
+                            </StatusPill>
+                          </div>
+                        ) : (
+                          <StatusPill tone={ready ? 'success' : 'warn'}>
+                            {ready ? 'Ready' : sourceLabelFor(video)}
+                          </StatusPill>
+                        )}
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex flex-wrap gap-1 max-w-[180px]">
@@ -409,7 +433,28 @@ function FilterChip<V extends string>({
 }
 
 function isSourceReady(video: VideoRow): boolean {
+  if (video.sourceKind === 'manual_upload') return video.transcribeStatus === 'ready';
   return video.hasCanonicalTranscript || video.captionStatus === 'available';
+}
+
+type Tone = 'success' | 'warn' | 'danger' | 'info' | 'neutral';
+
+function uploadedSourceTone(video: VideoRow): Tone {
+  switch (video.transcribeStatus) {
+    case 'ready':       return 'success';
+    case 'failed':      return 'danger';
+    case 'transcribing': return 'info';
+    default:            return 'neutral';
+  }
+}
+
+function uploadedSourceLabel(video: VideoRow): string {
+  switch (video.transcribeStatus) {
+    case 'ready':        return 'Ready';
+    case 'failed':       return 'Failed';
+    case 'transcribing': return 'Transcribing';
+    default:             return 'Pending';
+  }
 }
 
 function sourceLabelFor(video: VideoRow): string {

@@ -44,6 +44,8 @@ export default async function LibraryPage() {
       viewCount: video.viewCount,
       thumbnails: video.thumbnails,
       captionStatus: video.captionStatus,
+      transcribeStatus: video.transcribeStatus,
+      sourceKind: video.sourceKind,
       categories: video.categories,
     })
     .from(video)
@@ -97,6 +99,8 @@ export default async function LibraryPage() {
     viewCount: v.viewCount,
     thumbnailUrl: v.thumbnails?.medium ?? v.thumbnails?.small ?? null,
     captionStatus: v.captionStatus,
+    transcribeStatus: v.transcribeStatus as VideoRow['transcribeStatus'],
+    sourceKind: v.sourceKind,
     hasCanonicalTranscript: canonicalVideoIds.has(v.id),
     hasAudioAsset: audioVideoIds.has(v.id),
     categories: v.categories ?? [],
