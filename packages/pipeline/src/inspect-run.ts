@@ -7,7 +7,7 @@ loadDefaultEnvFiles();
 const args = process.argv.slice(2);
 const idx = args.indexOf('--runId');
 const runId = idx >= 0 ? args[idx + 1] : null;
-if (!runId) {
+if (!runId || runId.startsWith('-')) {
   console.error('Usage: pnpm inspect:run --runId <id>');
   process.exit(1);
 }

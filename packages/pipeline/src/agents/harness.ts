@@ -7,6 +7,13 @@ import { listTools } from './tools/registry';
 import { StopController, DEFAULT_STOP_CAPS, type StopCaps, type StopReason } from './stop-conditions';
 import { tokenCostCents } from './cost-tracking';
 
+const PII_EMAIL_RE = /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g;
+const PII_SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
+
+export function stripPiiText(s: string): string {
+  return s.replace(PII_EMAIL_RE, '<email>').replace(PII_SSN_RE, '<id>');
+}
+
 export interface RunAgentInput {
   runId: string;
   workspaceId: string;
@@ -39,14 +46,6 @@ const PROPOSE_TOOL_RESULT_HAS_FINDING_ID = (result: unknown): boolean =>
     && 'ok' in result && (result as { ok: unknown }).ok === true
     && 'findingId' in result;
 
-function stripPii(turns: ChatTurn[]): ChatTurn[] {
-  const emailRe = /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g;
-  const ssnRe = /\b\d{3}-\d{2}-\d{4}\b/g;
-  return turns.map((m) => ({
-    ...m,
-    content: m.content.replace(emailRe, '<email>').replace(ssnRe, '<id>'),
-  }));
-}
 
 export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
   const caps: StopCaps = { ...DEFAULT_STOP_CAPS, ...(input.caps ?? {}) };
@@ -188,18 +187,18 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
     transcriptR2Key,
   };
   } catch (err) {
-    // PII-strip transcript and attach to Sentry before re-throwing.
-    const sanitized = stripPii(transcript);
+    const rawTranscript = JSON.stringify(transcript);
+    const sanitized = stripPiiText(rawTranscript);
     try {
       Sentry.captureException(err, {
         tags: { runId: input.runId, agent: input.agent },
         extra: {
           transcriptR2Key,
-          transcriptPreview: JSON.stringify(sanitized).slice(0, 2000),
+          transcriptPreview: sanitized.slice(0, 2000),
           modelId: input.modelId,
         },
       });
-    } catch { /* Sentry not initialized in this env — ignore */ }
+    } catch { /* Sentry not initialized — ignore */ }
     throw err;
   }
 }
