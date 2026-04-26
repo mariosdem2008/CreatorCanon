@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { EditorialAtlasManifest } from '@/lib/hub/manifest/schema';
-import { getSearchRoute } from '@/lib/hub/routes';
+import { getHighlightsRoute, getSearchRoute } from '@/lib/hub/routes';
 
 type Props = {
   hubSlug: string;
@@ -15,6 +15,8 @@ type Props = {
    * server component because it doesn't need any state.
    */
   activePathname: string;
+  /** When present and non-empty, renders a conditional Highlights nav item. */
+  highlights?: EditorialAtlasManifest['highlights'];
 };
 
 /**
@@ -26,7 +28,7 @@ type Props = {
  * - "Built on CreatorCanon" link
  * - Sticky search input at the very bottom
  */
-export function HubSidebar({ hubSlug, title, creator, navigation, activePathname }: Props) {
+export function HubSidebar({ hubSlug, title, creator, navigation, activePathname, highlights }: Props) {
   return (
     <aside
       aria-label="Hub navigation"
@@ -73,6 +75,27 @@ export function HubSidebar({ hubSlug, title, creator, navigation, activePathname
                 </li>
               );
             })}
+            {highlights && highlights.length > 0 && (() => {
+              const href = getHighlightsRoute(hubSlug);
+              const active = activePathname === href || activePathname.startsWith(href);
+              return (
+                <li>
+                  <Link
+                    href={href}
+                    aria-current={active ? 'page' : undefined}
+                    className={
+                      'flex h-8 items-center gap-2.5 rounded-[8px] px-2 text-[13px] transition-colors ' +
+                      (active
+                        ? 'bg-white text-[#1A1612] font-medium shadow-[0_1px_0_rgba(0,0,0,0.04)]'
+                        : 'text-[#6B5F50] hover:bg-white/60 hover:text-[#1A1612]')
+                    }
+                  >
+                    <span aria-hidden className="size-1.5 rounded-full bg-current opacity-40" />
+                    <span className="truncate">Highlights</span>
+                  </Link>
+                </li>
+              );
+            })()}
           </ul>
         </nav>
 

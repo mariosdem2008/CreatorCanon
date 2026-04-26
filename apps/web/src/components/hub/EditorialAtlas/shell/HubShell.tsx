@@ -31,6 +31,7 @@ export function HubShell({ manifest, activePathname, rightRail, children }: Prop
           creator={manifest.creator}
           navigation={manifest.navigation}
           activePathname={activePathname}
+          highlights={manifest.highlights}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
