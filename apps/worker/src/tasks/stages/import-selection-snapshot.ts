@@ -18,6 +18,7 @@ export interface SelectionSnapshotOutput {
     youtubeVideoId: string | null;
     title: string | null;
     durationSeconds: number | null;
+    sourceKind: 'youtube' | 'manual_upload';
   }>;
 }
 
@@ -47,6 +48,7 @@ export async function importSelectionSnapshot(
           youtubeVideoId: video.youtubeVideoId,
           title: video.title,
           durationSeconds: video.durationSeconds,
+          sourceKind: video.sourceKind,
         })
         .from(video)
         .where(eq(video.id, id))

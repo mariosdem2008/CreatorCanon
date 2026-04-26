@@ -355,6 +355,40 @@ export async function ensureTranscripts(
       continue;
     }
 
+    // Manual-upload videos must have been transcribed by the Trigger.dev worker job
+    // before reaching this pipeline stage. If the canonical transcript row is missing
+    // (not caught by existing[0] above) it means the worker job hasn't completed or
+    // failed. Surface a clear error rather than attempting a YouTube timedtext fetch.
+    if (vid.sourceKind === 'manual_upload') {
+      const videoRows = await db
+        .select({ transcribeStatus: video.transcribeStatus })
+        .from(video)
+        .where(eq(video.id, vid.id))
+        .limit(1);
+      const transcribeStatus = videoRows[0]?.transcribeStatus ?? 'unknown';
+
+      if (transcribeStatus !== 'ready') {
+        throw new Error(
+          `Manual upload ${vid.id} (${vid.title ?? 'untitled'}) is not transcribed yet ` +
+          `(status: ${transcribeStatus}). Re-upload or wait for transcription to complete.`,
+        );
+      }
+
+      // status=ready but canonical row missing — race or partial failure.
+      await db.update(video).set({ captionStatus: 'none' }).where(eq(video.id, vid.id));
+      results.push({
+        videoId: vid.id,
+        youtubeVideoId: vid.youtubeVideoId,
+        r2Key: '',
+        provider: 'youtube_timedtext',
+        wordCount: 0,
+        language: 'en',
+        skipped: true,
+        skipReason: `Manual upload transcript not found in canonical index despite status=ready. Check transcriptAsset row for videoId=${vid.id}.`,
+      });
+      continue;
+    }
+
     let vttContent: string | null = null;
     let chosenLang = 'en';
     let isAutoCaption = false;

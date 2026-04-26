@@ -1,5 +1,5 @@
 import { and, eq, getDb } from '@creatorcanon/db';
-import { transcriptAsset } from '@creatorcanon/db/schema';
+import { transcriptAsset, video } from '@creatorcanon/db/schema';
 import { createR2Client, transcriptKey } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import type { SelectionSnapshotOutput } from './import-selection-snapshot';
@@ -146,6 +146,42 @@ export async function ensureTranscripts(
         wordCount: existing[0].wordCount,
         language: existing[0].language ?? 'en',
         skipped: false,
+      });
+      continue;
+    }
+
+    // Manual-upload videos: the transcript is created by the transcribe-uploaded-video
+    // Trigger.dev worker job before the run reaches this stage. If the video is not
+    // yet in 'ready' state, we cannot proceed — surface a clear error to the caller.
+    if (vid.sourceKind === 'manual_upload') {
+      const videoRows = await db
+        .select({ transcribeStatus: video.transcribeStatus })
+        .from(video)
+        .where(eq(video.id, vid.id))
+        .limit(1);
+      const transcribeStatus = videoRows[0]?.transcribeStatus ?? 'unknown';
+
+      if (transcribeStatus !== 'ready') {
+        throw new Error(
+          `Manual upload ${vid.id} (${vid.title ?? 'untitled'}) is not transcribed yet ` +
+          `(status: ${transcribeStatus}). Re-upload or wait for transcription to complete.`,
+        );
+      }
+
+      // The transcriptAsset was already inserted by the worker job; it just wasn't
+      // found in the canonical-transcript query above (e.g., workspaceId mismatch
+      // or race). Mark as skipped-but-ok so downstream stages know there is a gap.
+      // In practice, if the worker job succeeded the canonical row exists and we
+      // would have taken the `existing[0]` branch above.
+      results.push({
+        videoId: vid.id,
+        youtubeVideoId: vid.youtubeVideoId,
+        r2Key: '',
+        provider: 'existing',
+        wordCount: 0,
+        language: 'en',
+        skipped: true,
+        skipReason: `Manual upload transcript not found in canonical index despite status=ready. Check transcriptAsset row for videoId=${vid.id}.`,
       });
       continue;
     }
