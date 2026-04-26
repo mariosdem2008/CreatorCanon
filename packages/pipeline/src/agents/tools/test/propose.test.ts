@@ -62,7 +62,7 @@ describe('propose* tools', () => {
       evidence: [{ segmentId: 'BOGUS' }],
     }, makeCtx(seed, 'topic_spotter', 'gpt-5.5'));
     assert.equal(out.ok, false);
-    if (!out.ok) assert.match(out.error, /Unknown segment ID: BOGUS/);
+    if (!out.ok) assert.match(out.error, /Unknown segment ID\(s\): BOGUS/);
     const after = await getDb().select().from(archiveFinding).where(eq(archiveFinding.runId, seed.runId));
     assert.equal(after.length, beforeCount, 'no new row should be inserted on validation failure');
   });
@@ -194,5 +194,40 @@ describe('propose* tools', () => {
       evidence: [{ segmentId: 'x' }, { segmentId: 'y' }],
     });
     assert.equal(result.success, false);
+  });
+
+  it('proposePlaybook rejects unknown buildsOnFindingIds without inserting anything', async () => {
+    const before = await getDb().select().from(archiveFinding).where(eq(archiveFinding.runId, seed.runId));
+    const beforeCount = before.length;
+
+    const out = await proposePlaybookTool.handler({
+      title: 'Bogus playbook',
+      summary: 'Should not be inserted because the build_on target does not exist.',
+      principles: [{ title: 'p', body: 'b' }],
+      evidence: [{ segmentId: 'seg_pt_a' }, { segmentId: 'seg_pt_b' }, { segmentId: 'seg_pt_a' }],
+      buildsOnFindingIds: ['fnd_doesnotexist'],
+    }, makeCtx(seed, 'playbook_extractor', 'gpt-5.5'));
+
+    assert.equal(out.ok, false);
+    if (!out.ok) assert.match(out.error, /Unknown buildsOnFindingId/);
+
+    const after = await getDb().select().from(archiveFinding).where(eq(archiveFinding.runId, seed.runId));
+    assert.equal(after.length, beforeCount, 'no playbook should be inserted on validation failure');
+  });
+
+  it('insertFinding stores deduplicated evidenceSegmentIds', async () => {
+    const out = await proposeLessonTool.handler({
+      title: 'Dedupe test',
+      summary: 'X',
+      idea: 'A long enough idea passage to satisfy the schema minimum length requirement.',
+      evidence: [{ segmentId: 'seg_pt_a' }, { segmentId: 'seg_pt_a' }, { segmentId: 'seg_pt_b' }],
+    }, makeCtx(seed, 'lesson_extractor', 'gpt-5.5'));
+
+    assert.equal(out.ok, true);
+    if (out.ok) {
+      const rows = await getDb().select().from(archiveFinding).where(eq(archiveFinding.id, out.findingId));
+      const stored = rows[0]?.evidenceSegmentIds ?? [];
+      assert.deepEqual(stored.sort(), ['seg_pt_a', 'seg_pt_b']);
+    }
   });
 });

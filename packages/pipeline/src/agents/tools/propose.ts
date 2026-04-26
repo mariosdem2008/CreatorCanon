@@ -50,7 +50,7 @@ async function insertFinding(
   if (!validation.ok) {
     return {
       ok: false,
-      error: `Unknown segment ID: ${validation.unknownIds[0]}. Use searchSegments to find valid IDs.`,
+      error: `Unknown segment ID(s): ${validation.unknownIds.join(', ')}. Use searchSegments to find valid IDs.`,
     };
   }
   const id = makeId('fnd');
@@ -61,7 +61,7 @@ async function insertFinding(
     agent: ctx.agent,
     model: ctx.model,
     payload,
-    evidenceSegmentIds: refs.map((e) => e.segmentId),
+    evidenceSegmentIds: [...new Set(refs.map((e) => e.segmentId))],
   });
   return { ok: true, findingId: id };
 }
@@ -148,30 +148,46 @@ type ProposePlaybookInput = z.infer<typeof proposePlaybookInput>;
 export const proposePlaybookTool: ToolDef<ProposePlaybookInput, ProposeResult> = {
   name: 'proposePlaybook',
   description:
-    'Record a playbook finding. Provide at least 1 evidence segment. ' +
+    'Record a playbook finding. Provide at least 3 evidence segments. ' +
     'Optionally pass buildsOnFindingIds to auto-create builds_on relations to existing findings. ' +
     'Returns a findingId on success.',
   input: proposePlaybookInput,
   output: proposeResultSchema,
   handler: async (input, ctx) => {
     const { evidence, buildsOnFindingIds, ...payload } = input;
+
+    // 1. Validate buildsOnFindingIds upfront, before the playbook insert.
+    if (buildsOnFindingIds && buildsOnFindingIds.length > 0) {
+      const found = await ctx.db.select({ id: archiveFinding.id })
+        .from(archiveFinding)
+        .where(and(
+          eq(archiveFinding.runId, ctx.runId),
+          inArray(archiveFinding.id, buildsOnFindingIds),
+        ));
+      const foundSet = new Set(found.map((r) => r.id));
+      const missing = buildsOnFindingIds.filter((id) => !foundSet.has(id));
+      if (missing.length > 0) {
+        return { ok: false, error: `Unknown buildsOnFindingId(s): ${missing.join(', ')}. Use listFindings to find valid IDs.` };
+      }
+    }
+
+    // 2. Insert the playbook finding.
     const result = await insertFinding('playbook', payload, evidence, ctx);
     if (!result.ok) return result;
 
-    // Auto-create builds_on relations for each referenced finding.
+    // 3. Insert relations.
     if (buildsOnFindingIds && buildsOnFindingIds.length > 0) {
-      const segmentIds = evidence.map((e) => e.segmentId);
       for (const toId of buildsOnFindingIds) {
-        const relId = makeId('rel');
         await ctx.db.insert(archiveRelation).values({
-          id: relId,
+          id: makeId('rel'),
           runId: ctx.runId,
           agent: ctx.agent,
           model: ctx.model,
           fromFindingId: result.findingId,
           toFindingId: toId,
           type: 'builds_on',
-          evidenceSegmentIds: segmentIds,
+          evidenceSegmentIds: evidence.map((e) => e.segmentId),
+          notes: 'auto-created from buildsOnFindingIds',
         });
       }
     }
