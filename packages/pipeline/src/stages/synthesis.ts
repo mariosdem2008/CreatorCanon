@@ -1,5 +1,5 @@
 import { eq, sql } from '@creatorcanon/db';
-import { archiveFinding } from '@creatorcanon/db/schema';
+import { archiveFinding, type ArchiveFinding } from '@creatorcanon/db/schema';
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel, type AgentName } from '../agents/providers/selectModel';
@@ -13,7 +13,13 @@ import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 
 type SynthesisAgent = Extract<AgentName, 'playbook_extractor' | 'source_ranker' | 'quote_finder' | 'aha_moment_detector'>;
 const SYNTHESIS_AGENTS: SynthesisAgent[] = ['playbook_extractor', 'source_ranker', 'quote_finder', 'aha_moment_detector'];
-const CONCURRENCY = 4;
+const CONCURRENCY = SYNTHESIS_AGENTS.length;
+
+const FINDING_TYPES = {
+  topic: 'topic',
+  framework: 'framework',
+  lesson: 'lesson',
+} as const satisfies Record<string, ArchiveFinding['type']>;
 
 export interface SynthesisStageInput {
   runId: string;
@@ -51,9 +57,9 @@ export async function runSynthesisStage(input: SynthesisStageInput): Promise<Syn
     .where(eq(archiveFinding.runId, input.runId))
     .groupBy(archiveFinding.type);
   const total = counts.reduce((acc, c) => acc + Number(c.count), 0);
-  const m = counts.find((c) => c.type === 'topic')?.count ?? 0;
-  const k = counts.find((c) => c.type === 'framework')?.count ?? 0;
-  const l = counts.find((c) => c.type === 'lesson')?.count ?? 0;
+  const m = counts.find((c) => c.type === FINDING_TYPES.topic)?.count ?? 0;
+  const k = counts.find((c) => c.type === FINDING_TYPES.framework)?.count ?? 0;
+  const l = counts.find((c) => c.type === FINDING_TYPES.lesson)?.count ?? 0;
   const bootstrap = `Discovery phase produced ${total} findings (${m} topics, ${k} frameworks, ${l} lessons). Use listFindings to read them.`;
 
   // Fan out synthesis specialists with bounded concurrency.

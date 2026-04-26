@@ -13,7 +13,7 @@ import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 
 type DiscoveryAgent = Extract<AgentName, 'topic_spotter' | 'framework_extractor' | 'lesson_extractor'>;
 const DISCOVERY_AGENTS: DiscoveryAgent[] = ['topic_spotter', 'framework_extractor', 'lesson_extractor'];
-const CONCURRENCY = 4;
+const CONCURRENCY = DISCOVERY_AGENTS.length;
 
 export interface DiscoveryStageInput {
   runId: string;
@@ -53,7 +53,9 @@ export async function runDiscoveryStage(input: DiscoveryStageInput): Promise<Dis
     r2,
   };
   const videos = await listVideosTool.handler({}, bootstrapCtx);
-  const bootstrap = `Archive: ${videos.length} videos.\n\n` + videos.slice(0, 50).map((v) => `- ${v.id}: ${v.title} (${Math.round(v.durationSec / 60)} min)`).join('\n');
+  const shown = videos.slice(0, 50);
+  const moreSuffix = videos.length > 50 ? ` (showing first 50; ${videos.length - 50} more available via listVideos)` : '';
+  const bootstrap = `Archive: ${videos.length} videos${moreSuffix}.\n\n` + shown.map((v) => `- ${v.id}: ${v.title} (${Math.round(v.durationSec / 60)} min)`).join('\n');
 
   // Fan out specialists with bounded concurrency.
   const summaries = await runWithConcurrency(DISCOVERY_AGENTS, CONCURRENCY, async (agent) => {
