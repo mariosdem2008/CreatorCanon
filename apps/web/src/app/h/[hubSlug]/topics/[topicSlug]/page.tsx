@@ -7,24 +7,24 @@ import { Breadcrumb } from '@/components/hub/EditorialAtlas/blocks/Breadcrumb';
 import { PageCard } from '@/components/hub/EditorialAtlas/blocks/PageCard';
 import { PageTable } from '@/components/hub/EditorialAtlas/blocks/PageTable';
 import { TopicCard } from '@/components/hub/EditorialAtlas/blocks/TopicCard';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from '../../manifest';
 import { getTopicRoute, getTopicsRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string; topicSlug: string } }): Promise<Metadata> {
-  const topic = mockManifest.topics.find((t) => t.slug === params.topicSlug);
-  if (!topic || params.hubSlug !== mockManifest.hubSlug) return { title: 'Topic not found' };
+  const { manifest } = await loadHubManifest(params.hubSlug);
+  const topic = manifest.topics.find((t) => t.slug === params.topicSlug);
+  if (!topic) return { title: 'Topic not found' };
   return {
-    title: `${topic.title} — ${mockManifest.title}`,
+    title: `${topic.title} — ${manifest.title}`,
     description: topic.description,
     alternates: { canonical: getTopicRoute(params.hubSlug, topic.slug) },
   };
 }
 
-export default function TopicDetail({ params }: { params: { hubSlug: string; topicSlug: string } }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+export default async function TopicDetail({ params }: { params: { hubSlug: string; topicSlug: string } }) {
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   const topic = m.topics.find((t) => t.slug === params.topicSlug);
   if (!topic) notFound();
 

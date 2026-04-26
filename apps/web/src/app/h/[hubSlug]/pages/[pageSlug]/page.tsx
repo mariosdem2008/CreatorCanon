@@ -10,24 +10,24 @@ import { LineIllustration } from '@/components/hub/EditorialAtlas/illustrations'
 import { SectionRenderer } from '@/components/hub/EditorialAtlas/blocks/SectionRenderer';
 import { RelatedPages } from '@/components/hub/EditorialAtlas/blocks/RelatedPages';
 import { SourceRail } from '@/components/hub/EditorialAtlas/blocks/SourceRail';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from '../../manifest';
 import { getPageRoute, getPagesRoute, getTopicRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string; pageSlug: string } }): Promise<Metadata> {
-  const page = mockManifest.pages.find((p) => p.slug === params.pageSlug && p.status === 'published');
-  if (!page || params.hubSlug !== mockManifest.hubSlug) return { title: 'Page not found' };
+  const { manifest } = await loadHubManifest(params.hubSlug);
+  const page = manifest.pages.find((p) => p.slug === params.pageSlug && p.status === 'published');
+  if (!page) return { title: 'Page not found' };
   return {
-    title: `${page.title} — ${mockManifest.title}`,
+    title: `${page.title} — ${manifest.title}`,
     description: page.summaryPlainText,
     alternates: { canonical: getPageRoute(params.hubSlug, page.slug) },
   };
 }
 
-export default function HubPageDetail({ params }: { params: { hubSlug: string; pageSlug: string } }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+export default async function HubPageDetail({ params }: { params: { hubSlug: string; pageSlug: string } }) {
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   const page = m.pages.find((p) => p.slug === params.pageSlug && p.status === 'published');
   if (!page) notFound();
 

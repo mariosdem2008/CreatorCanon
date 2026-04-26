@@ -1,27 +1,28 @@
 // apps/web/src/app/h/[hubSlug]/ask/page.tsx
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
 import { MOCK_ANSWER_QUESTIONS } from '@/lib/hub/chat/mockAnswers';
+import { loadHubManifest } from '../manifest';
 import { getAskRoute } from '@/lib/hub/routes';
 
 import { AskHubClient } from './AskHubClient';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Ask this hub' };
+export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
+  const { manifest } = await loadHubManifest(params.hubSlug);
+  return { title: `Ask — ${manifest.title}` };
+}
 
-export default function AskPage({
+export default async function AskPage({
   params,
   searchParams,
 }: {
   params: { hubSlug: string };
   searchParams: { q?: string };
 }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   const firstName = m.creator.name.split(' ')[0];
   return (
     <HubShell manifest={m} activePathname={getAskRoute(params.hubSlug)}>

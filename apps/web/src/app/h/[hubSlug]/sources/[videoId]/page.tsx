@@ -7,28 +7,27 @@ import { notFound } from 'next/navigation';
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { Breadcrumb } from '@/components/hub/EditorialAtlas/blocks/Breadcrumb';
 import { MetaTagPill } from '@/components/hub/EditorialAtlas/blocks/MetaTagPill';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from '../../manifest';
 import { formatTimestampLabel } from '@/lib/hub/manifest/empty-state';
 import { getPageRoute, getSourceRoute, getSourcesRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string; videoId: string } }): Promise<Metadata> {
-  const source = mockManifest.sources.find((s) => s.id === params.videoId);
-  if (!source || params.hubSlug !== mockManifest.hubSlug) return { title: 'Source not found' };
+  const { manifest } = await loadHubManifest(params.hubSlug);
+  const source = manifest.sources.find((s) => s.id === params.videoId);
+  if (!source) return { title: 'Source not found' };
   return {
-    title: `${source.title} — ${mockManifest.title}`,
+    title: `${source.title} — ${manifest.title}`,
     alternates: { canonical: getSourceRoute(params.hubSlug, source.id) },
   };
 }
 
-export default function SourceDetail({ params }: { params: { hubSlug: string; videoId: string } }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+export default async function SourceDetail({ params }: { params: { hubSlug: string; videoId: string } }) {
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   const source = m.sources.find((s) => s.id === params.videoId);
   if (!source) notFound();
 
-  const youtubeWatch = `https://www.youtube.com/watch?v=${source.youtubeId}`;
   const citingPages = m.pages.filter((p) => source.citedPageIds.includes(p.id) && p.status === 'published');
 
   return (
@@ -39,7 +38,7 @@ export default function SourceDetail({ params }: { params: { hubSlug: string; vi
         <section className="rounded-[12px] border border-[#E5DECF] bg-white p-4">
           <h2 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#9A8E7C]">Source coverage</h2>
           <dl className="mt-3 space-y-2 text-[12px]">
-            <Row label="Platform"          value="YouTube" />
+            <Row label="Platform"          value={source.youtubeId ? 'YouTube' : 'Uploaded'} />
             <Row label="Channel"           value={source.channelName} />
             <Row label="Published"         value={new Date(source.publishedAt).toLocaleDateString('en', { month: 'long', year: 'numeric' })} />
             <Row label="Duration"          value={source.durationSec != null ? `${Math.floor(source.durationSec / 60)} min` : '—'} />
@@ -47,9 +46,16 @@ export default function SourceDetail({ params }: { params: { hubSlug: string; vi
             <Row label="Pages citing"      value={`${citingPages.length}`} />
             <Row label="Key moments"       value={`${source.keyMoments.length}`} />
           </dl>
-          <a href={youtubeWatch} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-9 w-full items-center justify-center rounded-[8px] bg-[#1A1612] text-[12px] font-semibold text-[#F8F4EC] hover:opacity-90">
-            Open on YouTube
-          </a>
+          {source.youtubeId && (
+            <a
+              href={`https://www.youtube.com/watch?v=${source.youtubeId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex h-9 w-full items-center justify-center rounded-[8px] bg-[#1A1612] text-[12px] font-semibold text-[#F8F4EC] hover:opacity-90"
+            >
+              Open on YouTube
+            </a>
+          )}
         </section>
       }
     >
@@ -90,19 +96,33 @@ export default function SourceDetail({ params }: { params: { hubSlug: string; vi
         <section className="mt-10">
           <h2 className="text-[14px] font-semibold uppercase tracking-[0.12em] text-[#9A8E7C]">Key moments</h2>
           <ol className="mt-3 space-y-2">
-            {source.keyMoments.map((moment, i) => (
-              <li key={i}>
-                <a
-                  href={`${youtubeWatch}&t=${moment.timestampStart}s`} target="_blank" rel="noreferrer"
-                  className="flex items-center gap-3 rounded-[8px] border border-[#E5DECF] bg-white px-3 py-2 hover:border-[#D6CFC0]"
-                >
-                  <span className="size-9 shrink-0 rounded-[6px] bg-[#F2EBDA] grid place-items-center text-[11px] font-semibold tabular-nums text-[#3D352A]">
-                    {formatTimestampLabel(moment.timestampStart)}
-                  </span>
-                  <span className="text-[13px] font-medium text-[#1A1612]">{moment.label}</span>
-                </a>
-              </li>
-            ))}
+            {source.keyMoments.map((moment, i) => {
+              const href = source.youtubeId
+                ? `https://www.youtube.com/watch?v=${source.youtubeId}&t=${moment.timestampStart}s`
+                : undefined;
+              return (
+                <li key={i}>
+                  {href ? (
+                    <a
+                      href={href} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-3 rounded-[8px] border border-[#E5DECF] bg-white px-3 py-2 hover:border-[#D6CFC0]"
+                    >
+                      <span className="size-9 shrink-0 rounded-[6px] bg-[#F2EBDA] grid place-items-center text-[11px] font-semibold tabular-nums text-[#3D352A]">
+                        {formatTimestampLabel(moment.timestampStart)}
+                      </span>
+                      <span className="text-[13px] font-medium text-[#1A1612]">{moment.label}</span>
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-3 rounded-[8px] border border-[#E5DECF] bg-white px-3 py-2">
+                      <span className="size-9 shrink-0 rounded-[6px] bg-[#F2EBDA] grid place-items-center text-[11px] font-semibold tabular-nums text-[#3D352A]">
+                        {formatTimestampLabel(moment.timestampStart)}
+                      </span>
+                      <span className="text-[13px] font-medium text-[#1A1612]">{moment.label}</span>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         </section>
       )}
@@ -115,7 +135,7 @@ export default function SourceDetail({ params }: { params: { hubSlug: string; vi
             {source.transcriptExcerpts.map((e, i) => (
               <li key={i} className="rounded-[10px] border border-[#E5DECF] bg-white p-4">
                 <p className="text-[11px] tabular-nums text-[#9A8E7C]">{formatTimestampLabel(e.timestampStart)}</p>
-                <p className="mt-1 text-[13px] italic leading-[1.55] text-[#3D352A]">{`“${e.body}”`}</p>
+                <p className="mt-1 text-[13px] italic leading-[1.55] text-[#3D352A]">{`"${e.body}"`}</p>
               </li>
             ))}
           </ul>

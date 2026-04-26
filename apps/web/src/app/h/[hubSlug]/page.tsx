@@ -6,7 +6,7 @@ import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { LineIllustration } from '@/components/hub/EditorialAtlas/illustrations';
 import { PageCard } from '@/components/hub/EditorialAtlas/blocks/PageCard';
 import { TopicGrid } from '@/components/hub/EditorialAtlas/blocks/TopicGrid';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from './manifest';
 import {
   getAskRoute,
   getHubRoute,
@@ -19,20 +19,16 @@ import {
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  if (params.hubSlug !== mockManifest.hubSlug) return { title: 'Hub not found' };
+  const { manifest } = await loadHubManifest(params.hubSlug);
   return {
-    title: mockManifest.title,
-    description: mockManifest.tagline,
+    title: manifest.title,
+    description: manifest.tagline,
     alternates: { canonical: getHubRoute(params.hubSlug) },
   };
 }
 
-export default function HubHomePage({ params }: { params: { hubSlug: string } }) {
-  if (params.hubSlug !== mockManifest.hubSlug) {
-    return <div className="min-h-screen bg-[#F8F4EC] p-8 text-[#1A1612]">Hub not found.</div>;
-  }
-
-  const m = mockManifest;
+export default async function HubHomePage({ params }: { params: { hubSlug: string } }) {
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   const topicAccentBySlug = Object.fromEntries(m.topics.map((t) => [t.slug, t.accentColor]));
   const startHerePages   = m.pages.filter((p) => p.evidenceQuality === 'strong').slice(0, 3);
   const exploreByTopic   = m.topics.slice(0, 6);

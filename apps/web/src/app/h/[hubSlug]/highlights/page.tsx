@@ -4,22 +4,21 @@ import { notFound } from 'next/navigation';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { Breadcrumb } from '@/components/hub/EditorialAtlas/blocks/Breadcrumb';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from '../manifest';
 import { getHighlightsRoute, getSourceRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  if (params.hubSlug !== mockManifest.hubSlug) return { title: 'Hub not found' };
+  const { manifest } = await loadHubManifest(params.hubSlug);
   return {
-    title: `Highlights — ${mockManifest.title}`,
+    title: `Highlights — ${manifest.title}`,
     alternates: { canonical: getHighlightsRoute(params.hubSlug) },
   };
 }
 
-export default function HighlightsPage({ params }: { params: { hubSlug: string } }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+export default async function HighlightsPage({ params }: { params: { hubSlug: string } }) {
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   if (!m.highlights || m.highlights.length === 0) notFound();
 
   // Group by source video for a "found while reading" feel.

@@ -1,26 +1,24 @@
 // apps/web/src/app/h/[hubSlug]/pages/page.tsx
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { PageTable } from '@/components/hub/EditorialAtlas/blocks/PageTable';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from '../manifest';
 import { getPagesRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  if (params.hubSlug !== mockManifest.hubSlug) return { title: 'Hub not found' };
+  const { manifest } = await loadHubManifest(params.hubSlug);
   return {
-    title: `All pages — ${mockManifest.title}`,
-    description: `${mockManifest.pages.length} source-grounded pages across the ${mockManifest.title}.`,
+    title: `All pages — ${manifest.title}`,
+    description: `${manifest.pages.length} source-grounded pages across the ${manifest.title}.`,
     alternates: { canonical: getPagesRoute(params.hubSlug) },
   };
 }
 
-export default function AllPagesIndex({ params }: { params: { hubSlug: string } }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+export default async function AllPagesIndex({ params }: { params: { hubSlug: string } }) {
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   const topicAccentBySlug = Object.fromEntries(m.topics.map((t) => [t.slug, t.accentColor]));
   const published = m.pages.filter((p) => p.status === 'published');
 

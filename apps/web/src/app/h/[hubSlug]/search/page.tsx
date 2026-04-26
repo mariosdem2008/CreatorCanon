@@ -1,27 +1,28 @@
 // apps/web/src/app/h/[hubSlug]/search/page.tsx
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { PageRow } from '@/components/hub/EditorialAtlas/blocks/PageRow';
 import { TopicCard } from '@/components/hub/EditorialAtlas/blocks/TopicCard';
 import { SourceRow } from '@/components/hub/EditorialAtlas/blocks/SourceRow';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from '../manifest';
 import { getSearchRoute } from '@/lib/hub/routes';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = { title: 'Search' };
+export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
+  const { manifest } = await loadHubManifest(params.hubSlug);
+  return { title: `Search — ${manifest.title}` };
+}
 
-export default function SearchPage({
+export default async function SearchPage({
   params,
   searchParams,
 }: {
   params: { hubSlug: string };
   searchParams: { q?: string };
 }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
   const q = (searchParams.q ?? '').trim().toLowerCase();
   const topicAccentBySlug = Object.fromEntries(m.topics.map((t) => [t.slug, t.accentColor]));
 

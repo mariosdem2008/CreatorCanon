@@ -1,23 +1,21 @@
 // apps/web/src/app/h/[hubSlug]/start/page.tsx
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
-import { mockManifest } from '@/lib/hub/manifest/mockManifest';
+import { loadHubManifest } from '../manifest';
 import type { Page } from '@/lib/hub/manifest/schema';
 import { getPageRoute, getStartRoute, getTopicsRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  if (params.hubSlug !== mockManifest.hubSlug) return { title: 'Hub not found' };
-  return { title: `Start here — ${mockManifest.title}`, alternates: { canonical: getStartRoute(params.hubSlug) } };
+  const { manifest } = await loadHubManifest(params.hubSlug);
+  return { title: `Start here — ${manifest.title}`, alternates: { canonical: getStartRoute(params.hubSlug) } };
 }
 
-export default function StartHere({ params }: { params: { hubSlug: string } }) {
-  if (params.hubSlug !== mockManifest.hubSlug) notFound();
-  const m = mockManifest;
+export default async function StartHere({ params }: { params: { hubSlug: string } }) {
+  const { manifest: m } = await loadHubManifest(params.hubSlug);
 
   // Three "paths" curated from the published pages.
   const beginnerPath = m.pages.filter((p) => p.type === 'lesson' && p.evidenceQuality === 'strong').slice(0, 3);
