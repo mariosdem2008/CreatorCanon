@@ -99,7 +99,7 @@ export function HubSidebar({ hubSlug, title, creator, navigation, activePathname
         <div className="mt-auto rounded-[10px] border border-[#D6CFC0] bg-white/60 p-3">
           <p className="text-[12px] font-semibold text-[#1A1612]">Source-backed knowledge</p>
           <p className="mt-1 text-[11px] leading-[1.55] text-[#6B5F50]">
-            Every page is built from {creator.name.split(' ')[0]}'s videos, transcripts, and grounded citations.
+            {`Every page is built from ${creator.name.split(' ')[0]}'s videos, transcripts, and grounded citations.`}
           </p>
           <Link
             href={`/h/${hubSlug}/methodology`}
