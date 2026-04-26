@@ -38,6 +38,7 @@
     "@creatorcanon/core": "workspace:*",
     "@creatorcanon/cost-ledger": "workspace:*",
     "@creatorcanon/db": "workspace:*",
+    "@google/generative-ai": "0.21.0",
     "openai": "4.61.0",
     "zod": "3.23.8",
     "zod-to-json-schema": "3.23.5"
