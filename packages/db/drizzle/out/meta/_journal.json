@@ -22,6 +22,13 @@
       "when": 1777117570382,
       "tag": "0002_agent_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777191728865,
+      "tag": "0003_multi_agent_pipeline",
+      "breakpoints": true
     }
   ]
 }
