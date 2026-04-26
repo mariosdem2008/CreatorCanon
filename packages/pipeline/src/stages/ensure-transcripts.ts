@@ -93,7 +93,7 @@ export interface TranscriptResult {
   videoId: string;
   youtubeVideoId: string | null;
   r2Key: string;
-  provider: 'youtube_timedtext' | 'gpt-4o-mini-transcribe' | 'existing';
+  provider: 'youtube_captions' | 'gpt-4o-mini-transcribe' | 'existing';
   wordCount: number;
   language: string;
   skipped: boolean;
@@ -318,7 +318,7 @@ export async function ensureTranscripts(
   const results: TranscriptResult[] = [];
   const providerCounts: Record<string, number> = {
     existing: 0,
-    youtube_timedtext: 0,
+    youtube_captions: 0,
     'gpt-4o-mini-transcribe': 0,
   };
   const audioFallback = {
@@ -393,7 +393,7 @@ export async function ensureTranscripts(
     let chosenLang = 'en';
     let isAutoCaption = false;
     let skipReason = 'No captions available';
-    let provider: TranscriptResult['provider'] = 'youtube_timedtext';
+    let provider: TranscriptResult['provider'] = 'youtube_captions';
 
     try {
       // Strategy 0 (disabled post-audit): Owner-OAuth captions.list +
@@ -550,7 +550,7 @@ export async function ensureTranscripts(
         videoId: vid.id,
         youtubeVideoId: vid.youtubeVideoId,
         r2Key: '',
-        provider: 'youtube_timedtext',
+        provider: 'youtube_captions',
         wordCount: 0,
         language: 'en',
         skipped: true,

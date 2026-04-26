@@ -68,7 +68,7 @@ export async function projectSources({
       title: v.title ?? 'Untitled',
       channelName: 'Creator', // placeholder satisfies min(1) constraint
       publishedAt: v.publishedAt ? v.publishedAt.toISOString() : new Date().toISOString(),
-      durationSec: v.durationSeconds ?? 1,
+      durationSec: v.durationSeconds ?? null,
       thumbnailUrl:
         (v.thumbnails as { medium?: string; small?: string } | null)?.medium ??
         (v.thumbnails as { medium?: string; small?: string } | null)?.small ??

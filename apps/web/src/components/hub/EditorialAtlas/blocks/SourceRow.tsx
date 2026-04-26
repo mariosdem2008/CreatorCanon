@@ -19,7 +19,7 @@ export function SourceRow({ source, hubSlug }: Props) {
       <div className="min-w-0">
         <p className="truncate text-[13px] font-medium text-[#1A1612]">{source.title}</p>
         <p className="text-[11px] text-[#9A8E7C]">
-          {source.channelName} · {Math.floor(source.durationSec / 60)} min · {source.citedPageIds.length} pages cite
+          {source.channelName} · {source.durationSec != null ? `${Math.floor(source.durationSec / 60)} min` : '—'} · {source.citedPageIds.length} pages cite
         </p>
       </div>
       <span className="text-[11px] text-[#6B5F50]">

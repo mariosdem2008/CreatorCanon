@@ -19,7 +19,7 @@ export function SourceCard({ source, hubSlug }: Props) {
       </div>
       <h3 className="mt-3 text-[13px] font-medium leading-[1.35] text-[#1A1612] line-clamp-2">{source.title}</h3>
       <div className="mt-2 flex items-center gap-2 text-[10px] text-[#9A8E7C]">
-        <span>{Math.floor(source.durationSec / 60)} min</span>
+        <span>{source.durationSec != null ? `${Math.floor(source.durationSec / 60)} min` : '—'}</span>
         <span aria-hidden>·</span>
         <MetaTagPill size="xs" accent={source.transcriptStatus === 'available' ? 'sage' : source.transcriptStatus === 'partial' ? 'amber' : 'slate'}>
           {source.transcriptStatus === 'available' ? 'Transcript' : source.transcriptStatus === 'partial' ? 'Partial' : 'No transcript'}

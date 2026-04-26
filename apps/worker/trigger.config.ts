@@ -10,9 +10,9 @@ const project = process.env.TRIGGER_PROJECT_ID ?? DEFAULT_PROJECT_REF;
 export default defineConfig({
   project,
   logLevel: 'info',
-  // Task code lives alongside src/dev-server.ts — the CLI auto-discovers
-  // every `task()` export under the dirs listed here.
-  dirs: ['./src/tasks'],
+  // Task code and schedules live alongside src/dev-server.ts — the CLI
+  // auto-discovers every `task()` and `schedules.task()` export under these dirs.
+  dirs: ['./src/tasks', './src/schedules'],
   // Hard cap per task-run in seconds. Individual tasks can override.
   // 900s (15m) is generous for MVP; real pipeline stages tune this per stage.
   maxDuration: 900,

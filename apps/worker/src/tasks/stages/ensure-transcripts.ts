@@ -14,7 +14,7 @@ export interface TranscriptResult {
   videoId: string;
   youtubeVideoId: string | null;
   r2Key: string;
-  provider: 'youtube_timedtext' | 'whisper' | 'existing';
+  provider: 'youtube_captions' | 'whisper' | 'existing';
   wordCount: number;
   language: string;
   skipped: boolean;
@@ -189,7 +189,7 @@ export async function ensureTranscripts(
     // Try YouTube timedtext (only for videos with a YouTube ID)
     let vttContent: string | null = null;
     let chosenLang = 'en';
-    const provider: TranscriptResult['provider'] = 'youtube_timedtext';
+    const provider: TranscriptResult['provider'] = 'youtube_captions';
 
     if (vid.youtubeVideoId) {
       try {
@@ -209,7 +209,7 @@ export async function ensureTranscripts(
         videoId: vid.id,
         youtubeVideoId: vid.youtubeVideoId,
         r2Key: '',
-        provider: 'youtube_timedtext',
+        provider: 'youtube_captions',
         wordCount: 0,
         language: 'en',
         skipped: true,

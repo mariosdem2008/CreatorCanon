@@ -97,7 +97,7 @@ export const sourceVideoSchema = z.object({
   title: z.string().min(1),
   channelName: z.string().min(1),
   publishedAt: z.string().datetime(),
-  durationSec: z.number().int().min(1),
+  durationSec: z.number().int().min(0).nullable(),
   thumbnailUrl: z.string().url(),
   transcriptStatus: z.enum(['available', 'partial', 'unavailable']),
   topicSlugs: z.array(z.string().min(1)),

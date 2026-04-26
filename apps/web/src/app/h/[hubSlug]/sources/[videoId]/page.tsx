@@ -42,7 +42,7 @@ export default function SourceDetail({ params }: { params: { hubSlug: string; vi
             <Row label="Platform"          value="YouTube" />
             <Row label="Channel"           value={source.channelName} />
             <Row label="Published"         value={new Date(source.publishedAt).toLocaleDateString('en', { month: 'long', year: 'numeric' })} />
-            <Row label="Duration"          value={`${Math.floor(source.durationSec / 60)} min`} />
+            <Row label="Duration"          value={source.durationSec != null ? `${Math.floor(source.durationSec / 60)} min` : '—'} />
             <Row label="Transcript"        value={source.transcriptStatus} />
             <Row label="Pages citing"      value={`${citingPages.length}`} />
             <Row label="Key moments"       value={`${source.keyMoments.length}`} />
@@ -61,7 +61,7 @@ export default function SourceDetail({ params }: { params: { hubSlug: string; vi
         <div className="min-w-0">
           <MetaTagPill accent="slate">Video</MetaTagPill>
           <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.015em] text-[#1A1612]">{source.title}</h1>
-          <p className="mt-2 text-[12px] text-[#9A8E7C]">{source.channelName} · {Math.floor(source.durationSec / 60)} min</p>
+          <p className="mt-2 text-[12px] text-[#9A8E7C]">{source.channelName}{source.durationSec != null ? ` · ${Math.floor(source.durationSec / 60)} min` : ''}</p>
         </div>
       </div>
 

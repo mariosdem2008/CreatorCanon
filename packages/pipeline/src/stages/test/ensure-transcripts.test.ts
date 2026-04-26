@@ -100,7 +100,7 @@ async function simulateEnsureTranscripts(
     results.push({
       videoId: vid.id,
       skipped: false,
-      provider: 'youtube_timedtext',
+      provider: 'youtube_captions',
     });
   }
 
@@ -144,7 +144,7 @@ describe('ensure-transcripts — sourceKind switch', () => {
       const muResult = results.find((r) => r.videoId === 'mu_xyz');
       assert.ok(ytResult, 'YouTube result must exist');
       assert.ok(muResult, 'Manual upload result must exist');
-      assert.equal(ytResult.provider, 'youtube_timedtext');
+      assert.equal(ytResult.provider, 'youtube_captions');
       assert.equal(muResult.provider, 'existing');
       assert.equal(muResult.skipped, false, 'manual_upload with existing transcript should not be skipped');
     });
@@ -276,7 +276,7 @@ describe('ensure-transcripts — sourceKind switch', () => {
       });
 
       assert.equal(results.length, 1);
-      assert.equal(results[0]!.provider, 'youtube_timedtext');
+      assert.equal(results[0]!.provider, 'youtube_captions');
       assert.equal(results[0]!.skipped, false);
     });
   });

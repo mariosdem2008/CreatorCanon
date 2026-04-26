@@ -8,7 +8,7 @@ export const ensureTranscriptsStageOutputSchema = z.object({
     videoId: z.string().min(1),
     youtubeVideoId: z.string().min(1).nullable(),
     r2Key: z.string(),
-    provider: z.enum(['youtube_timedtext', 'gpt-4o-mini-transcribe', 'existing']),
+    provider: z.enum(['youtube_captions', 'gpt-4o-mini-transcribe', 'existing']),
     wordCount: z.number().int().min(0),
     language: z.string().min(1),
     skipped: z.boolean(),

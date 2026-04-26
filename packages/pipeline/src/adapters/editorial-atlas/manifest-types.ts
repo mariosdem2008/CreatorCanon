@@ -63,7 +63,7 @@ export interface SourceVideo {
   title: string;
   channelName: string;
   publishedAt: string;
-  durationSec: number;
+  durationSec: number | null;
   thumbnailUrl: string;
   transcriptStatus: 'available'|'partial'|'unavailable';
   topicSlugs: string[];
