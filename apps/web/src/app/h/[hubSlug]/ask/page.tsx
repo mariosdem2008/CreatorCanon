@@ -25,19 +25,22 @@ export default function AskPage({
   const firstName = m.creator.name.split(' ')[0];
   return (
     <HubShell manifest={m} activePathname={getAskRoute(params.hubSlug)}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A8E7C]">Ask this hub</p>
-      <h1 className="mt-3 text-[36px] font-semibold tracking-[-0.02em]">Ask this hub</h1>
-      <p className="mt-2 max-w-[640px] text-[14px] leading-[1.55] text-[#3D352A]">
-        {`Ask questions and get answers grounded only in ${firstName}'s videos, transcripts, and published hub pages.`}
-      </p>
+      <div className="mx-auto w-full max-w-[760px]">
+        <header className="border-b border-[#E5DECF] pb-4">
+          <h1 className="text-[20px] font-semibold tracking-[-0.01em]">Ask this hub</h1>
+          <p className="mt-1 text-[12px] text-[#9A8E7C]">
+            {`Answers grounded in ${firstName}'s videos, transcripts, and pages.`}
+          </p>
+        </header>
 
-      <div className="mt-8">
-        <AskHubClient
-          hubId={m.hubId}
-          hubSlug={m.hubSlug}
-          suggestedQuestions={MOCK_ANSWER_QUESTIONS}
-          initialQuestion={searchParams.q ?? ''}
-        />
+        <div className="mt-6">
+          <AskHubClient
+            hubId={m.hubId}
+            hubSlug={m.hubSlug}
+            suggestedQuestions={MOCK_ANSWER_QUESTIONS}
+            initialQuestion={searchParams.q ?? ''}
+          />
+        </div>
       </div>
     </HubShell>
   );

@@ -111,13 +111,10 @@ export function AskHubClient({ hubId, hubSlug, suggestedQuestions, initialQuesti
 
 function ThinkingIndicator() {
   return (
-    <div className="flex items-center gap-2 rounded-[14px] border border-[#E5DECF] bg-white px-6 py-4 text-[13px] text-[#9A8E7C]">
-      <span aria-hidden className="flex gap-1">
-        <span className="size-1.5 animate-pulse rounded-full bg-[#9A8E7C]" />
-        <span className="size-1.5 animate-pulse rounded-full bg-[#9A8E7C] [animation-delay:150ms]" />
-        <span className="size-1.5 animate-pulse rounded-full bg-[#9A8E7C] [animation-delay:300ms]" />
-      </span>
-      <span>Searching this hub for grounded sources…</span>
+    <div aria-label="Thinking" className="flex items-center gap-1 px-1 py-2 text-[#9A8E7C]">
+      <span className="size-1.5 animate-pulse rounded-full bg-current" />
+      <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:150ms]" />
+      <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:300ms]" />
     </div>
   );
 }
