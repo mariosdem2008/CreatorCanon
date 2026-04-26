@@ -29,7 +29,7 @@ export interface ComposedPage {
   hero: { illustrationKey: string };
 }
 
-const ILLUSTRATIONS = ['open-notebook', 'desk', 'books', 'window'] as const;
+const ILLUSTRATIONS = ['open-notebook', 'desk', 'books', 'plant'] as const;
 
 function pickIllustration(type: 'lesson'|'framework'|'playbook', findingId: string, hasWorkflow: boolean): typeof ILLUSTRATIONS[number] {
   if (type === 'lesson') return 'open-notebook';
