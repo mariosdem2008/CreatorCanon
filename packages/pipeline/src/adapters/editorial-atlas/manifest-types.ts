@@ -59,7 +59,7 @@ export interface Page {
 
 export interface SourceVideo {
   id: string;
-  youtubeId: string;
+  youtubeId: string | null;
   title: string;
   channelName: string;
   publishedAt: string;

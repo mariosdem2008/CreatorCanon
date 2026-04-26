@@ -15,7 +15,7 @@ export interface SelectionSnapshotOutput {
   totalDurationSeconds: number;
   videos: Array<{
     id: string;
-    youtubeVideoId: string;
+    youtubeVideoId: string | null;
     title: string | null;
     durationSeconds: number | null;
   }>;

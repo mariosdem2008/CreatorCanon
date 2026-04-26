@@ -27,7 +27,7 @@ export interface ChannelRow {
 
 export interface VideoRow {
   id: string;
-  youtubeVideoId: string;
+  youtubeVideoId: string | null;
   title: string | null;
   publishedAt: string | null;
   durationSeconds: number | null;

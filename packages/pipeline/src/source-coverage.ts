@@ -13,7 +13,7 @@ export type SourceReadinessLabel =
 
 export interface SourceCoverageVideo {
   videoId: string;
-  youtubeVideoId: string;
+  youtubeVideoId: string | null;
   title: string | null;
   captionStatus: 'available' | 'auto_only' | 'none' | 'unknown';
   hasCanonicalTranscript: boolean;

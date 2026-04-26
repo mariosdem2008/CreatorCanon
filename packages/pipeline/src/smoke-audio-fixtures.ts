@@ -67,6 +67,7 @@ async function main() {
 
   const target = rows[0];
   assert(target, 'No audio_m4a fixture media_asset row found. Run pnpm dev:seed:audio-fixtures first.');
+  assert(target.youtubeVideoId, 'Smoke target video has no youtubeVideoId — audio fixtures require real YouTube videos.');
 
   // The smoke uses a dedicated run id so it doesn't collide with the local-smoke run.
   // segment.run_id / transcript_asset.run_id / normalized_transcript_version.run_id are

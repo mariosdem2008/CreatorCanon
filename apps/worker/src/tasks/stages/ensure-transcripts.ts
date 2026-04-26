@@ -12,7 +12,7 @@ export interface EnsureTranscriptsInput {
 
 export interface TranscriptResult {
   videoId: string;
-  youtubeVideoId: string;
+  youtubeVideoId: string | null;
   r2Key: string;
   provider: 'youtube_timedtext' | 'whisper' | 'existing';
   wordCount: number;
@@ -150,20 +150,22 @@ export async function ensureTranscripts(
       continue;
     }
 
-    // Try YouTube timedtext
+    // Try YouTube timedtext (only for videos with a YouTube ID)
     let vttContent: string | null = null;
     let chosenLang = 'en';
     const provider: TranscriptResult['provider'] = 'youtube_timedtext';
 
-    try {
-      const tracks = await listTimedtextTracks(vid.youtubeVideoId);
-      const best = pickBestTrack(tracks);
-      if (best) {
-        vttContent = await downloadVtt(vid.youtubeVideoId, best.lang, best.kind, best.name);
-        chosenLang = best.lang;
+    if (vid.youtubeVideoId) {
+      try {
+        const tracks = await listTimedtextTracks(vid.youtubeVideoId);
+        const best = pickBestTrack(tracks);
+        if (best) {
+          vttContent = await downloadVtt(vid.youtubeVideoId, best.lang, best.kind, best.name);
+          chosenLang = best.lang;
+        }
+      } catch {
+        // Network errors are non-fatal; video will be skipped
       }
-    } catch {
-      // Network errors are non-fatal; video will be skipped
     }
 
     if (!vttContent) {

@@ -489,7 +489,7 @@ async function loadSourceRefs(input: DraftPagesV0Input): Promise<SourceRefByVide
   for (const row of rows) {
     const ref: SourceReferenceV0 = {
       videoId: row.videoId,
-      youtubeVideoId: row.youtubeVideoId,
+      youtubeVideoId: row.youtubeVideoId ?? '',
       title: row.title,
       segmentId: row.segmentId,
       startMs: row.startMs,

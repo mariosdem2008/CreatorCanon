@@ -60,7 +60,10 @@ async function main() {
     .where(eq(video.workspaceId, workspaceId));
 
   // Filter out our synthetic alpha-audio-* seed IDs (not real YouTube videos)
-  const realVideos = videos.filter((v) => v.youtubeVideoId && !v.youtubeVideoId.startsWith('alpha-audio-'));
+  const realVideos = videos.filter(
+    (v): v is typeof v & { youtubeVideoId: string } =>
+      v.youtubeVideoId != null && !v.youtubeVideoId.startsWith('alpha-audio-'),
+  );
   if (realVideos.length === 0) {
     console.info(JSON.stringify({ ok: true, workspaceId, note: 'No real YouTube videos in workspace.' }));
     await closeDb();

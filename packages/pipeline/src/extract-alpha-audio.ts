@@ -42,7 +42,7 @@ export interface ExtractAlphaAudioResult {
 
 type SelectedVideo = {
   videoId: string;
-  youtubeVideoId: string;
+  youtubeVideoId: string | null;
   title: string | null;
 };
 
@@ -122,10 +122,14 @@ export async function extractAlphaAudio(
   input: ExtractAlphaAudioInput,
 ): Promise<ExtractAlphaAudioResult> {
   const { run, videos } = await resolveRunSelection(input.runId);
+  // extractVideoAudioAssets requires a YouTube ID — filter out manual-upload videos.
+  const youtubeVideos = videos.filter(
+    (v): v is typeof v & { youtubeVideoId: string } => v.youtubeVideoId != null,
+  );
   const extraction = await extractVideoAudioAssets({
     workspaceId: run.workspaceId,
     runId: run.id,
-    videos,
+    videos: youtubeVideos,
     force: input.force,
     requireConfirmation: true,
   });
