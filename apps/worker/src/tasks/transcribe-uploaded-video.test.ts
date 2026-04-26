@@ -7,70 +7,10 @@
  * We test the observable state machine behaviour by exercising the run()
  * function through a thin harness that injects stubs via module-level
  * overrides of process.env and imports.
- *
- * Note: Because the Trigger.dev task is defined at module level and imports
- * are static, we test the business logic by re-implementing the decision tree
- * as pure functions and asserting on them. The task itself is a thin wrapper
- * over these decisions.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-
-// ── VTT helpers (duplicated from task to enable pure unit testing) ─────────────
-
-function formatVttTimestamp(ms: number): string {
-  const safeMs = Math.max(0, Math.round(ms));
-  const hours = Math.floor(safeMs / 3_600_000);
-  const minutes = Math.floor((safeMs % 3_600_000) / 60_000);
-  const seconds = Math.floor((safeMs % 60_000) / 1000);
-  const millis = safeMs % 1000;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
-}
-
-function toVtt(verboseRes: {
-  text: string;
-  language?: string;
-  duration?: number;
-  segments?: Array<{ start: number; end: number; text: string }>;
-}): string {
-  const segments = verboseRes.segments?.filter((s) => s.text.trim()) ?? [];
-  if (segments.length > 0) {
-    return [
-      'WEBVTT',
-      '',
-      ...segments.flatMap((s, i) => [
-        String(i + 1),
-        `${formatVttTimestamp(s.start * 1000)} --> ${formatVttTimestamp(Math.max(s.end * 1000, s.start * 1000 + 1000))}`,
-        s.text.trim(),
-        '',
-      ]),
-    ].join('\n');
-  }
-  const text = verboseRes.text.trim();
-  if (!text) return 'WEBVTT\n';
-  const durationMs = Math.max(30_000, Math.round((verboseRes.duration ?? 60) * 1000));
-  return [
-    'WEBVTT',
-    '',
-    '1',
-    `00:00:00.000 --> ${formatVttTimestamp(durationMs)}`,
-    text,
-    '',
-  ].join('\n');
-}
-
-function countVttWords(vtt: string): number {
-  const lines = vtt.split('\n');
-  const textLines = lines.filter(
-    (l) =>
-      l.trim() &&
-      !l.startsWith('WEBVTT') &&
-      !l.includes('-->') &&
-      !/^\d+$/.test(l.trim()) &&
-      !l.startsWith('NOTE'),
-  );
-  return textLines.join(' ').split(/\s+/).filter(Boolean).length;
-}
+import { toVtt, countVttWords, formatVttTimestamp } from './transcribe-uploaded-video';
 
 // ── State machine branching ────────────────────────────────────────────────────
 
@@ -180,6 +120,26 @@ describe('countVttWords', () => {
   });
 });
 
+// ── Timestamp formatting ──────────────────────────────────────────────────────
+
+describe('formatVttTimestamp', () => {
+  it('formats zero milliseconds as 00:00:00.000', () => {
+    assert.equal(formatVttTimestamp(0), '00:00:00.000');
+  });
+
+  it('formats 61500 ms as 00:01:01.500', () => {
+    assert.equal(formatVttTimestamp(61500), '00:01:01.500');
+  });
+
+  it('formats 3661000 ms as 01:01:01.000', () => {
+    assert.equal(formatVttTimestamp(3661000), '01:01:01.000');
+  });
+
+  it('clamps negative values to 00:00:00.000', () => {
+    assert.equal(formatVttTimestamp(-100), '00:00:00.000');
+  });
+});
+
 // ── Whisper file size threshold ────────────────────────────────────────────────
 
 describe('WHISPER_MAX_BYTES threshold', () => {
@@ -194,7 +154,7 @@ describe('WHISPER_MAX_BYTES threshold', () => {
     assert.ok(sizeBytes <= WHISPER_MAX_BYTES);
   });
 
-  it('files over threshold take chunked path', () => {
+  it('files over threshold exceed limit', () => {
     const sizeBytes = 30 * 1024 * 1024; // 30 MB
     assert.ok(sizeBytes > WHISPER_MAX_BYTES);
   });

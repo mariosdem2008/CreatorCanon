@@ -112,11 +112,12 @@ export async function POST(req: Request) {
   try {
     await tasks.trigger('transcribe-uploaded-video', { videoId: row.id, workspaceId });
   } catch (err) {
-    // Enqueue failed — mark video as failed so the user sees the error instead
-    // of waiting indefinitely for transcription that will never start.
+    // Enqueue failed — roll back both statuses so the user sees a clear failure
+    // and can delete + re-upload (the 409 guard checks uploadStatus='uploading',
+    // so leaving it as 'uploaded' would permanently block a retry).
     await db
       .update(video)
-      .set({ transcribeStatus: 'failed' })
+      .set({ uploadStatus: 'failed', transcribeStatus: 'failed' })
       .where(eq(video.id, videoId));
     console.error('[upload-complete] failed to enqueue transcribe job', err);
     return NextResponse.json({ error: 'Failed to schedule transcription' }, { status: 502 });

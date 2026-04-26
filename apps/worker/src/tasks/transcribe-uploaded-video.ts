@@ -1,5 +1,5 @@
 import { task, logger } from '@trigger.dev/sdk/v3';
-import { eq, getDb } from '@creatorcanon/db';
+import { and, eq, getDb } from '@creatorcanon/db';
 import { video, transcriptAsset, normalizedTranscriptVersion } from '@creatorcanon/db/schema';
 import { extractAudioFromR2Source } from '@creatorcanon/pipeline';
 import { createR2Client, createOpenAIClient, transcriptKey } from '@creatorcanon/adapters';
@@ -16,7 +16,7 @@ const WHISPER_MAX_BYTES = 25 * 1024 * 1024;
 /**
  * Count words in a VTT string by stripping metadata lines and splitting on whitespace.
  */
-function countVttWords(vtt: string): number {
+export function countVttWords(vtt: string): number {
   const lines = vtt.split('\n');
   const textLines = lines.filter(
     (l) =>
@@ -32,7 +32,7 @@ function countVttWords(vtt: string): number {
 /**
  * Format milliseconds as a VTT timestamp: HH:MM:SS.mmm
  */
-function formatVttTimestamp(ms: number): string {
+export function formatVttTimestamp(ms: number): string {
   const safeMs = Math.max(0, Math.round(ms));
   const hours = Math.floor(safeMs / 3_600_000);
   const minutes = Math.floor((safeMs % 3_600_000) / 60_000);
@@ -44,7 +44,7 @@ function formatVttTimestamp(ms: number): string {
 /**
  * Convert a verbose_json Whisper response into a VTT string.
  */
-function toVtt(verboseRes: {
+export function toVtt(verboseRes: {
   text: string;
   language?: string;
   duration?: number;
@@ -146,29 +146,13 @@ export const transcribeUploadedVideoTask = task({
         };
         vttContent = toVtt(verboseRes);
       } else {
-        // TODO(chunking): For files > 25 MB, split via ffmpeg into 10 MB chunks,
-        // transcribe each chunk with a timestamp offset, then concatenate the VTT
-        // segments. This is a TODO for a follow-up commit; for now we transcribe
-        // truncated to the first 25 MB and log a warning.
-        logger.warn('Audio file exceeds 25 MB Whisper limit; transcribing first 25 MB only', {
-          videoId: payload.videoId,
-          sizeBytes: audioBytes.byteLength,
-        });
-        const truncated = audioBytes.slice(0, WHISPER_MAX_BYTES);
-        const file = new File([truncated], `${payload.videoId}.m4a`, { type: 'audio/mp4' });
-        const res = await openai.audio.transcriptions.create({
-          model: 'gpt-4o-mini-transcribe',
-          file,
-          response_format: 'verbose_json',
-          timestamp_granularities: ['segment'],
-        });
-        const verboseRes = res as unknown as {
-          text: string;
-          language?: string;
-          duration?: number;
-          segments?: Array<{ start: number; end: number; text: string }>;
-        };
-        vttContent = toVtt(verboseRes);
+        // TODO: implement chunking (split via ffmpeg into 10MB chunks, transcribe each, concat VTT)
+        // For now: surface a clear error so the user sees a meaningful failed state.
+        throw new Error(
+          `Audio file (${(audioBytes.byteLength / 1024 / 1024).toFixed(1)} MB) exceeds the ` +
+          `${WHISPER_MAX_BYTES / 1024 / 1024} MB Whisper limit. Chunking is not yet implemented; ` +
+          `please upload a shorter video or split it manually.`,
+        );
       }
 
       // 4. Write VTT to canonical R2 location.
@@ -184,9 +168,9 @@ export const transcribeUploadedVideoTask = task({
       });
       logger.info('VTT written to R2', { videoId: payload.videoId, vttKey });
 
-      // 5. Insert transcriptAsset row.
+      // 5. Insert transcriptAsset row (idempotent — safe to retry).
       const wordCount = countVttWords(vttContent);
-      const taId = `ta_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const taId = crypto.randomUUID();
       await db.insert(transcriptAsset).values({
         id: taId,
         workspaceId: payload.workspaceId,
@@ -195,18 +179,29 @@ export const transcribeUploadedVideoTask = task({
         r2Key: vttKey,
         wordCount,
         isCanonical: true,
-      });
+      }).onConflictDoNothing();
 
-      // 6. Insert normalizedTranscriptVersion row (VTT is the initial normalized form).
-      const ntvId = `ntv_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      // Re-read canonical row to get the actual taId (in case insert was a no-op due to a prior attempt).
+      const existing = await db.select({ id: transcriptAsset.id })
+        .from(transcriptAsset)
+        .where(and(
+          eq(transcriptAsset.videoId, payload.videoId),
+          eq(transcriptAsset.isCanonical, true),
+        ))
+        .limit(1);
+      const canonicalTaId = existing[0]?.id;
+      if (!canonicalTaId) throw new Error(`No canonical transcript_asset for video ${payload.videoId}`);
+
+      // 6. Insert normalizedTranscriptVersion row (VTT is the initial normalized form, idempotent).
+      const ntvId = crypto.randomUUID();
       await db.insert(normalizedTranscriptVersion).values({
         id: ntvId,
         workspaceId: payload.workspaceId,
         videoId: payload.videoId,
-        transcriptAssetId: taId,
+        transcriptAssetId: canonicalTaId,
         r2Key: vttKey,
         version: 1,
-      });
+      }).onConflictDoNothing();
 
       // 7. Mark video ready + capture duration.
       const durationSeconds = extracted.durationSec > 0

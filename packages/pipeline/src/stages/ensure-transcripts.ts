@@ -380,11 +380,11 @@ export async function ensureTranscripts(
         videoId: vid.id,
         youtubeVideoId: vid.youtubeVideoId,
         r2Key: '',
-        provider: 'youtube_timedtext',
+        provider: 'existing',
         wordCount: 0,
         language: 'en',
         skipped: true,
-        skipReason: `Manual upload transcript not found in canonical index despite status=ready. Check transcriptAsset row for videoId=${vid.id}.`,
+        skipReason: `manual_upload_no_canonical_asset: transcript not found in canonical index despite status=ready. Check transcriptAsset row for videoId=${vid.id}.`,
       });
       continue;
     }

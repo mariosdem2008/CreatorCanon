@@ -12,7 +12,7 @@
     "smoke:trigger-dispatch": "tsx ./src/smoke-trigger-dispatch.ts",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'worker: no tests yet'",
+    "test": "NODE_ENV=test node --import \"../../node_modules/.pnpm/tsx@4.19.1/node_modules/tsx/dist/loader.mjs\" --test \"src/**/*.test.ts\"",
     "build": "echo 'worker: source-only, no build'",
     "clean": "rm -rf dist .turbo .trigger"
   },

@@ -20,17 +20,19 @@ const completeBodySchema = z.object({
 
 // ── Enqueue-failure path (logic-level unit test) ───────────────────────────────
 describe('POST /api/upload/complete — enqueue-failure logic', () => {
-  it('when tasks.trigger throws, the handler should return 502 and mark transcribeStatus=failed', () => {
+  it('when tasks.trigger throws, the handler should return 502 and mark both uploadStatus=failed and transcribeStatus=failed', () => {
     // Simulate the handler's catch block without importing the route
     // (avoids Next.js / auth / R2 bootstrap in the test environment).
     const videoId = 'mu_enqueue_fail_test';
     const workspaceId = 'ws_enqueue_fail_test';
 
-    let capturedStatus: string | null = null;
+    let capturedUploadStatus: string | null = null;
+    let capturedTranscribeStatus: string | null = null;
     const mockDb = {
       update: () => ({
-        set: (vals: { transcribeStatus: string }) => {
-          capturedStatus = vals.transcribeStatus;
+        set: (vals: { uploadStatus?: string; transcribeStatus?: string }) => {
+          if (vals.uploadStatus !== undefined) capturedUploadStatus = vals.uploadStatus;
+          if (vals.transcribeStatus !== undefined) capturedTranscribeStatus = vals.transcribeStatus;
           return { where: () => Promise.resolve() };
         },
       }),
@@ -41,15 +43,16 @@ describe('POST /api/upload/complete — enqueue-failure logic', () => {
       try {
         throw new Error('Trigger.dev unavailable');
       } catch (err) {
-        // Mirror the handler's catch block
-        await mockDb.update().set({ transcribeStatus: 'failed' }).where();
+        // Mirror the handler's catch block (Fix I3: also rolls back uploadStatus)
+        await mockDb.update().set({ uploadStatus: 'failed', transcribeStatus: 'failed' }).where();
         return { status: 502, body: { error: 'Failed to schedule transcription' } };
       }
     };
 
     return simulateEnqueueFailure().then((result) => {
       assert.equal(result.status, 502, 'should return 502');
-      assert.equal(capturedStatus, 'failed', 'transcribeStatus should be set to failed');
+      assert.equal(capturedUploadStatus, 'failed', 'uploadStatus should be rolled back to failed');
+      assert.equal(capturedTranscribeStatus, 'failed', 'transcribeStatus should be set to failed');
       assert.equal(result.body.error, 'Failed to schedule transcription');
     });
   });
