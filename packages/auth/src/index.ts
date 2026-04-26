@@ -12,7 +12,7 @@ import NextAuth from 'next-auth';
 import type { NextAuthResult } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 
-import { getDb } from '@creatorcanon/db';
+import { getDb, withDbRetry } from '@creatorcanon/db';
 import {
   account,
   allowlistEmail,
@@ -57,17 +57,21 @@ function getInstance(): NextAuthResult {
                 if (!email) return null;
 
                 const db = getDb();
-                const rows = await db
-                  .select({
-                    id: user.id,
-                    email: user.email,
-                    name: user.name,
-                    image: user.image,
-                    isAdmin: user.isAdmin,
-                  })
-                  .from(user)
-                  .where(eq(user.email, email))
-                  .limit(1);
+                const rows = await withDbRetry(
+                  () =>
+                    db
+                      .select({
+                        id: user.id,
+                        email: user.email,
+                        name: user.name,
+                        image: user.image,
+                        isAdmin: user.isAdmin,
+                      })
+                      .from(user)
+                      .where(eq(user.email, email))
+                      .limit(1),
+                  { label: 'auth:credentials-lookup' },
+                );
 
                 const existingUser = rows[0];
                 if (!existingUser) return null;

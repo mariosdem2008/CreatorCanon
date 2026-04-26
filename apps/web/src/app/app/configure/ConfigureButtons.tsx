@@ -18,12 +18,12 @@ export function ConfigureSubmitButton({
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-ink px-6 text-body-sm font-semibold text-paper transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 sm:w-auto sm:justify-start"
+      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[8px] bg-[var(--cc-accent)] px-5 text-[13px] font-semibold text-white shadow-[0_1px_2px_rgba(88,86,246,0.18)] transition hover:bg-[var(--cc-accent-strong)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--cc-canvas)]"
     >
       {pending ? (
         <>
           <span
-            className="h-4 w-4 animate-spin rounded-full border-2 border-paper/30 border-t-paper"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
             aria-hidden="true"
           />
           {pendingLabel}
@@ -46,12 +46,12 @@ export function CheckSourceButton() {
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className="inline-flex h-9 whitespace-nowrap items-center gap-1.5 rounded-lg border border-rule bg-paper px-4 text-body-sm font-medium text-ink transition hover:bg-paper-2 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+      className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] transition hover:border-[var(--cc-ink-4)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)]"
     >
       {pending ? (
         <>
           <span
-            className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-4/30 border-t-ink-4"
+            className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--cc-ink-4)]/30 border-t-[var(--cc-ink-4)]"
             aria-hidden="true"
           />
           Checking...

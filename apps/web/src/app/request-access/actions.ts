@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { createResendClient } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
-import { getDb } from '@creatorcanon/db';
+import { getDb, withDbRetry } from '@creatorcanon/db';
 import { allowlistEmail } from '@creatorcanon/db/schema';
 
 import AccessRequestedEmail from '@/emails/AccessRequestedEmail';
@@ -25,14 +25,18 @@ export async function requestAccess(formData: FormData): Promise<void> {
   const ip = forwarded?.split(',')[0]?.trim() ?? null;
 
   const db = getDb();
-  await db
-    .insert(allowlistEmail)
-    .values({
-      email: rawEmail,
-      approved: false,
-      requestedByIp: ip,
-    })
-    .onConflictDoNothing();
+  await withDbRetry(
+    () =>
+      db
+        .insert(allowlistEmail)
+        .values({
+          email: rawEmail,
+          approved: false,
+          requestedByIp: ip,
+        })
+        .onConflictDoNothing(),
+    { label: 'request-access:insert' },
+  );
 
   // Best-effort operator notification. Never throw — the creator's submission
   // must succeed even if email delivery fails or RESEND_API_KEY is unset.

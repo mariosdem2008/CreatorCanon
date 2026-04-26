@@ -218,6 +218,7 @@ async function createEditedVersion(input: {
   });
 
   revalidatePath(`/app/projects/${input.projectId}/pages`);
+  revalidatePath(`/app/projects/${input.projectId}/pages/${input.pageId}`);
 }
 
 export async function updatePageTitle(
@@ -350,6 +351,7 @@ async function updatePageReviewStatus(input: {
   });
 
   revalidatePath(`/app/projects/${input.projectId}/pages`);
+  revalidatePath(`/app/projects/${input.projectId}/pages/${input.pageId}`);
 }
 
 export async function markPageReviewed(projectId: string, pageId: string) {

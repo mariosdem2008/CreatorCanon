@@ -4,7 +4,9 @@ import { notFound } from 'next/navigation';
 import { PublicHubDetail } from '@/components/hub/publicTemplates';
 import { loadHubManifest } from '../manifest';
 
-export const dynamic = 'force-dynamic';
+// Public hub pages are content-only (no cookies/auth). Cache aggressively;
+// publish actions revalidate via revalidatePath in publish.ts when content changes.
+export const revalidate = 60;
 
 export async function generateMetadata({
   params,

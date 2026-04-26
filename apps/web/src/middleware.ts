@@ -5,9 +5,11 @@
 export { edgeAuth as default } from '@creatorcanon/auth/middleware';
 
 export const config = {
-  // Run on everything except static assets, images, and the NextAuth API
-  // itself (the handler must not be wrapped in auth middleware).
+  // Run on everything except: static assets, images, NextAuth handler,
+  // public hub pages (/h/*), the healthcheck endpoint, and the request-access
+  // public form. Skipping these avoids an edge function invocation on every
+  // public navigation.
   matcher: [
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|monitoring|.*\\..*).*)',
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|monitoring|h/|healthcheck|request-access|.*\\..*).*)',
   ],
 };

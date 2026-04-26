@@ -1,410 +1,358 @@
-import Image from 'next/image';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { and, count, desc, eq, inArray, ne } from '@creatorcanon/db';
+import {
+  channel,
+  generationRun,
+  hub,
+  inboxItem,
+  page as hubPage,
+  project,
+  video,
+} from '@creatorcanon/db/schema';
 
-import { auth, signOut } from '@creatorcanon/auth';
-import { count, eq, getDb } from '@creatorcanon/db';
-import { channel, video, workspaceMember } from '@creatorcanon/db/schema';
+import {
+  ChannelHeaderCard,
+  HubProgressCard,
+  LinkButton,
+  MetricCard,
+  NoticeBanner,
+  PageHeader,
+  RecentActivityList,
+  type HubStage,
+  type RecentActivityItem,
+} from '@/components/cc';
+import { requireWorkspace } from '@/lib/workspace';
 
 import { ConnectChannelForm } from './ConnectChannelForm';
-import { DashboardCard } from './DashboardCard';
-import { StepList } from './StepList';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Home' };
-
-const ONBOARDING_STEPS = [
-  {
-    title: 'Connect your YouTube channel',
-    detail: 'Verify the workspace against the Google account that owns or manages the channel.',
-  },
-  {
-    title: 'Review the imported library',
-    detail: 'Pick focused, source-ready videos before you configure the hub.',
-  },
-  {
-    title: 'Configure, pay, and publish',
-    detail: 'Set output preferences, run generation, then review the draft before release.',
-  },
-] as const;
+export const metadata = { title: 'Welcome — CreatorCanon' };
 
 export default async function AppHomePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/sign-in');
+  const { db, session, workspaceId } = await requireWorkspace();
 
-  const db = getDb();
-  const userId = session.user.id;
-
-  const members = await db
-    .select({ workspaceId: workspaceMember.workspaceId })
-    .from(workspaceMember)
-    .where(eq(workspaceMember.userId, userId))
+  const channels = await db
+    .select()
+    .from(channel)
+    .where(eq(channel.workspaceId, workspaceId))
     .limit(1);
-
-  const workspaceId = members[0]?.workspaceId;
-
-  const channels = workspaceId
-    ? await db.select().from(channel).where(eq(channel.workspaceId, workspaceId)).limit(1)
-    : [];
-
   const ch = channels[0];
 
-  const videoCountResult = ch
-    ? await db.select({ n: count() }).from(video).where(eq(video.channelId, ch.id))
-    : [];
+  const noChannelInventoryDefault = [{ n: 0 }] as const;
+  const [
+    videoCountResult,
+    readyVideoCountResult,
+    activeRunCountResult,
+    reviewRunCountResult,
+    draftPageCountResult,
+    approvedPageCountResult,
+    hubCountResult,
+    inboxRows,
+    recentProjects,
+  ] = await Promise.all([
+    ch
+      ? db.select({ n: count() }).from(video).where(eq(video.channelId, ch.id))
+      : Promise.resolve(noChannelInventoryDefault),
+    ch
+      ? db
+          .select({ n: count() })
+          .from(video)
+          .where(
+            and(
+              eq(video.channelId, ch.id),
+              inArray(video.captionStatus, ['available', 'auto_only']),
+            ),
+          )
+      : Promise.resolve(noChannelInventoryDefault),
+    db
+      .select({ n: count() })
+      .from(generationRun)
+      .where(
+        and(
+          eq(generationRun.workspaceId, workspaceId),
+          inArray(generationRun.status, ['queued', 'running']),
+        ),
+      ),
+    db
+      .select({ n: count() })
+      .from(generationRun)
+      .where(
+        and(
+          eq(generationRun.workspaceId, workspaceId),
+          eq(generationRun.status, 'awaiting_review'),
+        ),
+      ),
+    db.select({ n: count() }).from(hubPage).where(eq(hubPage.workspaceId, workspaceId)),
+    db
+      .select({ n: count() })
+      .from(hubPage)
+      .where(
+        and(eq(hubPage.workspaceId, workspaceId), eq(hubPage.status, 'approved')),
+      ),
+    db.select({ n: count() }).from(hub).where(eq(hub.workspaceId, workspaceId)),
+    db
+      .select({
+        id: inboxItem.id,
+        kind: inboxItem.kind,
+        status: inboxItem.status,
+        title: inboxItem.title,
+        body: inboxItem.body,
+        targetRef: inboxItem.targetRef,
+        createdAt: inboxItem.createdAt,
+      })
+      .from(inboxItem)
+      .where(
+        and(
+          eq(inboxItem.workspaceId, workspaceId),
+          ne(inboxItem.status, 'archived'),
+        ),
+      )
+      .orderBy(desc(inboxItem.createdAt))
+      .limit(8),
+    db
+      .select({
+        id: project.id,
+        title: project.title,
+        currentRunId: project.currentRunId,
+        publishedHubId: project.publishedHubId,
+        createdAt: project.createdAt,
+      })
+      .from(project)
+      .where(eq(project.workspaceId, workspaceId))
+      .orderBy(desc(project.createdAt))
+      .limit(1),
+  ]);
+
   const videoCount = videoCountResult[0]?.n ?? 0;
+  const readyVideoCount = readyVideoCountResult[0]?.n ?? 0;
+  const activeRunCount = activeRunCountResult[0]?.n ?? 0;
+  const reviewRunCount = reviewRunCountResult[0]?.n ?? 0;
+  const draftPageCount = draftPageCountResult[0]?.n ?? 0;
+  const approvedPageCount = approvedPageCountResult[0]?.n ?? 0;
+  const publishedHubCount = hubCountResult[0]?.n ?? 0;
+  const firstProject = recentProjects[0];
 
-  async function signOutAction() {
-    'use server';
-    await signOut({ redirectTo: '/' });
-  }
+  const hubProgress = deriveHubStage({
+    hasChannel: Boolean(ch),
+    hasReadyVideos: readyVideoCount > 0,
+    firstProject: firstProject ?? null,
+    activeRunCount,
+    reviewRunCount,
+    approvedPageCount,
+    publishedHubCount,
+  });
+
+  const firstName = (session.user.name ?? '').split(' ')[0] ?? null;
+
+  const activityItems: RecentActivityItem[] = inboxRows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    title: row.title,
+    body: row.body,
+    href: deriveActivityHref(row.kind, row.targetRef),
+    createdAt: row.createdAt,
+    status: row.status,
+  }));
 
   return (
-    <main className="min-h-screen bg-paper-studio px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="relative overflow-hidden rounded-[32px] border border-rule bg-paper shadow-1">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top_left,rgba(196,154,68,0.18),transparent_38%),radial-gradient(circle_at_top_right,rgba(21,25,33,0.10),transparent_34%)]" />
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Command center"
+        title={firstName ? `Welcome back, ${firstName}` : 'Welcome to CreatorCanon'}
+        body={
+          ch
+            ? readyVideoCount > 0
+              ? 'Your channel is connected. Choose the videos for your first knowledge hub and Atlas will handle the rest.'
+              : 'Your channel is connected. Atlas is checking caption coverage for your videos — once at least 8 are ready, you can start a hub.'
+            : 'Connect your YouTube channel to begin. Atlas will catalogue your archive and recommend the best source set for your first hub.'
+        }
+        actions={
+          ch ? (
+            <LinkButton href="/app/library" variant="primary">
+              Select videos →
+            </LinkButton>
+          ) : null
+        }
+      />
 
-          <div className="relative grid gap-6 px-5 py-5 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.45fr)_320px]">
-            <div className="space-y-6">
-              <section className="overflow-hidden rounded-[28px] border border-rule bg-paper-2/80">
-                <div className="border-b border-rule/80 px-5 py-5 sm:px-6 sm:py-6">
-                  <div className="mb-2 text-eyebrow uppercase tracking-widest text-ink-4">
-                    Authenticated workspace
-                  </div>
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="max-w-3xl">
-                      <h1 className="font-serif text-heading-lg text-ink sm:text-display-sm">
-                        {ch ? 'Your channel cockpit' : 'Bring your channel into CreatorCanon'}
-                      </h1>
-                      <p className="mt-3 text-body-md leading-7 text-ink-3">
-                        {ch
-                          ? 'The channel is connected. Use this workspace to verify sync status, review imported inventory, and move into hub configuration.'
-                          : 'Start with a channel connection. Once metadata and videos land, the rest of the workflow becomes a guided build instead of a blank dashboard.'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href="/app/alpha-guide"
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-rule bg-paper px-4 text-body-sm font-medium text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                      >
-                        Open alpha guide
-                      </Link>
-                      {ch && videoCount > 0 ? (
-                        <Link
-                          href="/app/library"
-                          className="inline-flex h-10 items-center justify-center rounded-xl bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                        >
-                          Browse library
-                        </Link>
-                      ) : null}
-                      <Link
-                        href="/app/hubs"
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-rule bg-paper px-4 text-body-sm font-medium text-ink-3 transition hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                      >
-                        My hubs →
-                      </Link>
-                    </div>
-                  </div>
-                </div>
+      {ch ? (
+        readyVideoCount > 0 ? (
+          <NoticeBanner
+            tone="atlas"
+            badge="Atlas"
+            title={`${readyVideoCount} source-ready ${readyVideoCount === 1 ? 'video' : 'videos'} found.`}
+            body="Atlas suggests starting with your highest-engagement, most-comprehensive teaching content for the strongest first hub."
+            action={{ label: 'Review picks', href: '/app/library' }}
+          />
+        ) : null
+      ) : null}
 
-                {ch ? (
-                  <div className="space-y-6 px-5 py-5 sm:px-6 sm:py-6">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex min-w-0 items-center gap-4">
-                        {ch.avatarUrl ? (
-                          <Image
-                            src={ch.avatarUrl}
-                            alt={ch.title ?? 'Channel'}
-                            width={72}
-                            height={72}
-                            className="h-16 w-16 shrink-0 rounded-full ring-2 ring-rule sm:h-[72px] sm:w-[72px]"
-                            unoptimized
-                          />
-                        ) : (
-                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-paper text-body-md font-medium text-ink-3 ring-2 ring-rule sm:h-[72px] sm:w-[72px]">
-                            {ch.title?.slice(0, 2) ?? 'Ch'}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="inline-flex items-center rounded-full border border-emerald/30 bg-emerald/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                            Channel connected
-                          </div>
-                          <h2 className="mt-3 truncate font-serif text-heading-lg text-ink">
-                            {ch.title}
-                          </h2>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-ink-4">
-                            {ch.handle ? <span>{ch.handle}</span> : null}
-                            <span>Workspace ready for import and review</span>
-                          </div>
-                        </div>
-                      </div>
+      <HubProgressCard
+        current={hubProgress.current}
+        doneStages={hubProgress.done}
+        statusLabel={hubProgress.statusLabel}
+      />
 
-                      <div className="grid gap-3 sm:grid-cols-2 lg:w-[320px]">
-                        <StatusPill
-                          label="Library state"
-                          value={videoCount > 0 ? 'Synced' : 'Needs sync'}
-                          tone={videoCount > 0 ? 'success' : 'warning'}
-                        />
-                        <StatusPill
-                          label="Next move"
-                          value={videoCount > 0 ? 'Select videos' : 'Reconnect channel'}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <StatCard label="Subscribers" value={ch.subsCount != null ? fmtNumber(ch.subsCount) : '--'} />
-                      <StatCard label="YouTube videos" value={ch.videoCount != null ? fmtNumber(ch.videoCount) : '--'} />
-                      <StatCard label="Synced videos" value={fmtNumber(videoCount)} />
-                      <StatCard label="Coverage" value={videoCount > 0 ? pct(videoCount, ch.videoCount) : '0%'} />
-                    </div>
-
-                    {videoCount > 0 ? (
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                        <div className="rounded-[24px] border border-rule bg-paper px-5 py-5">
-                          <p className="text-eyebrow uppercase tracking-widest text-ink-4">
-                            Ready to build
-                          </p>
-                          <h3 className="mt-2 font-serif text-heading-md text-ink">
-                            Your imported library is ready for curation
-                          </h3>
-                          <p className="mt-3 max-w-2xl text-body-md leading-7 text-ink-3">
-                            Move into the library to select source-ready videos, shape the scope,
-                            and hand off a cleaner input set to configuration.
-                          </p>
-                        </div>
-                        <div className="rounded-[24px] border border-rule bg-paper px-5 py-5">
-                          <p className="text-eyebrow uppercase tracking-widest text-ink-4">
-                            Suggested next step
-                          </p>
-                          <p className="mt-2 text-body-sm leading-6 text-ink-3">
-                            Start with a focused batch of videos rather than the full archive for a
-                            tighter first hub.
-                          </p>
-                          <Link
-                            href="/app/library"
-                            className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-ink px-4 text-body-sm font-medium text-paper transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                          >
-                            Review source library
-                          </Link>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                        <div className="rounded-[24px] border border-amber/30 bg-amber-wash/60 px-5 py-5">
-                          <p className="text-eyebrow uppercase tracking-widest text-amber-ink/80">
-                            Sync needed
-                          </p>
-                          <h3 className="mt-2 font-serif text-heading-md text-amber-ink">
-                            Reconnect to trigger the first full video import
-                          </h3>
-                          <p className="mt-3 text-body-md leading-7 text-amber-ink/80">
-                            The workspace sees the channel, but the library has not landed yet.
-                            Reconnecting refreshes access and kicks off the catalog sync.
-                            {ch.videoCount != null
-                              ? ` ${ch.videoCount.toLocaleString()} videos are available upstream.`
-                              : ''}
-                          </p>
-                        </div>
-                        <div className="rounded-[24px] border border-rule bg-paper px-5 py-5">
-                          <p className="text-eyebrow uppercase tracking-widest text-ink-4">
-                            What to expect
-                          </p>
-                          <p className="mt-2 text-body-sm leading-6 text-ink-3">
-                            Once the import completes, this dashboard changes from setup mode to a
-                            curation workspace with library access.
-                          </p>
-                          <Link
-                            href="/app/alpha-guide"
-                            className="mt-4 inline-flex rounded text-body-sm font-medium text-ink underline decoration-rule underline-offset-4 transition hover:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                          >
-                            Review the alpha workflow
-                          </Link>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="grid gap-6 px-5 py-5 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1.1fr)_360px]">
-                    <div className="space-y-5">
-                      <div className="max-w-2xl">
-                        <p className="text-eyebrow uppercase tracking-widest text-ink-4">
-                          First run
-                        </p>
-                        <h2 className="mt-2 font-serif text-heading-lg text-ink">
-                          Connect a channel and let the workspace populate itself
-                        </h2>
-                        <p className="mt-3 text-body-md leading-7 text-ink-3">
-                          We will pull channel metadata and the video inventory tied to the Google
-                          account you signed in with. After that, the product flow switches from
-                          setup into selection and configuration.
-                        </p>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <InfoTile
-                          title="1. Verify ownership"
-                          body="The Google session needs channel access so the workspace resolves the right source."
-                        />
-                        <InfoTile
-                          title="2. Import the archive"
-                          body="Metadata arrives first, then the video list becomes available for selection."
-                        />
-                        <InfoTile
-                          title="3. Start the hub build"
-                          body="Once videos are in place, configuration and checkout become available."
-                        />
-                      </div>
-                    </div>
-
-                    <div className="rounded-[28px] border border-rule bg-paper p-5 shadow-1 sm:p-6">
-                      <p className="text-eyebrow uppercase tracking-widest text-ink-4">
-                        Connect channel
-                      </p>
-                      <h3 className="mt-2 font-serif text-heading-md text-ink">
-                        Set up the workspace source
-                      </h3>
-                      <p className="mt-3 text-body-sm leading-6 text-ink-3">
-                        This uses the signed-in Google account and does not change any later steps.
-                      </p>
-                      <div className="mt-5">
-                        <ConnectChannelForm />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </section>
-            </div>
-
-            <aside className="space-y-6">
-              <DashboardCard eyebrow="Progress" title={ch ? 'Current workflow' : 'Onboarding path'}>
-                <StepList
-                  items={ONBOARDING_STEPS.map((item, index) => ({
-                    ...item,
-                    status: ch
-                      ? index === 0
-                        ? 'complete'
-                        : videoCount > 0 && index === 1
-                          ? 'complete'
-                          : videoCount > 0 && index === 2
-                            ? 'current'
-                            : index === 1
-                              ? 'current'
-                              : 'upcoming'
-                      : index === 0
-                        ? 'current'
-                        : 'upcoming',
-                  }))}
-                  compact
-                />
-              </DashboardCard>
-
-              <DashboardCard eyebrow="Session" title="Workspace access">
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-rule bg-paper-2 p-4">
-                    <p className="text-body-sm font-medium text-ink">
-                      {session.user.name ?? session.user.email}
-                    </p>
-                    <p className="mt-1 text-caption text-ink-4">{session.user.email}</p>
-                    {session.user.isAdmin ? (
-                      <div className="mt-3 inline-flex rounded-full border border-rule bg-paper px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
-                        admin
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-3 text-body-sm">
-                    <Link
-                      href="/app/alpha-guide"
-                      className="block rounded-2xl border border-rule bg-paper-2 px-4 py-3 text-ink-3 transition hover:bg-paper hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                    >
-                      Review the private alpha guide
-                    </Link>
-                    {ch ? (
-                      <Link
-                        href="/app/library"
-                        className="block rounded-2xl border border-rule bg-paper-2 px-4 py-3 text-ink-3 transition hover:bg-paper hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                      >
-                        Open imported video library
-                      </Link>
-                    ) : null}
-                    <form action={signOutAction}>
-                      <button
-                        type="submit"
-                        className="w-full rounded-2xl border border-rule bg-paper-2 px-4 py-3 text-left text-body-sm text-ink-3 transition hover:bg-paper hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
-                      >
-                        Sign out
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </DashboardCard>
-
-              <DashboardCard eyebrow="Operator Notes" title="What makes this feel fast">
-                <div className="space-y-3 text-caption leading-5 text-ink-4">
-                  <p>Focused source selection creates better outlines than importing everything.</p>
-                  <p>Transcript coverage improves quotes, timestamps, and evidence density.</p>
-                  <p>The dashboard stays in setup mode until the library is genuinely usable.</p>
-                </div>
-              </DashboardCard>
-            </aside>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Videos selected"
+          value={firstProject ? videoCount : 0}
+          sub={firstProject ? `${readyVideoCount} caption-ready` : 'Select at least 8 to start'}
+        />
+        <MetricCard
+          label="Pages generated"
+          value={draftPageCount}
+          sub={draftPageCount === 0 ? 'Generated after your first run' : `${reviewRunCount} runs awaiting review`}
+        />
+        <MetricCard
+          label="Pages approved"
+          value={approvedPageCount}
+          sub={approvedPageCount === 0 ? 'Approved during review' : `${draftPageCount - approvedPageCount} still draft`}
+        />
+        <MetricCard
+          label="Hub status"
+          value={hubProgress.statusValue}
+          sub={hubProgress.statusSub}
+          tone={hubProgress.statusTone}
+        />
       </div>
-    </main>
-  );
-}
 
-function fmtNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
-}
-
-function pct(synced: number, total: number | null): string {
-  if (!total || total <= 0) return '--';
-  return `${Math.min(100, Math.round((synced / total) * 100))}%`;
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[22px] border border-rule bg-paper px-4 py-4">
-      <p className="text-eyebrow uppercase tracking-widest text-ink-4">{label}</p>
-      <p className="mt-2 font-serif text-heading-md text-ink">{value}</p>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {ch ? (
+          <ChannelHeaderCard
+            channel={{
+              avatarUrl: ch.avatarUrl,
+              name: ch.title ?? 'Connected channel',
+              handle: ch.handle,
+              videoCount,
+              subscriberCount: ch.subsCount ?? undefined,
+              captionReadyCount: readyVideoCount,
+              isConnected: true,
+            }}
+          />
+        ) : (
+          <div className="rounded-[12px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] p-5 shadow-[var(--cc-shadow-1)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--cc-ink-4)]">
+              Source setup
+            </p>
+            <h2 className="mt-2 text-[16px] font-semibold text-[var(--cc-ink)]">
+              Connect your YouTube channel
+            </h2>
+            <p className="mt-2 text-[13px] leading-[1.55] text-[var(--cc-ink-3)]">
+              Read-only access. We import channel metadata and the available video catalog.
+            </p>
+            <div className="mt-4">
+              <ConnectChannelForm />
+            </div>
+          </div>
+        )}
+        <RecentActivityList items={activityItems} />
+      </div>
     </div>
   );
 }
 
-function StatusPill({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string;
-  value: string;
-  tone?: 'default' | 'success' | 'warning';
-}) {
-  const toneClass =
-    tone === 'success'
-      ? 'border-emerald/30 bg-emerald/10 text-emerald-700'
-      : tone === 'warning'
-        ? 'border-amber/30 bg-amber-wash text-amber-ink'
-        : 'border-rule bg-paper text-ink';
+type ProjectRow = {
+  id: string;
+  currentRunId: string | null;
+  publishedHubId: string | null;
+};
 
-  return (
-    <div className={`rounded-[20px] border px-4 py-3 ${toneClass}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] opacity-80">{label}</p>
-      <p className="mt-1 text-body-sm font-medium">{value}</p>
-    </div>
-  );
+function deriveHubStage(input: {
+  hasChannel: boolean;
+  hasReadyVideos: boolean;
+  firstProject: ProjectRow | null;
+  activeRunCount: number;
+  reviewRunCount: number;
+  approvedPageCount: number;
+  publishedHubCount: number;
+}): {
+  current: HubStage;
+  done: HubStage[];
+  statusValue: string;
+  statusSub: string;
+  statusLabel: string;
+  statusTone: 'default' | 'success' | 'warn' | 'danger';
+} {
+  if (input.publishedHubCount > 0) {
+    return {
+      current: 'publish',
+      done: ['select_videos', 'configure_hub', 'generate', 'review_pages', 'publish'],
+      statusValue: 'Published',
+      statusSub: 'Live to readers',
+      statusLabel: 'Hub is live',
+      statusTone: 'success',
+    };
+  }
+  if (input.reviewRunCount > 0 || input.approvedPageCount > 0) {
+    return {
+      current: 'review_pages',
+      done: ['select_videos', 'configure_hub', 'generate'],
+      statusValue: 'In review',
+      statusSub: 'Approve pages to publish',
+      statusLabel: 'Awaiting review',
+      statusTone: 'warn',
+    };
+  }
+  if (input.activeRunCount > 0) {
+    return {
+      current: 'generate',
+      done: ['select_videos', 'configure_hub'],
+      statusValue: 'Generating',
+      statusSub: 'Atlas is drafting pages',
+      statusLabel: 'Worker running',
+      statusTone: 'warn',
+    };
+  }
+  if (input.firstProject) {
+    if (input.firstProject.currentRunId) {
+      return {
+        current: 'generate',
+        done: ['select_videos', 'configure_hub'],
+        statusValue: 'Queued',
+        statusSub: 'Generation about to start',
+        statusLabel: 'Worker queued',
+        statusTone: 'warn',
+      };
+    }
+    return {
+      current: 'configure_hub',
+      done: ['select_videos'],
+      statusValue: 'Configuring',
+      statusSub: 'Pick scope + theme',
+      statusLabel: 'Project drafted',
+      statusTone: 'default',
+    };
+  }
+  if (input.hasChannel && input.hasReadyVideos) {
+    return {
+      current: 'select_videos',
+      done: [],
+      statusValue: 'Not started',
+      statusSub: 'Select at least 8 videos',
+      statusLabel: 'Awaiting selection',
+      statusTone: 'default',
+    };
+  }
+  return {
+    current: 'select_videos',
+    done: [],
+    statusValue: 'Not started yet',
+    statusSub: input.hasChannel ? 'Awaiting caption coverage' : 'Connect a channel',
+    statusLabel: 'Not started',
+    statusTone: 'default',
+  };
 }
 
-function InfoTile({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-[22px] border border-rule bg-paper px-4 py-4">
-      <p className="text-body-sm font-medium text-ink">{title}</p>
-      <p className="mt-2 text-caption leading-5 text-ink-4">{body}</p>
-    </div>
-  );
+function deriveActivityHref(kind: string, targetRef: string | null): string | null {
+  switch (kind) {
+    case 'run_completed':
+    case 'run_failed':
+    case 'run_awaiting_review':
+    case 'release_published':
+      return targetRef ? `/app/projects/${targetRef}` : '/app/projects';
+    case 'invite_pending':
+      return '/app/settings/team';
+    default:
+      return null;
+  }
 }

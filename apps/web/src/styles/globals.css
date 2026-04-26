@@ -5,6 +5,52 @@
 /* Inherit design tokens from @creatorcanon/ui */
 @import '@creatorcanon/ui/globals.css';
 
+/* ==================== CC redesign tokens ====================
+ * Lives alongside the legacy --paper / --ink / --amber tokens during the
+ * five-phase migration. Spec: docs/superpowers/specs/2026-04-25-creatorcanon-redesign-design.md
+ * Marketing surface keeps the legacy tokens; /app/* and public hubs flip to cc-*.
+ */
+:root {
+  /* Sidebar / structure */
+  --cc-sidebar: #0B102B;
+  --cc-sidebar-2: #131A3B;
+  --cc-sidebar-ink: #FFFFFF;
+  --cc-sidebar-ink-3: #A3A8C7;
+  --cc-sidebar-ink-4: #6E7497;
+
+  /* Canvas / surface */
+  --cc-canvas: #FAF8F3;
+  --cc-surface: #FFFFFF;
+  --cc-surface-2: #F2EEE2;
+  --cc-rule: #EDEAE2;
+
+  /* Accent */
+  --cc-accent: #5856F6;
+  --cc-accent-strong: #4F4DE0;
+  --cc-accent-wash: #EEEEFF;
+
+  /* Status */
+  --cc-success: #16A34A;
+  --cc-success-wash: #DCFCE7;
+  --cc-warn: #F59E0B;
+  --cc-warn-wash: #FEF3C7;
+  --cc-danger: #EF4444;
+  --cc-danger-wash: #FEE2E2;
+  --cc-info: #0EA5E9;
+  --cc-info-wash: #E0F2FE;
+
+  /* Ink (text on canvas) */
+  --cc-ink: #0B102B;
+  --cc-ink-2: #3F455D;
+  --cc-ink-3: #5C6378;
+  --cc-ink-4: #7A8095;
+
+  /* Elevation */
+  --cc-shadow-1: 0 1px 2px rgba(11, 16, 43, 0.04);
+  --cc-shadow-2: 0 4px 12px rgba(11, 16, 43, 0.06);
+  --cc-shadow-pop: 0 12px 32px rgba(11, 16, 43, 0.10);
+}
+
 /* ==================== Tailwind base layer overrides ==================== */
 @layer base {
   html,

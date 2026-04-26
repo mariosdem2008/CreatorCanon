@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
 
 import { createR2Client } from '@creatorcanon/adapters';
@@ -8,7 +9,9 @@ import { releaseManifestV0Schema } from '@creatorcanon/pipeline';
 
 export type HubManifest = Awaited<ReturnType<typeof loadHubManifest>>;
 
-export async function loadHubManifest(subdomain: string) {
+// React.cache dedupes within a single request — generateMetadata and the page
+// render both call loadHubManifest, but only one DB+R2 round-trip happens.
+export const loadHubManifest = cache(async (subdomain: string) => {
   const db = getDb();
   const hubs = await db
     .select({
@@ -51,4 +54,4 @@ export async function loadHubManifest(subdomain: string) {
     release: releaseRow,
     manifest,
   };
-}
+});

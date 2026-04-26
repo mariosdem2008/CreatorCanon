@@ -233,3 +233,35 @@ export const costUserInteractionEnum = pgEnum('cost_user_interaction', [
   'chat_answer',
   'admin_rerun',
 ]);
+
+// ----- Atlas agent / inbox -----
+export const agentSuggestionStatusEnum = pgEnum('agent_suggestion_status', [
+  'pending',
+  'accepted',
+  'dismissed',
+]);
+
+export const agentSuggestionKindEnum = pgEnum('agent_suggestion_kind', [
+  'connect_source',
+  'pick_focus_set',
+  'configure_project',
+  'review_run',
+  'publish_release',
+  'edit_section',
+  'expand_archive',
+]);
+
+export const inboxItemStatusEnum = pgEnum('inbox_item_status', [
+  'unread',
+  'read',
+  'archived',
+]);
+
+export const inboxItemKindEnum = pgEnum('inbox_item_kind', [
+  'run_completed',
+  'run_failed',
+  'run_awaiting_review',
+  'release_published',
+  'invite_pending',
+  'system_notice',
+]);

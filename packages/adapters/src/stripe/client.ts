@@ -37,6 +37,16 @@ export interface WebhookHandleResult {
   verified: boolean;
 }
 
+export interface BillingPortalSessionParams {
+  customerId: string;
+  returnUrl: string;
+}
+
+export interface BillingPortalSessionResult {
+  id: string;
+  url: string;
+}
+
 export interface StripeAdapterClient {
   readonly raw: Stripe;
 
@@ -45,6 +55,9 @@ export interface StripeAdapterClient {
   ): Promise<CheckoutSessionResult>;
   retrieveCheckout(id: string): Promise<Stripe.Checkout.Session>;
   createCustomer(email: string): Promise<Stripe.Customer>;
+  createBillingPortalSession(
+    params: BillingPortalSessionParams,
+  ): Promise<BillingPortalSessionResult>;
   /**
    * Verify a Stripe webhook signature using `STRIPE_WEBHOOK_SECRET` and
    * return the parsed event. Raises `CanonError` on signature failure.
@@ -126,6 +139,22 @@ export const createStripeClient = (env: ServerEnv): StripeAdapterClient => {
     async createCustomer(email) {
       const customerEmail = z.string().email().parse(email);
       return raw.customers.create({ email: customerEmail });
+    },
+    async createBillingPortalSession({ customerId, returnUrl }) {
+      const id = z.string().min(1).parse(customerId);
+      const url = z.string().url().parse(returnUrl);
+      const session = await raw.billingPortal.sessions.create({
+        customer: id,
+        return_url: url,
+      });
+      if (!session.url) {
+        throw new CanonError({
+          code: 'provider_error',
+          category: 'provider_upstream',
+          message: 'Stripe did not return a billing portal URL.',
+        });
+      }
+      return { id: session.id, url: session.url };
     },
     async handleWebhook(_event, signature, rawBody) {
       const signedHeader = z.string().min(1).parse(signature);
