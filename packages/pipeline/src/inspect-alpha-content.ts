@@ -16,8 +16,8 @@ import {
 
 import {
   ensureTranscriptsStageOutputSchema,
-  releaseManifestV0Schema,
 } from './contracts';
+import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 import { loadDefaultEnvFiles } from './env-files';
 
 function requireRunId(): string {
@@ -145,17 +145,14 @@ async function main() {
   if (liveHub?.manifestR2Key) {
     const r2 = createR2Client(parseServerEnv(process.env));
     const manifestObject = await r2.getObject(liveHub.manifestR2Key);
-    const manifest = releaseManifestV0Schema.parse(
-      JSON.parse(new TextDecoder().decode(manifestObject.body)),
-    );
-    const sourceRefs = manifest.pages.flatMap((page) => page.blocks.flatMap((block) => {
-      const content = block.content as { sourceRefs?: unknown };
-      return Array.isArray(content.sourceRefs) ? content.sourceRefs : [];
-    }));
+    const raw = JSON.parse(new TextDecoder().decode(manifestObject.body)) as EditorialAtlasManifest;
+    const pageCount = raw.pages?.length ?? 0;
+    // Count citation references across all page sections as a proxy for source density.
+    const citationCount = raw.pages?.reduce((sum, p) => sum + (p.citations?.length ?? 0), 0) ?? 0;
     manifestSummary = {
-      pageCount: manifest.pages.length,
-      sourceRefCount: sourceRefs.length,
-      evidenceDensity: evidenceDensity(sourceRefs.length, manifest.pages.length),
+      pageCount,
+      sourceRefCount: citationCount,
+      evidenceDensity: evidenceDensity(citationCount, pageCount),
     };
   }
 

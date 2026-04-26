@@ -1,5 +1,5 @@
-import { and, eq, getDb, sql } from '@creatorcanon/db';
-import { hub, release } from '@creatorcanon/db/schema';
+import { eq, getDb } from '@creatorcanon/db';
+import { hub } from '@creatorcanon/db/schema';
 import { runStage, transitionRun } from './harness';
 import {
   importSelectionSnapshot,
@@ -104,29 +104,6 @@ export async function runGenerationPipeline(
       );
     }
 
-    // Find or create a release for this run.
-    const releaseRows = await db
-      .select()
-      .from(release)
-      .where(and(eq(release.hubId, hubRow.id), eq(release.runId, payload.runId)))
-      .limit(1);
-    let releaseId = releaseRows[0]?.id;
-    if (!releaseId) {
-      releaseId = `rel_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
-      // Atomically compute and claim the next release number.
-      await db.execute(sql`
-        INSERT INTO release (id, workspace_id, hub_id, run_id, release_number, status)
-        VALUES (
-          ${releaseId},
-          ${payload.workspaceId},
-          ${hubRow.id},
-          ${payload.runId},
-          (SELECT COALESCE(MAX(release_number), 0) + 1 FROM release WHERE hub_id = ${hubRow.id}),
-          'building'
-        )
-      `);
-    }
-
     // Phase 1: discovery.
     await assertWithinRunBudget(payload.runId);
     const discovery = await runStage({
@@ -168,7 +145,7 @@ export async function runGenerationPipeline(
     const adapt = await runStage({
       ctx,
       stage: 'adapt',
-      input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id, releaseId },
+      input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id },
       run: async (i) => runAdaptStage(i),
     });
 

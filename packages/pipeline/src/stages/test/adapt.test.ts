@@ -15,7 +15,7 @@ import {
   type SeedResult,
 } from '../../../test-helpers/fixtures';
 import { eq, getDb } from '@creatorcanon/db';
-import { hub, release } from '@creatorcanon/db/schema';
+import { hub } from '@creatorcanon/db/schema';
 import type { R2Client } from '@creatorcanon/adapters';
 
 // In-memory R2 stub.
@@ -51,7 +51,6 @@ function makeMockR2(): R2Client & { stored: Map<string, Uint8Array> } {
 describe('runAdaptStage', () => {
   let seed: SeedResult;
   let hubId: string;
-  let releaseId: string;
 
   before(async () => {
     loadDefaultEnvFiles();
@@ -97,7 +96,6 @@ describe('runAdaptStage', () => {
     });
 
     hubId = `hub_ad_${seed.runId.slice(-6)}`;
-    releaseId = `rel_ad_${seed.runId.slice(-6)}`;
     const db = getDb();
 
     await db.insert(hub).values({
@@ -109,31 +107,20 @@ describe('runAdaptStage', () => {
       accessMode: 'public',
       metadata: {} as any,
     });
-
-    await db.insert(release).values({
-      id: releaseId,
-      workspaceId: seed.workspaceId,
-      hubId,
-      runId: seed.runId,
-      releaseNumber: 1,
-      status: 'building',
-    });
   });
 
   after(async () => {
     const db = getDb();
-    await db.delete(release).where(eq(release.id, releaseId));
     await db.delete(hub).where(eq(hub.id, hubId));
     await teardownTestRun(seed);
   });
 
-  it('writes manifest.json to R2 and updates release.manifestR2Key', async () => {
+  it('writes manifest.json to R2 at the run-keyed adapt path', async () => {
     const r2 = makeMockR2();
     const output = await runAdaptStage({
       runId: seed.runId,
       workspaceId: seed.workspaceId,
       hubId,
-      releaseId,
       r2Override: r2,
     });
 
@@ -147,16 +134,11 @@ describe('runAdaptStage', () => {
     const stored = r2.stored.get(output.manifestR2Key);
     assert.ok(stored, 'manifest blob should be in mock R2');
 
-    // It should be valid JSON.
+    // It should be valid JSON with the correct schema version and placeholder releaseId.
     const parsed = JSON.parse(new TextDecoder().decode(stored));
     assert.equal(parsed.schemaVersion, 'editorial_atlas_v1');
+    assert.equal(parsed.releaseId, 'unpublished');
     assert.ok(parsed.pages.length >= 2, 'at least 2 pages expected');
-
-    // release.manifestR2Key should be updated in the DB.
-    const releaseRow = (
-      await getDb().select().from(release).where(eq(release.id, releaseId)).limit(1)
-    )[0];
-    assert.equal(releaseRow?.manifestR2Key, output.manifestR2Key);
   });
 
   it('throws when hub is not found', async () => {
@@ -167,7 +149,6 @@ describe('runAdaptStage', () => {
           runId: seed.runId,
           workspaceId: seed.workspaceId,
           hubId: 'nonexistent_hub',
-          releaseId,
           r2Override: r2,
         }),
       /hub.*not found/i,

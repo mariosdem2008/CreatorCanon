@@ -1,20 +1,14 @@
-import { releaseKey, createR2Client } from '@creatorcanon/adapters';
-import { and, asc, desc, eq, getDb, inArray } from '@creatorcanon/db';
+import { releaseKey, artifactKey, createR2Client } from '@creatorcanon/adapters';
+import { and, desc, eq, getDb } from '@creatorcanon/db';
 import {
   generationRun,
   hub,
-  page,
-  pageVersion,
   project,
   release,
 } from '@creatorcanon/db/schema';
 import { parseServerEnv } from '@creatorcanon/core';
 
-import {
-  type ReleaseManifestV0,
-  type ReleaseManifestV0Page,
-  releaseManifestV0Schema,
-} from './contracts';
+import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 
 export interface PublishRunAsHubInput {
   workspaceId: string;
@@ -31,15 +25,6 @@ export interface PublishRunAsHubResult {
   manifestR2Key: string;
   pageCount: number;
 }
-
-type BlockTree = {
-  blocks: Array<{
-    type: string;
-    id: string;
-    content: unknown;
-    citations?: string[];
-  }>;
-};
 
 type HubTheme = 'paper' | 'midnight' | 'field';
 
@@ -130,72 +115,22 @@ async function getOrCreateHub(input: {
   return rows[0]!;
 }
 
-async function loadPages(input: {
-  workspaceId: string;
-  runId: string;
-}): Promise<{ pages: ReleaseManifestV0Page[]; pageVersionIds: string[] }> {
-  const db = getDb();
-  const pageRows = await db
-    .select({
-      id: page.id,
-      slug: page.slug,
-      position: page.position,
-      currentVersionId: page.currentVersionId,
-    })
-    .from(page)
-    .where(and(eq(page.runId, input.runId), eq(page.workspaceId, input.workspaceId)))
-    .orderBy(asc(page.position));
-
-  const versionIds = pageRows
-    .map((item) => item.currentVersionId)
-    .filter((value): value is string => Boolean(value));
-
-  if (pageRows.length === 0 || versionIds.length === 0) {
-    throw new Error('Cannot publish before draft pages exist for this run.');
+/** Minimal runtime validation that the adapt-stage produced a v1 manifest. */
+function assertEditorialAtlasV1(value: unknown): asserts value is EditorialAtlasManifest {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    (value as { schemaVersion?: unknown }).schemaVersion !== 'editorial_atlas_v1'
+  ) {
+    throw new Error(
+      `publish: adapt-stage manifest has unexpected schemaVersion='${
+        (value as { schemaVersion?: unknown } | null)?.schemaVersion ?? 'missing'
+      }'. Expected 'editorial_atlas_v1'.`,
+    );
   }
-
-  const versions = await db
-    .select({
-      id: pageVersion.id,
-      title: pageVersion.title,
-      summary: pageVersion.summary,
-      blockTreeJson: pageVersion.blockTreeJson,
-    })
-    .from(pageVersion)
-    .where(inArray(pageVersion.id, versionIds));
-  const versionMap = new Map(versions.map((version) => [version.id, version]));
-
-  const manifestPages = pageRows.map((pageRow) => {
-    const version = pageRow.currentVersionId
-      ? versionMap.get(pageRow.currentVersionId)
-      : undefined;
-    if (!version) {
-      throw new Error(`Page ${pageRow.id} is missing its current version.`);
-    }
-
-    const blockTree = version.blockTreeJson as BlockTree;
-    return {
-      slug: pageRow.slug,
-      title: version.title,
-      summary: version.summary,
-      position: pageRow.position,
-      blocks: blockTree.blocks ?? [],
-    };
-  });
-
-  return { pages: manifestPages, pageVersionIds: versionIds };
-}
-
-function pageVersionIdsEqual(a: string[] | undefined, b: string[]): boolean {
-  if (!a || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }
 
 type ReleaseMetadata = {
-  pageVersionIds?: string[];
   actorUserId?: string;
   error?: string;
 };
@@ -236,15 +171,22 @@ export async function publishRunAsHub(
     theme,
   });
 
-  // Snapshot the current state of the run's pages before deciding whether to
-  // publish a new release. Idempotency key is the ordered list of
-  // page_version ids on the page rows — if that matches what's in the live
-  // release's metadata, the live release is still faithful to the draft and
-  // we return it verbatim. If it differs (creator edited pages since the
-  // last publish), fall through to build a new numbered release, archive
-  // the previous live, and point the hub at the new one.
-  const { pages, pageVersionIds: currentPageVersionIds } = await loadPages(input);
+  // 1. Read the editorial_atlas_v1 manifest written by the adapt stage.
+  const r2 = createR2Client(parseServerEnv(process.env));
+  const adaptManifestKey = artifactKey({
+    workspaceId: input.workspaceId,
+    runId: input.runId,
+    stage: 'adapt',
+    name: 'manifest.json',
+  });
 
+  const manifestObject = await r2.getObject(adaptManifestKey);
+  const rawManifest: unknown = JSON.parse(new TextDecoder().decode(manifestObject.body));
+  // Validate schema version before doing anything irreversible.
+  assertEditorialAtlasV1(rawManifest);
+  const adaptManifest: EditorialAtlasManifest = rawManifest;
+
+  // 2. Idempotency: if there is already a live release for this exact run, return it.
   const existingLive = await db
     .select()
     .from(release)
@@ -258,21 +200,17 @@ export async function publishRunAsHub(
     .limit(1);
 
   if (existingLive[0]?.manifestR2Key) {
-    const liveMetadata = (existingLive[0].metadata ?? {}) as ReleaseMetadata;
-    if (pageVersionIdsEqual(liveMetadata.pageVersionIds, currentPageVersionIds)) {
-      return {
-        hubId: hubRow.id,
-        releaseId: existingLive[0].id,
-        subdomain: hubRow.subdomain,
-        publicPath: `/h/${hubRow.subdomain}`,
-        manifestR2Key: existingLive[0].manifestR2Key,
-        pageCount: pages.length,
-      };
-    }
-    // Fall through: content has changed since the last publish, build a new
-    // release and rotate the hub's live pointer.
+    return {
+      hubId: hubRow.id,
+      releaseId: existingLive[0].id,
+      subdomain: hubRow.subdomain,
+      publicPath: `/h/${hubRow.subdomain}`,
+      manifestR2Key: existingLive[0].manifestR2Key,
+      pageCount: adaptManifest.pages.length,
+    };
   }
 
+  // 3. Compute next release number and generate a fresh release ID.
   const latestRelease = await db
     .select({ releaseNumber: release.releaseNumber })
     .from(release)
@@ -281,6 +219,14 @@ export async function publishRunAsHub(
     .limit(1);
   const releaseNumber = (latestRelease[0]?.releaseNumber ?? 0) + 1;
   const releaseId = crypto.randomUUID();
+
+  // 4. Stamp the real releaseId and publishedAt into the manifest, then write to
+  //    the release-keyed R2 path.
+  const finalManifest: EditorialAtlasManifest = {
+    ...adaptManifest,
+    releaseId,
+    publishedAt: now.toISOString(),
+  };
   const manifestR2Key = releaseKey({
     hubId: hubRow.id,
     releaseId,
@@ -288,10 +234,11 @@ export async function publishRunAsHub(
   });
 
   const releaseMetadata: ReleaseMetadata = {
-    pageVersionIds: currentPageVersionIds,
     actorUserId: input.actorUserId,
   };
 
+  // 5. Insert the release row (status: 'building') — this is the only place a
+  //    release row is created for a given run.
   await db.insert(release).values({
     id: releaseId,
     workspaceId: input.workspaceId,
@@ -304,31 +251,21 @@ export async function publishRunAsHub(
     updatedAt: now,
   });
 
-  const manifest: ReleaseManifestV0 = releaseManifestV0Schema.parse({
-    schemaVersion: 'release_manifest_v0',
-    hubId: hubRow.id,
-    releaseId,
-    projectId: input.projectId,
-    runId: input.runId,
-    generatedAt: now.toISOString(),
-    title: projectRow.title,
-    subdomain: hubRow.subdomain,
-    pages,
-  });
-
   try {
-    const r2 = createR2Client(parseServerEnv(process.env));
+    // 6. Write the release-keyed manifest to R2.
     await r2.putObject({
       key: manifestR2Key,
-      body: JSON.stringify(manifest, null, 2),
+      body: JSON.stringify(finalManifest, null, 2),
       contentType: 'application/json',
     });
 
+    // 7. Archive any prior live release for this hub.
     await db
       .update(release)
       .set({ status: 'archived', archivedAt: now, updatedAt: now })
       .where(and(eq(release.hubId, hubRow.id), eq(release.status, 'live')));
 
+    // 8. Flip the new release to live.
     await db
       .update(release)
       .set({
@@ -340,16 +277,19 @@ export async function publishRunAsHub(
       })
       .where(eq(release.id, releaseId));
 
+    // 9. Update hub.liveReleaseId.
     await db
       .update(hub)
       .set({ liveReleaseId: releaseId, updatedAt: now })
       .where(eq(hub.id, hubRow.id));
 
+    // 10. Update project.publishedHubId.
     await db
       .update(project)
       .set({ publishedHubId: hubRow.id, updatedAt: now })
       .where(eq(project.id, input.projectId));
 
+    // 11. Mark run as published.
     await db
       .update(generationRun)
       .set({ status: 'published', updatedAt: now })
@@ -375,6 +315,6 @@ export async function publishRunAsHub(
     subdomain: hubRow.subdomain,
     publicPath: `/h/${hubRow.subdomain}`,
     manifestR2Key,
-    pageCount: pages.length,
+    pageCount: finalManifest.pages.length,
   };
 }

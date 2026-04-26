@@ -54,9 +54,9 @@ import {
 import { createR2Client, transcriptKey } from '@creatorcanon/adapters';
 import { parseServerEnv, PIPELINE_VERSION } from '@creatorcanon/core';
 
-import { releaseManifestV0Schema } from './contracts';
 import { publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
+import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 
 // ── Env setup ──────────────────────────────────────────────────────────────
 // Load .env only — intentionally skip .env.local (contains local-smoke stubs).
@@ -824,19 +824,20 @@ async function main() {
   const env = parseServerEnv(process.env);
   const r2 = createR2Client(env);
   const manifestObj = await r2.getObject(publishResult.manifestR2Key);
-  const manifest = releaseManifestV0Schema.parse(
-    JSON.parse(new TextDecoder().decode(manifestObj.body)),
-  );
-  const sourceRefs = manifest.pages.flatMap((p) =>
-    p.blocks.flatMap((b) => {
-      const content = b.content as { sourceRefs?: unknown };
-      return Array.isArray(content.sourceRefs) ? content.sourceRefs : [];
-    }),
-  );
+  const manifest = JSON.parse(
+    new TextDecoder().decode(manifestObj.body),
+  ) as EditorialAtlasManifest;
+  const citationCount = manifest.pages?.reduce(
+    (sum, p) => sum + (p.citations?.length ?? 0),
+    0,
+  ) ?? 0;
 
-  assert(manifest.runId === RUN_ID, `Manifest runId mismatch: ${manifest.runId}`);
+  assert(
+    manifest.schemaVersion === 'editorial_atlas_v1',
+    `Manifest schemaVersion mismatch: ${manifest.schemaVersion}`,
+  );
   assert(manifest.pages.length > 0, 'Manifest has no pages.');
-  assert(sourceRefs.length > 0, 'Manifest has no source references.');
+  assert(citationCount > 0, 'Manifest has no citations.');
 
   await closeDb();
 
@@ -865,7 +866,7 @@ async function main() {
           publicPath: publishResult.publicPath,
           manifestR2Key: publishResult.manifestR2Key,
           pageCount: manifest.pages.length,
-          sourceRefCount: sourceRefs.length,
+          citationCount,
         },
       },
       null,

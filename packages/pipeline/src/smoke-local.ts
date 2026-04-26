@@ -13,8 +13,8 @@ import { parseServerEnv, PIPELINE_VERSION } from '@creatorcanon/core';
 import { closeDb } from '@creatorcanon/db/client';
 import { runGenerationPipeline } from './run-generation-pipeline';
 import { publishRunAsHub } from './publish-run-as-hub';
-import { releaseManifestV0Schema } from './contracts';
 import { loadDefaultEnvFiles } from './env-files';
+import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 
 const RUN_ID = 'local-smoke-run';
 const PROJECT_ID = 'local-smoke-project';
@@ -141,28 +141,18 @@ async function run() {
 
   const r2 = createR2Client(parseServerEnv(process.env));
   const manifestObject = await r2.getObject(releases[0].manifestR2Key);
-  const manifest = releaseManifestV0Schema.parse(
-    JSON.parse(new TextDecoder().decode(manifestObject.body)),
+  const manifest = JSON.parse(
+    new TextDecoder().decode(manifestObject.body),
+  ) as EditorialAtlasManifest;
+  assert(
+    manifest.schemaVersion === 'editorial_atlas_v1',
+    `Expected editorial_atlas_v1 manifest, got ${manifest.schemaVersion}.`,
   );
-  const sourceRefs = manifest.pages.flatMap((manifestPage) => manifestPage.blocks.flatMap((block) => {
-    const content = block.content as { sourceRefs?: unknown };
-    return Array.isArray(content.sourceRefs) ? content.sourceRefs : [];
-  }));
-  assert(sourceRefs.length > 0, 'Expected release manifest to include source references.');
-  for (const ref of sourceRefs) {
-    const candidate = ref as {
-      videoId?: string;
-      segmentId?: string;
-      startMs?: number;
-      endMs?: number;
-      quote?: string;
-    };
-    assert(candidate.videoId, 'Expected source ref videoId.');
-    assert(candidate.segmentId, 'Expected source ref segmentId.');
-    assert(typeof candidate.startMs === 'number', 'Expected source ref startMs.');
-    assert(typeof candidate.endMs === 'number', 'Expected source ref endMs.');
-    assert(candidate.quote, 'Expected source ref quote.');
-  }
+  const citationCount = manifest.pages?.reduce(
+    (sum, p) => sum + (p.citations?.length ?? 0),
+    0,
+  ) ?? 0;
+  assert(citationCount > 0, 'Expected release manifest to include citations.');
 
   const publishedProjects = await db
     .select({ publishedHubId: project.publishedHubId })

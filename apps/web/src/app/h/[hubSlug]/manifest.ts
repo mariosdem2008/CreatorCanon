@@ -1,7 +1,3 @@
-// Note: this loader serves OG images and the legacy renderer. The new
-// Editorial Atlas home page reads from `lib/hub/manifest/mockManifest.ts`
-// directly. This file stays in service for the other consumers.
-
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
 
@@ -9,7 +5,7 @@ import { createR2Client } from '@creatorcanon/adapters';
 import { eq, getDb } from '@creatorcanon/db';
 import { hub, release } from '@creatorcanon/db/schema';
 import { parseServerEnv } from '@creatorcanon/core';
-import { releaseManifestV0Schema } from '@creatorcanon/pipeline';
+import { editorialAtlasManifestSchema, type EditorialAtlasManifest } from '@/lib/hub/manifest/schema';
 
 export type HubManifest = Awaited<ReturnType<typeof loadHubManifest>>;
 
@@ -51,7 +47,7 @@ export const loadHubManifest = cache(async (hubSlug: string) => {
   const r2 = createR2Client(parseServerEnv(process.env));
   const object = await r2.getObject(releaseRow.manifestR2Key);
   const decoded = new TextDecoder().decode(object.body);
-  const manifest = releaseManifestV0Schema.parse(JSON.parse(decoded));
+  const manifest: EditorialAtlasManifest = editorialAtlasManifestSchema.parse(JSON.parse(decoded));
 
   return {
     hub: hubRow,

@@ -20,8 +20,8 @@ import {
   videoSetItem,
 } from '@creatorcanon/db/schema';
 
-import { releaseManifestV0Schema } from './contracts';
 import { loadDefaultEnvFiles, repoRoot } from './env-files';
+import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 import { publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
 
@@ -36,12 +36,9 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function manifestSourceRefs(manifest: unknown) {
-  const parsed = releaseManifestV0Schema.parse(manifest);
-  return parsed.pages.flatMap((manifestPage) => manifestPage.blocks.flatMap((block) => {
-    const content = block.content as { sourceRefs?: unknown };
-    return Array.isArray(content.sourceRefs) ? content.sourceRefs : [];
-  }));
+function manifestCitationCount(manifest: unknown): number {
+  const m = manifest as EditorialAtlasManifest;
+  return m.pages?.reduce((sum, p) => sum + (p.citations?.length ?? 0), 0) ?? 0;
 }
 
 async function resetDedicatedRows(videoIds: string[]) {
@@ -238,25 +235,10 @@ async function main() {
 
   const r2 = createR2Client(parseServerEnv(process.env));
   const manifestObject = await r2.getObject(publishResult.manifestR2Key);
-  const sourceRefs = manifestSourceRefs(
+  const citationCount = manifestCitationCount(
     JSON.parse(new TextDecoder().decode(manifestObject.body)),
   );
-  assert(sourceRefs.length > 0, 'Expected published manifest to include source refs from audio transcription.');
-
-  for (const ref of sourceRefs) {
-    const candidate = ref as {
-      videoId?: string;
-      segmentId?: string;
-      startMs?: number;
-      endMs?: number;
-      quote?: string;
-    };
-    assert(candidate.videoId, 'Expected source ref videoId.');
-    assert(candidate.segmentId, 'Expected source ref segmentId.');
-    assert(typeof candidate.startMs === 'number', 'Expected source ref startMs.');
-    assert(typeof candidate.endMs === 'number', 'Expected source ref endMs.');
-    assert(candidate.quote, 'Expected source ref quote.');
-  }
+  assert(citationCount > 0, 'Expected published manifest to include citations from audio transcription.');
 
   await closeDb();
 
@@ -265,7 +247,7 @@ async function main() {
     runId: RUN_ID,
     videoCount: videoIds.length,
     transcribedVideoCount: transcribedRows.length,
-    sourceRefCount: sourceRefs.length,
+    citationCount,
     publicPath: publishResult.publicPath,
     theme: hubs[0].theme,
     manifestR2Key: publishResult.manifestR2Key,

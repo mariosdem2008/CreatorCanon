@@ -9,7 +9,7 @@ import { runMergeStage } from '../stages/merge';
 import { runAdaptStage } from '../stages/adapt';
 import { seedTestRun, teardownTestRun, type SeedResult } from '../../test-helpers/fixtures';
 import { getDb, eq } from '@creatorcanon/db';
-import { hub, release } from '@creatorcanon/db/schema';
+import { hub } from '@creatorcanon/db/schema';
 import type { AgentProvider, ChatResponse } from '../agents/providers';
 import type { R2Client } from '@creatorcanon/adapters';
 
@@ -86,7 +86,6 @@ function buildArgsFor(toolName: string): Record<string, unknown> {
 describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)', () => {
   let seed: SeedResult;
   let hubId: string;
-  let releaseId: string;
 
   before(async () => {
     loadDefaultEnvFiles();
@@ -105,9 +104,9 @@ describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)'
       ],
     });
 
-    // Create hub + release with templateKey='editorial_atlas'.
+    // Create hub with templateKey='editorial_atlas'.
+    // The orchestrator no longer creates a release row; that is publish's responsibility.
     hubId = `hub_${seed.runId.slice(-6)}`;
-    releaseId = `rel_${seed.runId.slice(-6)}`;
     const db = getDb();
     await db.insert(hub).values({
       id: hubId,
@@ -117,19 +116,10 @@ describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)'
       templateKey: 'editorial_atlas',
       metadata: {} as any,
     });
-    await db.insert(release).values({
-      id: releaseId,
-      workspaceId: seed.workspaceId,
-      hubId,
-      runId: seed.runId,
-      releaseNumber: 1,
-      status: 'building',
-    });
   });
 
   after(async () => {
     const db = getDb();
-    await db.delete(release).where(eq(release.id, releaseId));
     await db.delete(hub).where(eq(hub.id, hubId));
     await teardownTestRun(seed);
   });
@@ -156,15 +146,13 @@ describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)'
     });
     const adapt = await runAdaptStage({
       runId: seed.runId, workspaceId: seed.workspaceId,
-      hubId, releaseId, r2Override: r2,
+      hubId, r2Override: r2,
     });
 
     assert.ok(merge.pageCount >= 1, `expected at least 1 page; got ${merge.pageCount}`);
     assert.ok(adapt.manifestR2Key.includes('manifest.json'));
     assert.equal(adapt.templateKey, 'editorial_atlas');
-
-    // Release row should now have manifestR2Key set.
-    const releaseRow = (await getDb().select().from(release).where(eq(release.id, releaseId)).limit(1))[0];
-    assert.equal(releaseRow?.manifestR2Key, adapt.manifestR2Key);
+    // The adapt-stage manifest uses 'unpublished' as a releaseId placeholder;
+    // publishRunAsHub stamps the real ID when creating the release row.
   });
 });

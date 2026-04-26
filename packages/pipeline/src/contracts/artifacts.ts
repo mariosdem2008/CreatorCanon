@@ -27,35 +27,3 @@ export const ensureTranscriptsStageOutputSchema = z.object({
 
 export type EnsureTranscriptsStageOutput = z.infer<typeof ensureTranscriptsStageOutputSchema>;
 
-export const releaseManifestV0BlockSchema = z.object({
-  type: z.string().min(1),
-  id: z.string().min(1),
-  content: z.unknown(),
-  citations: z.array(z.string()).optional(),
-});
-
-export type ReleaseManifestV0Block = z.infer<typeof releaseManifestV0BlockSchema>;
-
-export const releaseManifestV0PageSchema = z.object({
-  slug: z.string().min(1),
-  title: z.string().min(1),
-  summary: z.string().nullable(),
-  position: z.number().int().min(0),
-  blocks: z.array(releaseManifestV0BlockSchema),
-});
-
-export type ReleaseManifestV0Page = z.infer<typeof releaseManifestV0PageSchema>;
-
-export const releaseManifestV0Schema = z.object({
-  schemaVersion: z.literal('release_manifest_v0'),
-  hubId: z.string().min(1),
-  releaseId: z.string().min(1),
-  projectId: z.string().min(1),
-  runId: z.string().min(1),
-  generatedAt: z.string().datetime(),
-  title: z.string().min(1),
-  subdomain: z.string().min(1),
-  pages: z.array(releaseManifestV0PageSchema).min(1),
-});
-
-export type ReleaseManifestV0 = z.infer<typeof releaseManifestV0Schema>;

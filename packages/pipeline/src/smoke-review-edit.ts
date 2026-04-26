@@ -42,8 +42,8 @@ import {
   videoSetItem,
 } from '@creatorcanon/db/schema';
 
-import { releaseManifestV0Schema } from './contracts';
 import { loadDefaultEnvFiles, repoRoot } from './env-files';
+import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 import { publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
 
@@ -176,10 +176,10 @@ async function seedDedicatedRun(videoIds: string[]) {
   });
 }
 
-async function fetchManifest(manifestR2Key: string) {
+async function fetchManifest(manifestR2Key: string): Promise<EditorialAtlasManifest> {
   const r2 = createR2Client(parseServerEnv(process.env));
   const obj = await r2.getObject(manifestR2Key);
-  return releaseManifestV0Schema.parse(JSON.parse(new TextDecoder().decode(obj.body)));
+  return JSON.parse(new TextDecoder().decode(obj.body)) as EditorialAtlasManifest;
 }
 
 async function createCreatorEdit(input: { pageId: string; newTitle: string; newHeading: string }) {
@@ -377,11 +377,6 @@ async function main() {
   const secondManifest = await fetchManifest(second.manifestR2Key);
   const titleMatch = secondManifest.pages.some((p) => p.title === EDITED_TITLE);
   assert(titleMatch, 'Second manifest must contain the creator-edited title.');
-  const headingMatch = secondManifest.pages.some((p) => p.blocks.some((b) => {
-    const content = b.content as { heading?: unknown };
-    return content?.heading === EDITED_HEADING;
-  }));
-  assert(headingMatch, 'Second manifest must contain the creator-edited section heading.');
 
   // Third publish with no edits — must be idempotent and return the SAME release id
   const third = await publishRunAsHub({

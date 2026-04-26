@@ -3,11 +3,35 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
-import type {
-  ReleaseManifestV0,
-  ReleaseManifestV0Page,
-  ReleaseManifestV0Block,
-} from '@creatorcanon/pipeline';
+// Legacy v0 template — not rendered by any current route.
+// These types are inlined here after the v0 manifest schema was removed from
+// @creatorcanon/pipeline as part of the editorial_atlas_v1 migration.
+type ReleaseManifestV0Block = {
+  type: string;
+  id: string;
+  content: unknown;
+  citations?: string[];
+};
+
+type ReleaseManifestV0Page = {
+  slug: string;
+  title: string;
+  summary: string | null;
+  position: number;
+  blocks: ReleaseManifestV0Block[];
+};
+
+type ReleaseManifestV0 = {
+  schemaVersion: 'release_manifest_v0';
+  hubId: string;
+  releaseId: string;
+  projectId: string;
+  runId: string;
+  generatedAt: string;
+  title: string;
+  subdomain: string;
+  pages: ReleaseManifestV0Page[];
+};
 
 import type { SourceReferenceView } from './EvidenceChips';
 import { getHubTemplate, type HubTemplate } from './templates';

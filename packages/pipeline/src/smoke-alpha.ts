@@ -14,10 +14,10 @@ import {
 } from '@creatorcanon/db/schema';
 import { parseServerEnv } from '@creatorcanon/core';
 
-import { releaseManifestV0Schema } from './contracts';
 import { loadDefaultEnvFiles } from './env-files';
 import { publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
+import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 
 const REQUIRED_STAGES = [
   'import_selection_snapshot',
@@ -171,18 +171,21 @@ async function verifyPublishedManifest(input: {
   assert(theme === input.expectedTheme, `Expected published hub theme ${input.expectedTheme}, got ${String(theme)}.`);
 
   const manifestObject = await r2.getObject(manifestR2Key);
-  const manifest = releaseManifestV0Schema.parse(
-    JSON.parse(new TextDecoder().decode(manifestObject.body)),
-  );
-  const sourceRefs = manifest.pages.flatMap((manifestPage) => manifestPage.blocks.flatMap((block) => {
-    const content = block.content as { sourceRefs?: unknown };
-    return Array.isArray(content.sourceRefs) ? content.sourceRefs : [];
-  }));
+  const manifest = JSON.parse(
+    new TextDecoder().decode(manifestObject.body),
+  ) as EditorialAtlasManifest;
+  const citationCount = manifest.pages?.reduce(
+    (sum, p) => sum + (p.citations?.length ?? 0),
+    0,
+  ) ?? 0;
 
-  assert(manifest.runId === input.runId, 'Release manifest run id does not match smoke run.');
+  assert(
+    manifest.schemaVersion === 'editorial_atlas_v1',
+    'Release manifest schemaVersion is not editorial_atlas_v1.',
+  );
   assert(manifest.pages.length > 0, 'Release manifest has no pages.');
 
-  if (sourceRefs.length === 0) {
+  if (citationCount === 0) {
     const selectedVideoRows = await db
       .select({ videoId: videoSetItem.videoId })
       .from(videoSetItem)
@@ -202,14 +205,14 @@ async function verifyPublishedManifest(input: {
     const transcriptsForSelected = transcriptRows.length;
     if (transcriptsForSelected === 0) {
       console.warn(
-        '[smoke-alpha] WARN: Release manifest has 0 source refs because none of the ' +
+        '[smoke-alpha] WARN: Release manifest has 0 citations because none of the ' +
           selectedIds.length +
           ' selected videos returned fetchable captions. Graceful no-caption path verified.',
       );
     } else {
       assert(
-        sourceRefs.length > 0,
-        'Release manifest has no source references despite ' + transcriptsForSelected + ' transcripts on the run. This is a real pipeline bug.',
+        citationCount > 0,
+        'Release manifest has no citations despite ' + transcriptsForSelected + ' transcripts on the run. This is a real pipeline bug.',
       );
     }
   }
@@ -220,7 +223,7 @@ async function verifyPublishedManifest(input: {
     publicPath,
     theme,
     pageCount: manifest.pages.length,
-    sourceRefCount: sourceRefs.length,
+    citationCount,
   };
 }
 

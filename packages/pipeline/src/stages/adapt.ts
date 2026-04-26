@@ -1,5 +1,5 @@
 import { eq, getDb } from '@creatorcanon/db';
-import { hub, release } from '@creatorcanon/db/schema';
+import { hub } from '@creatorcanon/db/schema';
 import { artifactKey, createR2Client, type R2Client } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import { getAdapter } from '../adapters';
@@ -8,7 +8,6 @@ export interface AdaptStageInput {
   runId: string;
   workspaceId: string;
   hubId: string;
-  releaseId: string;
   /** Test override. */
   r2Override?: R2Client;
 }
@@ -27,10 +26,12 @@ export async function runAdaptStage(input: AdaptStageInput): Promise<AdaptStageO
   if (!hubRow) throw new Error(`Adapt: hub '${input.hubId}' not found`);
 
   const adapter = getAdapter(hubRow.templateKey);
+  // Pass 'unpublished' as a placeholder releaseId; publishRunAsHub will
+  // overwrite it with the real release ID when it writes the release-keyed copy.
   const manifest = await adapter({
     runId: input.runId,
     hubId: input.hubId,
-    releaseId: input.releaseId,
+    releaseId: 'unpublished',
   });
 
   const key = artifactKey({
@@ -46,10 +47,7 @@ export async function runAdaptStage(input: AdaptStageInput): Promise<AdaptStageO
     contentType: 'application/json',
   });
 
-  await db
-    .update(release)
-    .set({ manifestR2Key: key })
-    .where(eq(release.id, input.releaseId));
+  // No release row update here — publishRunAsHub is the sole creator of releases.
 
   return { manifestR2Key: key, templateKey: hubRow.templateKey };
 }
