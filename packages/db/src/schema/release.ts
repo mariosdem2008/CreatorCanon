@@ -13,6 +13,7 @@ import {
   hubAccessModeEnum,
   hubAccessStatusEnum,
   hubFreePreviewEnum,
+  hubTemplateKeyEnum,
   hubThemeEnum,
   releaseStatusEnum,
 } from './enums';
@@ -42,8 +43,10 @@ export const hub = pgTable(
     subdomain: citext('subdomain').notNull(),
     customDomain: text('custom_domain'),
     theme: hubThemeEnum('theme').notNull().default('paper'),
+    templateKey: hubTemplateKeyEnum('template_key').notNull().default('legacy_v0'),
     accessMode: hubAccessModeEnum('access_mode').notNull().default('public'),
     paywallPriceCents: integer('paywall_price_cents'),
+    metadata: jsonb('metadata').notNull().default({}),
     freePreview: hubFreePreviewEnum('free_preview').notNull().default('first_lesson'),
     /** Forward ref; FK added post-migration (avoids import cycle with release). */
     liveReleaseId: text('live_release_id'),
