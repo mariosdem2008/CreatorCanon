@@ -145,6 +145,11 @@ export const video = pgTable(
       t.workspaceId,
       t.publishedAt,
     ),
+    // Partial index for orphaned-uploads-sweep: scopes to manual-upload rows still in flight.
+    uploadingCreatedAtIdx: index('video_uploading_created_at_idx').on(
+      t.uploadStatus,
+      t.createdAt,
+    ).where(sql`${t.uploadStatus} = 'uploading'`),
   }),
 );
 

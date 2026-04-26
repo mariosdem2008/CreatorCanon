@@ -1,4 +1,4 @@
-import { task, logger } from '@trigger.dev/sdk/v3';
+import { task, logger, tasks } from '@trigger.dev/sdk/v3';
 import { and, eq, lt, getDb } from '@creatorcanon/db';
 import { video } from '@creatorcanon/db/schema';
 import { createR2Client } from '@creatorcanon/adapters';
@@ -12,9 +12,12 @@ import { parseServerEnv } from '@creatorcanon/core';
  * that are still in 'uploading' and reconciles them:
  *
  *   - R2 object exists  → user finished PUT but never called complete; mark 'uploaded'
- *                         so they can retry the complete step.
+ *                         and enqueue transcription so the video is fully processed.
  *   - R2 object missing → true orphan; delete R2 key (best-effort) and mark 'failed'.
  *   - No localR2Key     → no R2 object was ever created; mark 'failed' immediately.
+ *
+ * All UPDATEs are guarded with `AND upload_status = 'uploading'` to avoid a TOCTOU
+ * race where /api/upload/complete advances the row between our SELECT and UPDATE.
  *
  * Schedule registration is a Trigger.dev deploy-time step (trigger.config.ts schedules
  * array or the dashboard). This file only defines the task; wire the schedule on deploy.
@@ -52,10 +55,11 @@ export const orphanedUploadsSweepTask = task({
     for (const v of candidates) {
       if (!v.localR2Key) {
         // No R2 key was ever recorded — nothing to check; mark failed.
+        // Guard on uploadStatus='uploading' to avoid overwriting a concurrent /complete.
         await db
           .update(video)
           .set({ uploadStatus: 'failed' })
-          .where(eq(video.id, v.id));
+          .where(and(eq(video.id, v.id), eq(video.uploadStatus, 'uploading')));
         failed++;
         logger.warn('Orphaned upload: no localR2Key, marked failed', { videoId: v.id });
         continue;
@@ -63,18 +67,45 @@ export const orphanedUploadsSweepTask = task({
 
       try {
         await r2.headObject(v.localR2Key);
-        // Object exists — the user completed the PUT but never called the
-        // complete endpoint. Recover by marking 'uploaded' so the UI can offer
-        // a retry of the complete step.
-        await db
+        // Object exists — the user completed the PUT but never called the complete
+        // endpoint. Recover: mark 'uploaded' and drive transcription forward.
+        // Use .returning() so we only enqueue if WE actually own the transition.
+        const updateResult = await db
           .update(video)
-          .set({ uploadStatus: 'uploaded' })
-          .where(eq(video.id, v.id));
-        recovered++;
-        logger.info('Orphaned upload: R2 object found, marked uploaded', {
-          videoId: v.id,
-          r2Key: v.localR2Key,
-        });
+          .set({ uploadStatus: 'uploaded', transcribeStatus: 'transcribing' })
+          .where(and(eq(video.id, v.id), eq(video.uploadStatus, 'uploading')))
+          .returning({ id: video.id });
+
+        if (updateResult.length > 0) {
+          // We won the race — enqueue transcription.
+          try {
+            await tasks.trigger('transcribe-uploaded-video', {
+              videoId: v.id,
+              workspaceId: v.workspaceId,
+            });
+            recovered++;
+            logger.info('Orphaned upload: R2 object found, marked uploaded and enqueued transcribe', {
+              videoId: v.id,
+              r2Key: v.localR2Key,
+            });
+          } catch (err) {
+            // Trigger.dev unavailable — mark failed so user can retry.
+            await db
+              .update(video)
+              .set({ uploadStatus: 'failed', transcribeStatus: 'failed' })
+              .where(eq(video.id, v.id));
+            logger.error('Failed to enqueue transcribe job during sweep recovery', {
+              videoId: v.id,
+              error: String(err),
+            });
+            failed++;
+          }
+        } else {
+          // Another writer (e.g. /complete) already advanced the row — skip.
+          logger.info('Orphaned upload: row already advanced by concurrent writer, skipping', {
+            videoId: v.id,
+          });
+        }
       } catch {
         // headObject threw — object is missing (or inaccessible). Clean up and
         // mark failed so the UI shows a clear error state.
@@ -83,10 +114,11 @@ export const orphanedUploadsSweepTask = task({
         } catch {
           // Best-effort deletion; object may already be gone.
         }
+        // Guard on uploadStatus='uploading' to avoid overwriting a concurrent /complete.
         await db
           .update(video)
           .set({ uploadStatus: 'failed' })
-          .where(eq(video.id, v.id));
+          .where(and(eq(video.id, v.id), eq(video.uploadStatus, 'uploading')));
         failed++;
         logger.warn('Orphaned upload: R2 object missing, marked failed', {
           videoId: v.id,
