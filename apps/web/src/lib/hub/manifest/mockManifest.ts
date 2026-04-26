@@ -681,6 +681,29 @@ export const mockManifest: EditorialAtlasManifest = {
   pages,
   sources,
 
+  highlights: [
+    {
+      id: 'hl_1',
+      type: 'aha_moment',
+      text: "Don't trust the urgency monster.",
+      context: 'Names the trap of letting calendar pressure replace judgement about importance.',
+      evidence: { sourceVideoId: 'vid_001', timestampStart: 90, timestampLabel: '1:30' },
+    },
+    {
+      id: 'hl_2',
+      type: 'quote',
+      text: 'Writing is the act of thinking on paper.',
+      attribution: 'Adapted from Paul Graham',
+      evidence: { sourceVideoId: 'vid_001', timestampStart: 240, timestampLabel: '4:00' },
+    },
+    {
+      id: 'hl_3',
+      type: 'quote',
+      text: 'Discipline equals freedom — the small reps compound.',
+      evidence: { sourceVideoId: 'vid_002', timestampStart: 12, timestampLabel: '0:12' },
+    },
+  ],
+
   navigation: {
     primary: [
       { label: 'Home',        href: '/h/ali-abdaal',                 iconKey: 'home' },
