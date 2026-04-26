@@ -1,4 +1,12 @@
 import type { ToolDef } from './types';
+import { listVideosTool, getVideoSummaryTool, listSegmentsForVideoTool, getSegmentTool } from './universal';
+import { searchSegmentsTool } from './search';
+import { listFindingsTool } from './listFindings';
+import {
+  proposeTopicTool, proposeFrameworkTool, proposeLessonTool, proposePlaybookTool,
+  proposeQuoteTool, proposeAhaMomentTool, proposeSourceRankingTool, proposeRelationTool,
+} from './propose';
+import { markFindingEvidenceTool } from './markFindingEvidence';
 
 /** Process-level singleton. Tools register at module import time and never clear in production. */
 const REGISTRY = new Map<string, ToolDef<any, any>>();
@@ -28,4 +36,23 @@ export function _resetRegistryForTests(): void {
     throw new Error('_resetRegistryForTests called outside test context');
   }
   REGISTRY.clear();
+}
+
+/**
+ * Register all 15 tools into the module-level registry. Called once at
+ * process startup before the agent harness dispatches tool calls.
+ *
+ * Throws if any tool name is already registered (idempotent only via
+ * `_resetRegistryForTests`).
+ */
+export function registerAllTools(): void {
+  for (const t of [
+    listVideosTool, getVideoSummaryTool, searchSegmentsTool, listSegmentsForVideoTool, getSegmentTool,
+    listFindingsTool,
+    proposeTopicTool, proposeFrameworkTool, proposeLessonTool, proposePlaybookTool,
+    proposeQuoteTool, proposeAhaMomentTool, proposeSourceRankingTool, proposeRelationTool,
+    markFindingEvidenceTool,
+  ]) {
+    registerTool(t);
+  }
 }
