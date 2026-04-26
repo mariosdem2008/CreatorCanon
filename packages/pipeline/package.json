@@ -38,7 +38,9 @@
     "@creatorcanon/core": "workspace:*",
     "@creatorcanon/cost-ledger": "workspace:*",
     "@creatorcanon/db": "workspace:*",
-    "zod": "3.23.8"
+    "openai": "4.61.0",
+    "zod": "3.23.8",
+    "zod-to-json-schema": "3.23.5"
   },
   "devDependencies": {
     "@creatorcanon/config": "workspace:*",
