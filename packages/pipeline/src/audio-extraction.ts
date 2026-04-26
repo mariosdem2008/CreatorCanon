@@ -11,6 +11,138 @@ import {
   transcriptAsset,
 } from '@creatorcanon/db/schema';
 
+// ── R2-source extraction (manual uploads) ──────────────────────────────────────
+
+export interface ExtractAudioFromR2SourceInput {
+  workspaceId: string;
+  videoId: string;
+  /** R2 key for the uploaded source file. */
+  sourceR2Key: string;
+  /** MIME type of the uploaded file; used to decide audio passthrough vs ffmpeg. */
+  contentType: string;
+  /** R2 key where the extracted/passthrough audio should be written. */
+  outputR2Key: string;
+}
+
+export interface ExtractAudioFromR2SourceResult {
+  outputR2Key: string;
+  /** Duration in seconds, or 0 if it could not be determined. */
+  durationSec: number;
+  sizeBytes: number;
+}
+
+/**
+ * Download a file from R2, optionally run ffmpeg to extract audio, then
+ * upload the result back to a different R2 key.
+ *
+ * - Audio files (contentType starts with `audio/`): uploaded as-is (passthrough).
+ * - Video files (contentType starts with `video/`): audio stream extracted via
+ *   `ffmpeg -i <input> -vn -c:a aac <output.m4a>`.
+ */
+export async function extractAudioFromR2Source(
+  input: ExtractAudioFromR2SourceInput,
+): Promise<ExtractAudioFromR2SourceResult> {
+  const env = parseServerEnv(process.env);
+  const r2 = createR2Client(env);
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cc-r2extract-'));
+  try {
+    // 1. Download source from R2
+    const sourceObj = await r2.getObject(input.sourceR2Key);
+    const sourceExt = guessExtension(input.contentType, input.sourceR2Key);
+    const sourcePath = path.join(tempDir, `source${sourceExt}`);
+    await fs.writeFile(sourcePath, sourceObj.body);
+
+    let audioPath: string;
+    let outputContentType: string;
+
+    if (input.contentType.startsWith('audio/')) {
+      // Audio passthrough — no conversion needed
+      audioPath = sourcePath;
+      outputContentType = input.contentType;
+    } else {
+      // Video — extract audio stream as AAC m4a
+      const outputPath = path.join(tempDir, 'audio.m4a');
+      await runCommand(ffmpegBin(), [
+        '-y',
+        '-i', sourcePath,
+        '-vn',
+        '-c:a', 'aac',
+        outputPath,
+      ]);
+      audioPath = outputPath;
+      outputContentType = 'audio/mp4';
+    }
+
+    // 2. Probe duration via ffprobe (best-effort; 0 on failure)
+    const durationSec = await probeDuration(audioPath);
+
+    // 3. Upload to outputR2Key
+    const audioBytes = await fs.readFile(audioPath);
+    await r2.putObject({
+      key: input.outputR2Key,
+      body: audioBytes,
+      contentType: outputContentType,
+      metadata: {
+        source: 'manual-upload-extraction',
+        workspaceId: input.workspaceId,
+        videoId: input.videoId,
+      },
+    });
+
+    return {
+      outputR2Key: input.outputR2Key,
+      durationSec,
+      sizeBytes: audioBytes.byteLength,
+    };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+function guessExtension(contentType: string, fallbackKey: string): string {
+  const mimeToExt: Record<string, string> = {
+    'video/mp4': '.mp4',
+    'video/quicktime': '.mov',
+    'video/x-msvideo': '.avi',
+    'video/webm': '.webm',
+    'video/x-matroska': '.mkv',
+    'audio/mpeg': '.mp3',
+    'audio/mp4': '.m4a',
+    'audio/wav': '.wav',
+    'audio/ogg': '.ogg',
+    'audio/webm': '.webm',
+    'audio/aac': '.aac',
+  };
+  if (mimeToExt[contentType]) return mimeToExt[contentType]!;
+  const extFromKey = path.extname(fallbackKey);
+  return extFromKey || '.bin';
+}
+
+async function probeDuration(filePath: string): Promise<number> {
+  return new Promise((resolve) => {
+    const proc = spawn('ffprobe', [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_format',
+      filePath,
+    ]);
+    let out = '';
+    proc.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString(); });
+    proc.on('close', (code) => {
+      if (code !== 0) { resolve(0); return; }
+      try {
+        const parsed = JSON.parse(out) as { format?: { duration?: string } };
+        const dur = parseFloat(parsed.format?.duration ?? '0');
+        resolve(isFinite(dur) ? dur : 0);
+      } catch {
+        resolve(0);
+      }
+    });
+    proc.on('error', () => resolve(0));
+  });
+}
+
 export interface AudioExtractionVideoInput {
   videoId: string;
   youtubeVideoId: string | null;
