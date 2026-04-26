@@ -26,6 +26,17 @@ ALTER TABLE "video" ADD COLUMN "transcribe_status" "transcribe_status";--> state
 ALTER TABLE "video" ADD COLUMN "file_size_bytes" bigint;--> statement-breakpoint
 ALTER TABLE "video" ADD COLUMN "content_type" text;
 
+--> Partial unique indexes — uniqueness only enforced for non-null values
+DROP INDEX IF EXISTS "channel_youtube_channel_id_unique";
+CREATE UNIQUE INDEX "channel_youtube_channel_id_unique"
+  ON "channel" USING btree ("youtube_channel_id")
+  WHERE "youtube_channel_id" IS NOT NULL;
+
+DROP INDEX IF EXISTS "video_workspace_youtube_id_unique";
+CREATE UNIQUE INDEX "video_workspace_youtube_id_unique"
+  ON "video" USING btree ("workspace_id", "youtube_video_id")
+  WHERE "youtube_video_id" IS NOT NULL;
+
 --> CHECK constraint to enforce manual_upload videos have local_r2_key
 ALTER TABLE "video" ADD CONSTRAINT "video_manual_upload_has_r2_key"
   CHECK (source_kind <> 'manual_upload' OR local_r2_key IS NOT NULL);

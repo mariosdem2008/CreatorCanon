@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const v0ReviewVideoSchema = z.object({
   videoId: z.string().min(1),
-  youtubeVideoId: z.string().min(1),
+  youtubeVideoId: z.string().min(1).nullable(),
   title: z.string().nullable(),
   durationSeconds: z.number().int().nullable(),
   summary: z.string().min(1),
@@ -30,7 +30,7 @@ export type SynthMode = z.infer<typeof synthModeSchema>;
 export const ensureTranscriptsStageOutputSchema = z.object({
   transcripts: z.array(z.object({
     videoId: z.string().min(1),
-    youtubeVideoId: z.string().min(1),
+    youtubeVideoId: z.string().min(1).nullable(),
     r2Key: z.string(),
     provider: z.enum(['youtube_timedtext', 'gpt-4o-mini-transcribe', 'existing']),
     wordCount: z.number().int().min(0),
@@ -64,7 +64,7 @@ export type V0ReviewStageOutput = z.infer<typeof v0ReviewStageOutputSchema>;
 
 export const sourceReferenceV0Schema = z.object({
   videoId: z.string().min(1),
-  youtubeVideoId: z.string().min(1),
+  youtubeVideoId: z.string().min(1).nullable(),
   title: z.string().nullable(),
   segmentId: z.string().min(1),
   startMs: z.number().int().min(0),

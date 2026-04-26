@@ -13,7 +13,7 @@ import {
 
 export interface AudioExtractionVideoInput {
   videoId: string;
-  youtubeVideoId: string;
+  youtubeVideoId: string | null;
   title: string | null;
 }
 
@@ -30,7 +30,7 @@ export interface ExtractVideoAudioAssetsResult {
   reusedCount: number;
   items: Array<{
     videoId: string;
-    youtubeVideoId: string;
+    youtubeVideoId: string | null;
     title: string | null;
     transcriptProvider: string | null;
     audioR2Key: string;
@@ -216,6 +216,11 @@ export async function extractVideoAudioAssets(
   let reusedCount = 0;
 
   for (const selected of videos) {
+    if (!selected.youtubeVideoId) {
+      // manual_upload videos skip yt-dlp; the worker job handles their audio separately.
+      continue;
+    }
+
     const existingAudio = audioByVideo.get(selected.videoId);
     if (existingAudio && !input.force) {
       reusedCount += 1;

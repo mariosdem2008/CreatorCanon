@@ -72,7 +72,7 @@ export async function projectSources({
       thumbnailUrl:
         (v.thumbnails as { medium?: string; small?: string } | null)?.medium ??
         (v.thumbnails as { medium?: string; small?: string } | null)?.small ??
-        `https://i.ytimg.com/vi/${v.youtubeVideoId}/hqdefault.jpg`,
+        (v.youtubeVideoId ? `https://i.ytimg.com/vi/${v.youtubeVideoId}/hqdefault.jpg` : 'https://placehold.co/480x270/E5DECF/3D352A?text=Video'),
       transcriptStatus: canonicalSet.has(v.id) ? ('available' as const) : ('unavailable' as const),
       topicSlugs,
       citedPageIds,

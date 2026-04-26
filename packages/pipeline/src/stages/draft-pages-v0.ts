@@ -43,7 +43,7 @@ export interface DraftPagesV0Input {
 
 interface ReviewArtifactVideo {
   videoId: string;
-  youtubeVideoId?: string;
+  youtubeVideoId?: string | null;
   title: string | null;
   summary: string;
   segmentCount: number;
@@ -489,7 +489,7 @@ async function loadSourceRefs(input: DraftPagesV0Input): Promise<SourceRefByVide
   for (const row of rows) {
     const ref: SourceReferenceV0 = {
       videoId: row.videoId,
-      youtubeVideoId: row.youtubeVideoId ?? '',
+      youtubeVideoId: row.youtubeVideoId ?? null,
       title: row.title,
       segmentId: row.segmentId,
       startMs: row.startMs,

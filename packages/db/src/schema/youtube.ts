@@ -81,7 +81,7 @@ export const channel = pgTable(
       .notNull(),
   },
   (t) => ({
-    youtubeIdIdx: uniqueIndex('channel_youtube_channel_id_unique').on(t.youtubeChannelId),
+    youtubeIdIdx: uniqueIndex('channel_youtube_channel_id_unique').on(t.youtubeChannelId).where(sql`${t.youtubeChannelId} IS NOT NULL`),
     workspaceIdx: index('channel_workspace_idx').on(t.workspaceId),
   }),
 );
@@ -135,7 +135,7 @@ export const video = pgTable(
     youtubeIdWorkspaceIdx: uniqueIndex('video_workspace_youtube_id_unique').on(
       t.workspaceId,
       t.youtubeVideoId,
-    ),
+    ).where(sql`${t.youtubeVideoId} IS NOT NULL`),
     youtubeVideoIdx: index('video_youtube_video_id_idx').on(t.youtubeVideoId),
     workspaceChannelIdx: index('video_workspace_channel_idx').on(
       t.workspaceId,

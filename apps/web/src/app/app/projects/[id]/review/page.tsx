@@ -166,14 +166,16 @@ export default async function ProjectReviewPage({
                             {video.segmentCount} segments · {formatDuration(video.durationSeconds)}
                           </p>
                         </div>
-                        <a
-                          href={`https://www.youtube.com/watch?v=${video.youtubeVideoId}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[12px] font-semibold text-[var(--cc-accent)] hover:underline"
-                        >
-                          Watch source ↗
-                        </a>
+                        {video.youtubeVideoId && (
+                          <a
+                            href={`https://www.youtube.com/watch?v=${video.youtubeVideoId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[12px] font-semibold text-[var(--cc-accent)] hover:underline"
+                          >
+                            Watch source ↗
+                          </a>
+                        )}
                       </div>
                       <p className="mt-3 text-[13px] leading-[1.65] text-[var(--cc-ink-3)]">
                         {video.summary}

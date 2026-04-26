@@ -32,7 +32,7 @@ export interface ExtractAlphaAudioResult {
   dispatched: boolean;
   items: Array<{
     videoId: string;
-    youtubeVideoId: string;
+    youtubeVideoId: string | null;
     title: string | null;
     transcriptProvider: string | null;
     audioR2Key: string;
