@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, asc, eq, gte, lte } from '@creatorcanon/db';
+import { and, asc, count, eq, gte, lte } from '@creatorcanon/db';
 import { segment, video } from '@creatorcanon/db/schema';
 import type { ToolDef } from './types';
 
@@ -27,7 +27,7 @@ export const listVideosTool: ToolDef<Record<string, never>, z.infer<typeof video
       })
       .from(video)
       .innerJoin(segment, eq(segment.videoId, video.id))
-      .where(eq(segment.runId, ctx.runId))
+      .where(and(eq(segment.runId, ctx.runId), eq(video.workspaceId, ctx.workspaceId)))
       .groupBy(video.id, video.title, video.durationSeconds, video.publishedAt, video.thumbnails);
     return rows.map((r) => ({
       id: r.id,
@@ -52,22 +52,28 @@ export const getVideoSummaryTool: ToolDef<{ videoId: string }, z.infer<typeof vi
   input: z.object({ videoId: z.string().min(1) }).strict(),
   output: videoSummarySchema,
   handler: async ({ videoId }, ctx) => {
-    const v = await ctx.db
-      .selectDistinct({ title: video.title, durationSec: video.durationSeconds })
+    const rows = await ctx.db
+      .select({
+        title: video.title,
+        durationSec: video.durationSeconds,
+        segmentCount: count(segment.id),
+      })
       .from(video)
       .innerJoin(segment, eq(segment.videoId, video.id))
-      .where(and(eq(video.id, videoId), eq(segment.runId, ctx.runId)))
+      .where(and(
+        eq(video.id, videoId),
+        eq(video.workspaceId, ctx.workspaceId),
+        eq(segment.runId, ctx.runId),
+        eq(segment.workspaceId, ctx.workspaceId),
+      ))
+      .groupBy(video.id, video.title, video.durationSeconds)
       .limit(1);
-    if (!v[0]) throw new Error(`Video '${videoId}' not found in run '${ctx.runId}'`);
-    const segCount = await ctx.db
-      .select({ id: segment.id })
-      .from(segment)
-      .where(and(eq(segment.runId, ctx.runId), eq(segment.videoId, videoId)));
+    if (!rows[0]) throw new Error(`Video '${videoId}' not found in run '${ctx.runId}'`);
     return {
-      title: v[0].title ?? '',
+      title: rows[0].title ?? '',
       summary: null, // pre-computed summaries are out of scope for v1
-      durationSec: v[0].durationSec ?? 0,
-      segmentCount: segCount.length,
+      durationSec: rows[0].durationSec ?? 0,
+      segmentCount: Number(rows[0].segmentCount),
     };
   },
 };
@@ -89,10 +95,10 @@ export const listSegmentsForVideoTool: ToolDef<{ videoId: string; range?: { star
   }).strict(),
   output: z.array(segmentRowSchema),
   handler: async ({ videoId, range }, ctx) => {
-    const conditions = [eq(segment.runId, ctx.runId), eq(segment.videoId, videoId)];
+    const conditions = [eq(segment.runId, ctx.runId), eq(segment.videoId, videoId), eq(segment.workspaceId, ctx.workspaceId)];
     if (range) {
-      conditions.push(gte(segment.startMs, range.startSec * 1000));
-      conditions.push(lte(segment.endMs, range.endSec * 1000));
+      conditions.push(lte(segment.startMs, range.endSec * 1000));   // segment starts before range ends
+      conditions.push(gte(segment.endMs, range.startSec * 1000));   // segment ends after range starts
     }
     const rows = await ctx.db
       .select({ id: segment.id, videoId: segment.videoId, startMs: segment.startMs, endMs: segment.endMs, text: segment.text })
@@ -113,7 +119,7 @@ export const getSegmentTool: ToolDef<{ segmentId: string }, z.infer<typeof segme
     const rows = await ctx.db
       .select({ id: segment.id, videoId: segment.videoId, startMs: segment.startMs, endMs: segment.endMs, text: segment.text })
       .from(segment)
-      .where(and(eq(segment.runId, ctx.runId), eq(segment.id, segmentId)))
+      .where(and(eq(segment.runId, ctx.runId), eq(segment.id, segmentId), eq(segment.workspaceId, ctx.workspaceId)))
       .limit(1);
     if (!rows[0]) throw new Error(`Segment '${segmentId}' not found in run '${ctx.runId}'`);
     return rows[0];
