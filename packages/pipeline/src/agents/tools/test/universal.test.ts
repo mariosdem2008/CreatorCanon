@@ -49,9 +49,14 @@ describe('universal read tools', () => {
   });
 
   it('listSegmentsForVideo respects time range', async () => {
-    const out = await listSegmentsForVideoTool.handler({ videoId: 'vid_focus_v1', range: { startSec: 30, endSec: 60 } }, makeCtx(seed));
-    assert.equal(out.length, 2);
-    assert.deepEqual(out.map((s) => s.id).sort(), ['seg_v1_b', 'seg_v1_span']);
+    const out = await listSegmentsForVideoTool.handler(
+      { videoId: 'vid_focus_v1', range: { startSec: 30, endSec: 60 } },
+      makeCtx(seed),
+    );
+    // Inclusive overlap: a segment ending at 30s touches the range start;
+    // a segment starting at 50s touches the range end.
+    assert.equal(out.length, 3);
+    assert.deepEqual(out.map((s) => s.id).sort(), ['seg_v1_a', 'seg_v1_b', 'seg_v1_span']);
   });
 
   it('getSegment returns the row', async () => {
