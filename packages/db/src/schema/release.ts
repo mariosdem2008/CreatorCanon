@@ -56,7 +56,7 @@ export const hub = pgTable(
     subdomain: citext('subdomain').notNull(),
     customDomain: text('custom_domain'),
     theme: hubThemeEnum('theme').notNull().default('paper'),
-    templateKey: hubTemplateKeyEnum('template_key').notNull().default('legacy_v0'),
+    templateKey: hubTemplateKeyEnum('template_key').notNull().default('editorial_atlas'),
     accessMode: hubAccessModeEnum('access_mode').notNull().default('public'),
     paywallPriceCents: integer('paywall_price_cents'),
     metadata: jsonb('metadata').$type<HubMetadata>().notNull().default({}),

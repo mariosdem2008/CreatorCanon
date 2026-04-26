@@ -43,6 +43,13 @@
       "when": 1745625600000,
       "tag": "0005_uploading_videos_index",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1745712000000,
+      "tag": "0006_default_to_editorial_atlas",
+      "breakpoints": true
     }
   ]
 }
