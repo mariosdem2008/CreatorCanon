@@ -71,7 +71,7 @@ async function insertFinding(
 // ---------------------------------------------------------------------------
 
 const proposeTopicInput = topicPayload.extend({
-  evidence: z.array(segmentRefSchema).min(1),
+  evidence: z.array(segmentRefSchema).min(1).max(20),
 });
 type ProposeTopicInput = z.infer<typeof proposeTopicInput>;
 
@@ -137,7 +137,7 @@ export const proposeLessonTool: ToolDef<ProposeLessonInput, ProposeResult> = {
 // ---------------------------------------------------------------------------
 
 const proposePlaybookInput = playbookPayload.extend({
-  evidence: z.array(segmentRefSchema).min(1),
+  evidence: z.array(segmentRefSchema).min(3),
   /** Optional IDs of previously-recorded findings that this playbook builds upon.
    *  Each ID must belong to the current run. For each ID, an archiveRelation row
    *  with type `builds_on` is automatically created (from=playbook, to=that ID). */
@@ -208,7 +208,8 @@ export const proposeQuoteTool: ToolDef<ProposeQuoteInput, ProposeResult> = {
 // ---------------------------------------------------------------------------
 
 const proposeAhaMomentInput = ahaMomentPayload.extend({
-  evidence: z.array(segmentRefSchema).min(1),
+  /** A single segment that contains this aha-moment. */
+  evidence: segmentRefSchema,
 });
 type ProposeAhaMomentInput = z.infer<typeof proposeAhaMomentInput>;
 
@@ -216,12 +217,12 @@ export const proposeAhaMomentTool: ToolDef<ProposeAhaMomentInput, ProposeResult>
   name: 'proposeAhaMoment',
   description:
     'Record an aha-moment finding — a striking insight or realization from the source material. ' +
-    'Provide at least 1 evidence segment. Returns a findingId on success.',
+    'Provide exactly 1 evidence segment that contains the moment. Returns a findingId on success.',
   input: proposeAhaMomentInput,
   output: proposeResultSchema,
   handler: async (input, ctx) => {
     const { evidence, ...payload } = input;
-    return insertFinding('aha_moment', payload, evidence, ctx);
+    return insertFinding('aha_moment', payload, [evidence], ctx);
   },
 };
 

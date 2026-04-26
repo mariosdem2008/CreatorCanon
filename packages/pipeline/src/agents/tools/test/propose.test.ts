@@ -168,4 +168,31 @@ describe('propose* tools', () => {
     assert.equal(rel.ok, false);
     if (!rel.ok) assert.match(rel.error, /self-reference/i);
   });
+
+  it('proposeAhaMoment accepts single segment evidence', async () => {
+    const out = await proposeAhaMomentTool.handler({
+      quote: 'When you write you discover what you think.',
+      context: 'This crystallizes the lesson that writing IS thinking, not just transcription.',
+      evidence: { segmentId: 'seg_pt_a' },
+    }, makeCtx(seed, 'aha_moment_detector', 'gpt-5.5'));
+    assert.equal(out.ok, true);
+  });
+
+  it('proposeTopic input schema rejects >20 evidence segments', () => {
+    const result = proposeTopicTool.input.safeParse({
+      title: 'X', description: 'X',
+      iconKey: 'productivity', accentColor: 'mint',
+      evidence: Array.from({ length: 21 }, () => ({ segmentId: 'x' })),
+    });
+    assert.equal(result.success, false);
+  });
+
+  it('proposePlaybook input schema requires min 3 evidence segments', () => {
+    const result = proposePlaybookTool.input.safeParse({
+      title: 'X', summary: 'X',
+      principles: [{ title: 'p', body: 'b' }],
+      evidence: [{ segmentId: 'x' }, { segmentId: 'y' }],
+    });
+    assert.equal(result.success, false);
+  });
 });
