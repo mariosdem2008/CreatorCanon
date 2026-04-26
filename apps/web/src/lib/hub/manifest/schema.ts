@@ -121,6 +121,20 @@ export const navItemSchema = z.object({
 });
 export type NavItem = z.infer<typeof navItemSchema>;
 
+export const highlightSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(['aha_moment', 'quote']),
+  text: z.string().min(1).max(280),
+  context: z.string().optional(),
+  attribution: z.string().optional(),
+  evidence: z.object({
+    sourceVideoId: z.string().min(1),
+    timestampStart: z.number().int().nonnegative(),
+    timestampLabel: z.string().min(1),
+  }),
+});
+export type Highlight = z.infer<typeof highlightSchema>;
+
 export const editorialAtlasManifestSchema = z.object({
   schemaVersion: z.literal('editorial_atlas_v1'),
   hubId: z.string().min(1),
@@ -169,5 +183,7 @@ export const editorialAtlasManifestSchema = z.object({
     })),
     faq: z.array(z.object({ question: z.string().min(1), answer: z.string().min(1) })),
   }),
+
+  highlights: z.array(highlightSchema).optional(),
 });
 export type EditorialAtlasManifest = z.infer<typeof editorialAtlasManifestSchema>;
