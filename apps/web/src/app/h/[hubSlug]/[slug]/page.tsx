@@ -1,66 +1,26 @@
-import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+// apps/web/src/app/h/[hubSlug]/[slug]/page.tsx
+//
+// Backwards-compatibility redirect for the old flat URL pattern.
+// Old: /h/[hubSlug]/[slug]
+// New: /h/[hubSlug]/pages/[slug]
+//
+// This dynamic segment only matches when no other dedicated segment
+// (`pages`, `topics`, `sources`, `start`, `methodology`, `search`, `ask`) wins
+// — Next.js routes specific segments first.
+//
+// Phase 1 acceptance includes a manual smoke test against
+// /h/<slug>/start, /h/<slug>/topics, /h/<slug>/pages, etc. to confirm no
+// shadowing. If a conflict surfaces (it shouldn't), delete this file and
+// note the reason in the implementation PR.
 
-import { PublicHubDetail } from '@/components/hub/publicTemplates';
-import { loadHubManifest } from '../manifest';
+import { permanentRedirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
+import { getPageRoute } from '@/lib/hub/routes';
 
-export async function generateMetadata({
+export default function LegacyDetailRedirect({
   params,
 }: {
-  params: { subdomain: string; slug: string };
-}): Promise<Metadata> {
-  try {
-    const { manifest } = await loadHubManifest(params.subdomain);
-    const page = manifest.pages.find((p) => p.slug === params.slug);
-    if (!page) return { title: 'Page not found' };
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    const canonicalUrl = `${appUrl}/h/${params.subdomain}/${params.slug}`;
-
-    const description =
-      page.summary ??
-      `${page.title} — part of the ${manifest.title} knowledge hub on CreatorCanon.`;
-
-    const title = `${page.title} — ${manifest.title}`;
-
-    return {
-      title,
-      description,
-      alternates: {
-        canonical: canonicalUrl,
-      },
-      openGraph: {
-        type: 'article',
-        siteName: 'CreatorCanon',
-        title,
-        description,
-        url: canonicalUrl,
-        // No OG image: manifest does not produce one yet — flagged for follow-up.
-      },
-      twitter: {
-        card: 'summary',
-        title,
-        description,
-        // No twitter:image for the same reason.
-      },
-    };
-  } catch {
-    return {
-      title: 'Hub page not found',
-    };
-  }
-}
-
-export default async function PublicHubPageDetail({
-  params,
-}: {
-  params: { subdomain: string; slug: string };
+  params: { hubSlug: string; slug: string };
 }) {
-  const data = await loadHubManifest(params.subdomain);
-  const page = data.manifest.pages.find((item) => item.slug === params.slug);
-  if (!page) notFound();
-
-  return <PublicHubDetail {...data} page={page} />;
+  permanentRedirect(getPageRoute(params.hubSlug, params.slug));
 }
