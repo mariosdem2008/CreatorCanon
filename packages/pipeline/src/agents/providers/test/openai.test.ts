@@ -36,7 +36,7 @@ describe('OpenAI provider message mapping', () => {
       role: 'tool',
       content: '{"result": 42}',
       toolCallId: 'call_1',
-    }) as { role: 'tool'; tool_call_id: string };
+    }) as { role: 'tool'; tool_call_id: string; content: string };
     assert.equal(out.role, 'tool');
     assert.equal(out.tool_call_id, 'call_1');
     assert.equal(out.content, '{"result": 42}');
