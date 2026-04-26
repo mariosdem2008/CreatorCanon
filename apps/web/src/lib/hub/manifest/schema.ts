@@ -93,7 +93,7 @@ export type Page = z.infer<typeof pageSchema>;
 
 export const sourceVideoSchema = z.object({
   id: z.string().min(1),
-  youtubeId: z.string().min(1),
+  youtubeId: z.string().min(1).nullable(),
   title: z.string().min(1),
   channelName: z.string().min(1),
   publishedAt: z.string().datetime(),
