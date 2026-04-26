@@ -1,6 +1,5 @@
 import { before, after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadDefaultEnvFiles } from '../../env-files';
 import { runDiscoveryStage } from '../discovery';
 import { _resetRegistryForTests, registerAllTools } from '../../agents/tools/registry';
 import { seedTestRun, teardownTestRun, type SeedResult } from '../../../test-helpers/fixtures';
@@ -46,11 +45,12 @@ function buildMinimalArgsFor(toolName: string): Record<string, unknown> {
   }
 }
 
-describe('runDiscoveryStage', () => {
+const skipIfNoEnv = !process.env.DATABASE_URL || !process.env.GEMINI_API_KEY || !process.env.OPENAI_API_KEY;
+
+describe('runDiscoveryStage', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPENAI_API_KEY not set' : false }, () => {
   let seed: SeedResult;
 
   before(async () => {
-    loadDefaultEnvFiles();
     _resetRegistryForTests();
     registerAllTools();
     seed = await seedTestRun({

@@ -1,6 +1,5 @@
 import { before, after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadDefaultEnvFiles } from '../env-files';
 import { _resetRegistryForTests, registerAllTools } from '../agents/tools/registry';
 import { runDiscoveryStage } from '../stages/discovery';
 import { runSynthesisStage } from '../stages/synthesis';
@@ -83,12 +82,13 @@ function buildArgsFor(toolName: string): Record<string, unknown> {
   }
 }
 
-describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)', () => {
+const skipIfNoEnv = !process.env.DATABASE_URL || !process.env.GEMINI_API_KEY || !process.env.OPENAI_API_KEY;
+
+describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPENAI_API_KEY not set' : false }, () => {
   let seed: SeedResult;
   let hubId: string;
 
   before(async () => {
-    loadDefaultEnvFiles();
     _resetRegistryForTests();
     registerAllTools();
 

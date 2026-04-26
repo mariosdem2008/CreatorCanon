@@ -1,6 +1,5 @@
 import { before, after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadDefaultEnvFiles } from '../../env-files';
 import { runAdaptStage } from '../adapt';
 import { runMergeStage } from '../merge';
 import { _resetRegistryForTests, registerAllTools } from '../../agents/tools/registry';
@@ -48,12 +47,13 @@ function makeMockR2(): R2Client & { stored: Map<string, Uint8Array> } {
   } as any;
 }
 
-describe('runAdaptStage', () => {
+const skipIfNoEnv = !process.env.DATABASE_URL || !process.env.GEMINI_API_KEY || !process.env.OPENAI_API_KEY;
+
+describe('runAdaptStage', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPENAI_API_KEY not set' : false }, () => {
   let seed: SeedResult;
   let hubId: string;
 
   before(async () => {
-    loadDefaultEnvFiles();
     _resetRegistryForTests();
     registerAllTools();
 

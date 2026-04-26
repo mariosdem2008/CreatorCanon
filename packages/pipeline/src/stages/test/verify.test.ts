@@ -1,6 +1,5 @@
 import { before, after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadDefaultEnvFiles } from '../../env-files';
 import { runVerifyStage } from '../verify';
 import { _resetRegistryForTests, registerAllTools } from '../../agents/tools/registry';
 import { proposeTopicTool } from '../../agents/tools/propose';
@@ -54,11 +53,12 @@ function makeGrounderProvider(): AgentProvider {
   };
 }
 
-describe('runVerifyStage', () => {
+const skipIfNoEnv = !process.env.DATABASE_URL || !process.env.GEMINI_API_KEY || !process.env.OPENAI_API_KEY;
+
+describe('runVerifyStage', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPENAI_API_KEY not set' : false }, () => {
   let seed: SeedResult;
 
   before(async () => {
-    loadDefaultEnvFiles();
     _resetRegistryForTests();
     registerAllTools();
     seed = await seedTestRun({
