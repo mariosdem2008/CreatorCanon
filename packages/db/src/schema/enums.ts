@@ -301,3 +301,14 @@ export const hubTemplateKeyEnum = pgEnum('hub_template_key', [
   'editorial_atlas',
   'legacy_v0',
 ]);
+
+// ----- Manual video upload -----
+
+/** Origin of a video/channel row. */
+export const sourceKindEnum = pgEnum('source_kind', ['youtube', 'manual_upload']);
+
+/** Per-upload state through R2 PUT lifecycle. */
+export const uploadStatusEnum = pgEnum('upload_status', ['uploading', 'uploaded', 'failed']);
+
+/** Per-upload state through transcription lifecycle. */
+export const transcribeStatusEnum = pgEnum('transcribe_status', ['pending', 'transcribing', 'ready', 'failed']);
