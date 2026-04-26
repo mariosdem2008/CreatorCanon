@@ -22,6 +22,7 @@
     "smoke:audio-fixtures": "tsx ./src/smoke-audio-fixtures.ts",
     "smoke:audio-publish": "tsx ./src/smoke-audio-publish.ts",
     "smoke:review-edit": "tsx ./src/smoke-review-edit.ts",
+    "inspect:run": "tsx ./src/inspect-run.ts",
     "inspect:alpha-run": "tsx ./src/inspect-alpha-run.ts",
     "inspect:alpha-content": "tsx ./src/inspect-alpha-content.ts",
     "extract:alpha-audio": "tsx ./src/extract-alpha-audio.ts",
