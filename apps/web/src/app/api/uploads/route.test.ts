@@ -33,6 +33,18 @@ describe('GET /api/uploads — query param validation', () => {
     assert.ok(!VALID_STATUSES.has(''));
     assert.ok(!VALID_STATUSES.has('pending'));
   });
+
+  // I2: Invalid ?status= should produce 400, not be silently ignored
+  it('invalid status values are rejected (would produce 400 in handler)', () => {
+    const invalidStatuses = ['uploading', 'pending', 'bogus', 'READY', ''];
+    for (const s of invalidStatuses) {
+      if (s === '') continue; // empty string means absent param
+      assert.ok(
+        !VALID_STATUSES.has(s),
+        `"${s}" must not be in VALID_STATUSES — handler returns 400 for unknown values`,
+      );
+    }
+  });
 });
 
 // ── Integration tests — gated on DATABASE_URL ─────────────────────────────────
@@ -169,6 +181,42 @@ describe(
           and(eq(video.workspaceId, otherWorkspaceId), eq(video.sourceKind, 'manual_upload')),
         );
       assert.equal(rows.length, 0);
+    });
+
+    // C1: ?workspaceId= param — membership check blocks access to foreign workspace
+    it('?workspaceId= for a workspace the user does not belong to: membership check returns empty', async () => {
+      // userId is in workspaceId but NOT in otherWorkspaceId.
+      // The fixed handler checks membership before scoping the query.
+      const { getDb, eq, and } = await import('@creatorcanon/db');
+      const { workspaceMember: wm } = await import('@creatorcanon/db/schema');
+      const memberRows = await getDb()
+        .select({ workspaceId: wm.workspaceId })
+        .from(wm)
+        .where(and(eq(wm.userId, userId), eq(wm.workspaceId, otherWorkspaceId)))
+        .limit(1);
+      assert.equal(memberRows.length, 0, 'userId must not be a member of otherWorkspaceId → handler returns 403');
+    });
+
+    // C1: multi-workspace list — inArray across all user workspaces
+    it('listing across all user workspaces uses inArray with correct workspace set', async () => {
+      const { getDb, eq, inArray, and } = await import('@creatorcanon/db');
+      const { workspaceMember: wm, video } = await import('@creatorcanon/db/schema');
+
+      // Simulate handler: collect all workspaces for userId
+      const allMemberships = await getDb()
+        .select({ workspaceId: wm.workspaceId })
+        .from(wm)
+        .where(eq(wm.userId, userId));
+      const wsIds = allMemberships.map((m) => m.workspaceId);
+
+      assert.ok(wsIds.includes(workspaceId), 'userId must be a member of workspaceId');
+      assert.ok(!wsIds.includes(otherWorkspaceId), 'userId must not be a member of otherWorkspaceId');
+
+      const rows = await getDb()
+        .select({ id: video.id })
+        .from(video)
+        .where(and(inArray(video.workspaceId, wsIds), eq(video.sourceKind, 'manual_upload')));
+      assert.equal(rows.length, 2, 'should only see videos from workspaces userId belongs to');
     });
   },
 );

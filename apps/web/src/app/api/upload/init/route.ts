@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     }
     workspaceId = bodyWorkspaceId;
   } else {
-    // Auto-detect: use first workspace the user belongs to
+    // Auto-detect: list all workspaces the user belongs to; use first (init supplies workspaceId in practice)
     const members = await db
       .select({ workspaceId: workspaceMember.workspaceId })
       .from(workspaceMember)
@@ -72,29 +72,41 @@ export async function POST(req: Request) {
   const ext = fileExtFromContentType(contentType);
   const r2Key = `workspaces/${workspaceId}/uploads/${videoId}/source.${ext}`;
 
-  // 7. Insert video row
-  await db.insert(video).values({
-    id: videoId,
-    workspaceId,
-    channelId,
-    sourceKind: 'manual_upload',
-    uploadStatus: 'uploading',
-    transcribeStatus: 'pending',
-    localR2Key: r2Key,
-    fileSizeBytes: fileSize,
-    contentType,
-    durationSeconds: durationSec ?? null,
-    title: null,
-  });
+  // 7. Sign URL FIRST — before DB insert so a signing failure leaves no orphan row
+  const env = parseServerEnv(process.env);
+  const r2 = createR2Client(env);
+  let uploadUrl: string;
+  try {
+    uploadUrl = await r2.getSignedUrl({
+      key: r2Key,
+      operation: 'put',
+      expiresInSeconds: 1800,
+      contentType,
+    });
+  } catch (err) {
+    console.error('[upload-init] R2 signing failed:', err);
+    return NextResponse.json({ error: 'Failed to generate upload URL' }, { status: 500 });
+  }
 
-  // 8. Get presigned PUT URL (30 min)
-  const r2 = createR2Client(parseServerEnv(process.env));
-  const uploadUrl = await r2.getSignedUrl({
-    key: r2Key,
-    operation: 'put',
-    expiresInSeconds: 1800,
-    contentType,
-  });
+  // 8. Insert DB row — after URL signing so a signing failure leaves no dangling row
+  try {
+    await db.insert(video).values({
+      id: videoId,
+      workspaceId,
+      channelId,
+      sourceKind: 'manual_upload',
+      uploadStatus: 'uploading',
+      transcribeStatus: 'pending',
+      localR2Key: r2Key,
+      fileSizeBytes: fileSize,
+      contentType,
+      durationSeconds: durationSec ?? null,
+      title: null,
+    });
+  } catch (err) {
+    console.error('[upload-init] DB insert failed:', err);
+    return NextResponse.json({ error: 'Insert failed' }, { status: 500 });
+  }
 
   return NextResponse.json({ videoId, uploadUrl, r2Key });
 }

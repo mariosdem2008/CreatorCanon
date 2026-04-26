@@ -21,19 +21,9 @@ export async function DELETE(
   }
   const userId = session.user.id;
 
-  // 2. Workspace lookup
   const db = getDb();
-  const members = await db
-    .select({ workspaceId: workspaceMember.workspaceId })
-    .from(workspaceMember)
-    .where(eq(workspaceMember.userId, userId))
-    .limit(1);
-  if (!members[0]) {
-    return NextResponse.json({ error: 'No workspace found' }, { status: 404 });
-  }
-  const workspaceId = members[0].workspaceId;
 
-  // 3. Load video row
+  // 2. Load video row by ID — workspace comes from the resource, not from the user's first workspace
   const rows = await db
     .select({
       id: video.id,
@@ -41,7 +31,7 @@ export async function DELETE(
       localR2Key: video.localR2Key,
     })
     .from(video)
-    .where(and(eq(video.id, videoId), eq(video.workspaceId, workspaceId)))
+    .where(eq(video.id, videoId))
     .limit(1);
 
   if (!rows[0]) {
@@ -49,6 +39,18 @@ export async function DELETE(
   }
 
   const row = rows[0];
+
+  // 3. Verify the caller is a member of the resource's workspace
+  const member = await db
+    .select({ workspaceId: workspaceMember.workspaceId })
+    .from(workspaceMember)
+    .where(and(eq(workspaceMember.userId, userId), eq(workspaceMember.workspaceId, row.workspaceId)))
+    .limit(1);
+  if (!member[0]) {
+    return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404 });
+  }
+
+  const workspaceId = row.workspaceId;
 
   // 4. Check if video is in use by any non-failed generation run
   //    Path: video → videoSetItem → videoSet → generationRun

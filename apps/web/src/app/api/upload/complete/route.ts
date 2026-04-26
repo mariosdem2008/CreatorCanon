@@ -22,33 +22,22 @@ export async function POST(req: Request) {
   const userId = session.user.id;
 
   // 2. Body validation
-  let body: { videoId: string };
-  try {
-    body = completeBody.parse(await req.json());
-  } catch {
+  const parsed = completeBody.safeParse(await req.json());
+  if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
-  const { videoId } = body;
+  const { videoId } = parsed.data;
 
-  // 3. Workspace lookup
   const db = getDb();
-  const members = await db
-    .select({ workspaceId: workspaceMember.workspaceId })
-    .from(workspaceMember)
-    .where(eq(workspaceMember.userId, userId))
-    .limit(1);
-  if (!members[0]) {
-    return NextResponse.json({ error: 'No workspace found' }, { status: 404 });
-  }
-  const workspaceId = members[0].workspaceId;
 
-  // 4. Load video row
+  // 3. Load video row by ID — workspace comes from the resource, not from the user's first workspace
   const rows = await db
     .select({
       id: video.id,
       workspaceId: video.workspaceId,
       uploadStatus: video.uploadStatus,
       localR2Key: video.localR2Key,
+      fileSizeBytes: video.fileSizeBytes,
     })
     .from(video)
     .where(eq(video.id, videoId))
@@ -60,12 +49,19 @@ export async function POST(req: Request) {
 
   const row = rows[0];
 
-  // 5. Cross-workspace check
-  if (row.workspaceId !== workspaceId) {
+  // 4. Verify the caller is a member of the resource's workspace
+  const member = await db
+    .select({ workspaceId: workspaceMember.workspaceId })
+    .from(workspaceMember)
+    .where(and(eq(workspaceMember.userId, userId), eq(workspaceMember.workspaceId, row.workspaceId)))
+    .limit(1);
+  if (!member[0]) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 6. State check — must be 'uploading'
+  const workspaceId = row.workspaceId;
+
+  // 5. State check — must be 'uploading'
   if (row.uploadStatus !== 'uploading') {
     return NextResponse.json(
       { error: 'Upload already completed or failed', uploadStatus: row.uploadStatus },
@@ -73,11 +69,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // 7. HEAD the R2 object to confirm upload
+  // 6. HEAD the R2 object to confirm upload
   const r2 = createR2Client(parseServerEnv(process.env));
   const r2Key = row.localR2Key!;
+  let head;
   try {
-    await r2.headObject(r2Key);
+    head = await r2.headObject(r2Key);
   } catch {
     // Object missing — mark failed
     await db
@@ -86,6 +83,20 @@ export async function POST(req: Request) {
       .where(and(eq(video.id, videoId), eq(video.workspaceId, workspaceId)));
     return NextResponse.json(
       { error: 'Upload not found in storage', videoId },
+      { status: 422 },
+    );
+  }
+
+  // 7. Content-length check — compare actual upload size to declared size
+  if (row.fileSizeBytes != null && head.contentLength !== row.fileSizeBytes) {
+    await db
+      .update(video)
+      .set({ uploadStatus: 'failed' })
+      .where(and(eq(video.id, videoId), eq(video.workspaceId, workspaceId)));
+    return NextResponse.json(
+      {
+        error: `Uploaded size (${head.contentLength}) does not match declared size (${row.fileSizeBytes})`,
+      },
       { status: 422 },
     );
   }
