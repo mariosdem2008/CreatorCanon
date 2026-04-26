@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { tasks } from '@trigger.dev/sdk/v3';
 import { auth } from '@creatorcanon/auth';
 import { and, eq, getDb } from '@creatorcanon/db';
 import { workspaceMember, video } from '@creatorcanon/db/schema';
@@ -107,8 +108,19 @@ export async function POST(req: Request) {
     .set({ uploadStatus: 'uploaded', transcribeStatus: 'transcribing' })
     .where(and(eq(video.id, videoId), eq(video.workspaceId, workspaceId)));
 
-  // 9. TODO(Phase D): wire to actual Trigger.dev task once transcribe-uploaded-video exists.
-  console.log(`[upload-complete] would enqueue transcribe-uploaded-video for ${videoId}`);
+  // 9. Enqueue Trigger.dev transcription task.
+  try {
+    await tasks.trigger('transcribe-uploaded-video', { videoId: row.id, workspaceId });
+  } catch (err) {
+    // Enqueue failed — mark video as failed so the user sees the error instead
+    // of waiting indefinitely for transcription that will never start.
+    await db
+      .update(video)
+      .set({ transcribeStatus: 'failed' })
+      .where(eq(video.id, videoId));
+    console.error('[upload-complete] failed to enqueue transcribe job', err);
+    return NextResponse.json({ error: 'Failed to schedule transcription' }, { status: 502 });
+  }
 
   return NextResponse.json({ ok: true, videoId, transcribeStatus: 'transcribing' });
 }
