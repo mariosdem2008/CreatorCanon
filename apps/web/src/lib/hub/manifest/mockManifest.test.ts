@@ -59,3 +59,30 @@ test('mock manifest: hubSlug and templateKey are consistent', () => {
 test('mock manifest: stats.pageCount matches pages.length', () => {
   assert.equal(mockManifest.stats.pageCount, mockManifest.pages.length);
 });
+
+test('mock manifest: structural integrity (topic slugs and relatedPageIds resolve)', () => {
+  const topicSlugs = new Set(mockManifest.topics.map((t) => t.slug));
+  const pageIds = new Set(mockManifest.pages.map((p) => p.id));
+  const sourceIds = new Set(mockManifest.sources.map((s) => s.id));
+
+  for (const page of mockManifest.pages) {
+    for (const slug of page.topicSlugs) {
+      assert.ok(topicSlugs.has(slug), `page ${page.slug} references unknown topic '${slug}'`);
+    }
+    for (const id of page.relatedPageIds) {
+      assert.ok(pageIds.has(id), `page ${page.slug} relates to unknown page id '${id}'`);
+    }
+    for (const c of page.citations) {
+      assert.ok(sourceIds.has(c.sourceVideoId), `page ${page.slug} citation ${c.id} references unknown source '${c.sourceVideoId}'`);
+    }
+  }
+
+  for (const source of mockManifest.sources) {
+    for (const slug of source.topicSlugs) {
+      assert.ok(topicSlugs.has(slug), `source ${source.id} references unknown topic '${slug}'`);
+    }
+    for (const id of source.citedPageIds) {
+      assert.ok(pageIds.has(id), `source ${source.id} citedPageIds references unknown page '${id}'`);
+    }
+  }
+});
