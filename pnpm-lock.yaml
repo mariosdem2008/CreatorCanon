@@ -335,6 +335,9 @@ importers:
       '@google/generative-ai':
         specifier: 0.21.0
         version: 0.21.0
+      '@sentry/node':
+        specifier: 8.33.1
+        version: 8.33.1
       openai:
         specifier: 4.61.0
         version: 4.61.0(zod@3.23.8)
@@ -7507,7 +7510,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.52.1
       '@types/shimmer': 1.2.0
-      import-in-the-middle: 1.11.0
+      import-in-the-middle: 1.15.0
       require-in-the-middle: 7.5.2(supports-color@10.2.2)
       semver: 7.7.4
       shimmer: 1.2.1

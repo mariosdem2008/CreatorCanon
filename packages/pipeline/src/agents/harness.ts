@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import { artifactKey, type R2Client } from '@creatorcanon/adapters';
 import { getDb } from '@creatorcanon/db';
 import type { AgentProvider, ChatTurn } from './providers';
@@ -38,6 +39,15 @@ const PROPOSE_TOOL_RESULT_HAS_FINDING_ID = (result: unknown): boolean =>
     && 'ok' in result && (result as { ok: unknown }).ok === true
     && 'findingId' in result;
 
+function stripPii(turns: ChatTurn[]): ChatTurn[] {
+  const emailRe = /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g;
+  const ssnRe = /\b\d{3}-\d{2}-\d{4}\b/g;
+  return turns.map((m) => ({
+    ...m,
+    content: m.content.replace(emailRe, '<email>').replace(ssnRe, '<id>'),
+  }));
+}
+
 export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
   const caps: StopCaps = { ...DEFAULT_STOP_CAPS, ...(input.caps ?? {}) };
   const stop = new StopController(caps);
@@ -58,6 +68,13 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
   ];
   const transcript: ChatTurn[] = [...messages];
 
+  const transcriptR2Key = artifactKey({
+    workspaceId: input.workspaceId,
+    runId: input.runId,
+    stage: 'agents',
+    name: `${input.agent}/transcript.json`,
+  });
+
   let warnedSoftCap = false;
   let stopReason: RunAgentSummary['stopReason'];
   let findingCount = 0;
@@ -65,6 +82,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
   // Count individual tool invocations dispatched (not provider calls).
   let toolCallCount = 0;
 
+  try {
   while (true) {
     if (stop.shouldWarn() && !warnedSoftCap) {
       const snap = stop.snapshot();
@@ -154,12 +172,6 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
   }
 
   // Persist transcript to R2.
-  const transcriptR2Key = artifactKey({
-    workspaceId: input.workspaceId,
-    runId: input.runId,
-    stage: 'agents',
-    name: `${input.agent}/transcript.json`,
-  });
   await input.r2.putObject({
     key: transcriptR2Key,
     body: new TextEncoder().encode(JSON.stringify(transcript)),
@@ -175,4 +187,19 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
     durationMs: stop.snapshot().elapsedMs,
     transcriptR2Key,
   };
+  } catch (err) {
+    // PII-strip transcript and attach to Sentry before re-throwing.
+    const sanitized = stripPii(transcript);
+    try {
+      Sentry.captureException(err, {
+        tags: { runId: input.runId, agent: input.agent },
+        extra: {
+          transcriptR2Key,
+          transcriptPreview: JSON.stringify(sanitized).slice(0, 2000),
+          modelId: input.modelId,
+        },
+      });
+    } catch { /* Sentry not initialized in this env — ignore */ }
+    throw err;
+  }
 }
