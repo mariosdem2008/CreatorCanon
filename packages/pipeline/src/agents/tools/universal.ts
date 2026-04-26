@@ -53,11 +53,12 @@ export const getVideoSummaryTool: ToolDef<{ videoId: string }, z.infer<typeof vi
   output: videoSummarySchema,
   handler: async ({ videoId }, ctx) => {
     const v = await ctx.db
-      .select({ title: video.title, durationSec: video.durationSeconds })
+      .selectDistinct({ title: video.title, durationSec: video.durationSeconds })
       .from(video)
-      .where(eq(video.id, videoId))
+      .innerJoin(segment, eq(segment.videoId, video.id))
+      .where(and(eq(video.id, videoId), eq(segment.runId, ctx.runId)))
       .limit(1);
-    if (!v[0]) throw new Error(`Video '${videoId}' not found`);
+    if (!v[0]) throw new Error(`Video '${videoId}' not found in run '${ctx.runId}'`);
     const segCount = await ctx.db
       .select({ id: segment.id })
       .from(segment)

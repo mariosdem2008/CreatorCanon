@@ -66,4 +66,13 @@ describe('universal read tools', () => {
       /not found/,
     );
   });
+
+  it('getVideoSummary throws when videoId belongs to a different run', async () => {
+    // The seed has 'vid_focus_v1' (with segments) and 'vid_unused_v2' (no segments
+    // in the run — but the row still exists in the video table).
+    await assert.rejects(
+      () => getVideoSummaryTool.handler({ videoId: 'vid_unused_v2' }, makeCtx(seed)),
+      /not found in run/,
+    );
+  });
 });
