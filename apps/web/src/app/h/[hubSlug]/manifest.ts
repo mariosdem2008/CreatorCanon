@@ -1,3 +1,7 @@
+// Note: this loader serves OG images and the legacy renderer. The new
+// Editorial Atlas home page reads from `lib/hub/manifest/mockManifest.ts`
+// directly. This file stays in service for the other consumers.
+
 import { notFound } from 'next/navigation';
 
 import { createR2Client } from '@creatorcanon/adapters';
@@ -8,7 +12,7 @@ import { releaseManifestV0Schema } from '@creatorcanon/pipeline';
 
 export type HubManifest = Awaited<ReturnType<typeof loadHubManifest>>;
 
-export async function loadHubManifest(subdomain: string) {
+export async function loadHubManifest(hubSlug: string) {
   const db = getDb();
   const hubs = await db
     .select({
@@ -19,7 +23,7 @@ export async function loadHubManifest(subdomain: string) {
       deletedAt: hub.deletedAt,
     })
     .from(hub)
-    .where(eq(hub.subdomain, subdomain))
+    .where(eq(hub.subdomain, hubSlug))
     .limit(1);
 
   const hubRow = hubs[0];

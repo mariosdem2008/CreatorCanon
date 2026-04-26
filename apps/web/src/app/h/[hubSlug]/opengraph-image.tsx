@@ -46,14 +46,14 @@ type ThemeKey = keyof typeof THEME_STYLES;
 export default async function Image({
   params,
 }: {
-  params: { subdomain: string };
+  params: { hubSlug: string };
 }) {
   let title = 'CreatorCanon';
   let description = 'Knowledge hubs for creators';
   let theme: ThemeKey = 'paper';
 
   try {
-    const { hub, manifest } = await loadHubManifest(params.subdomain);
+    const { hub, manifest } = await loadHubManifest(params.hubSlug);
     title = manifest.title;
     const overviewPage =
       manifest.pages.find((p) => p.slug === 'overview') ?? manifest.pages[0];
@@ -150,7 +150,7 @@ export default async function Image({
           }}
         >
           <span style={{ fontSize: '16px', color: colors.muted }}>
-            creatorcanon.com/h/{params.subdomain}
+            creatorcanon.com/h/{params.hubSlug}
           </span>
           <div
             style={{
