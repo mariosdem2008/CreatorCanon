@@ -265,3 +265,34 @@ export const inboxItemKindEnum = pgEnum('inbox_item_kind', [
   'invite_pending',
   'system_notice',
 ]);
+
+// ----- Multi-agent pipeline -----
+export const findingTypeEnum = pgEnum('finding_type', [
+  'topic',
+  'framework',
+  'lesson',
+  'playbook',
+  'quote',
+  'aha_moment',
+  'source_ranking',
+]);
+
+export const evidenceQualityEnum = pgEnum('evidence_quality', [
+  'strong',
+  'moderate',
+  'limited',
+  'unverified',
+]);
+
+export const relationTypeEnum = pgEnum('relation_type', [
+  'supports',
+  'builds_on',
+  'related_to',
+  'instance_of',
+  'contradicts',
+]);
+
+export const hubTemplateKeyEnum = pgEnum('hub_template_key', [
+  'editorial_atlas',
+  'legacy_v0',
+]);
