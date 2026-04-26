@@ -34,6 +34,17 @@ export interface SeedResult {
 }
 
 /**
+ * Seed a fresh, isolated FK chain for tool tests.
+ *
+ * Isolation guarantee: each call mints a NEW workspace, channel, project,
+ * videoSet, and run via `nano()` IDs. No two `seedTestRun` calls share rows.
+ * This is what makes the workspace-scoped deletes in `teardownTestRun` safe
+ * under parallel test execution.
+ *
+ * Caller-supplied `input.videos[].id` and `input.segments[].id` MUST be
+ * globally unique (they become primary keys). Tests that run in parallel
+ * MUST not pass the same caller-supplied IDs across calls.
+ *
  * Seed the minimal FK chain needed for tool tests:
  * user → workspace → (channel, project, videoSet) → video → transcriptAsset → ntv → segment
  * + a generationRun rooted at the workspace/project/videoSet.
@@ -154,9 +165,16 @@ export async function seedTestRun(input: SeedInput): Promise<SeedResult> {
 }
 
 /**
- * Delete the FK chain produced by seedTestRun in reverse dependency order.
+ * Delete rows seeded by a previous `seedTestRun` call, in reverse FK order.
+ *
  * Idempotent: calling on already-deleted IDs is a no-op (each delete uses
- * `WHERE id = ?`; missing rows do nothing).
+ * `WHERE id = ?` or `WHERE workspaceId = seed.workspaceId`; missing rows
+ * delete nothing).
+ *
+ * Workspace-scoped deletes (video, transcriptAsset, normalizedTranscriptVersion)
+ * ONLY hit rows seeded under this call's workspace because workspace IDs are
+ * unique per `seedTestRun` (see invariant on that function). If a caller ever
+ * reuses a workspace ID across seed calls, this teardown will over-delete.
  */
 export async function teardownTestRun(seed: SeedResult): Promise<void> {
   const db = getDb();
@@ -194,7 +212,7 @@ function makeStubR2Client(): ReturnType<typeof createR2Client> {
       `Test fixture: stub R2 client method '${method}' called. Pass an explicit r2 to makeCtx({ r2: ... }).`,
     );
   };
-  return {
+  const stub = {
     bucket: 'stub',
     putObject: () => throwUnused('putObject'),
     getObject: () => throwUnused('getObject'),
@@ -202,7 +220,8 @@ function makeStubR2Client(): ReturnType<typeof createR2Client> {
     deleteObject: () => throwUnused('deleteObject'),
     headObject: () => throwUnused('headObject'),
     listObjects: () => throwUnused('listObjects'),
-  } as ReturnType<typeof createR2Client>;
+  } satisfies ReturnType<typeof createR2Client>;
+  return stub;
 }
 
 /**
