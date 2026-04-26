@@ -183,9 +183,9 @@ async function run() {
     runId: result.runId,
     videoCount: result.videoCount,
     segmentsCreated: result.segmentsCreated,
-    reviewArtifactKey: result.reviewArtifactKey,
-    draftPageCount: result.draftPageCount,
-    draftPagesArtifactKey: result.draftPagesArtifactKey,
+    reviewArtifactKey: result.mode === 'legacy_v0' ? result.reviewArtifactKey : undefined,
+    draftPageCount: result.mode === 'legacy_v0' ? result.draftPageCount : result.pageCount,
+    draftPagesArtifactKey: result.mode === 'legacy_v0' ? result.draftPagesArtifactKey : undefined,
     publicPath: publishResult.publicPath,
     releaseManifestKey: publishResult.manifestR2Key,
   }, null, 2));
