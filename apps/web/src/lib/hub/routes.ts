@@ -14,3 +14,4 @@ export const getSearchRoute      = (hubSlug: string, query?: string)            
   query ? `/h/${hubSlug}/search?q=${encodeURIComponent(query)}` : `/h/${hubSlug}/search`;
 export const getAskRoute         = (hubSlug: string)                              => `/h/${hubSlug}/ask`;
 export const getAskApiRoute      = (hubSlug: string)                              => `/h/${hubSlug}/ask/api`;
+export const getHighlightsRoute  = (hubSlug: string)                              => `/h/${hubSlug}/highlights`;
