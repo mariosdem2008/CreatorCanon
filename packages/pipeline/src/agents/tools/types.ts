@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { getDb } from '@creatorcanon/db';
+import type { AtlasDb } from '@creatorcanon/db';
 import type { createR2Client } from '@creatorcanon/adapters';
 
 export interface ToolCtx {
@@ -7,7 +7,7 @@ export interface ToolCtx {
   workspaceId: string;
   agent: string;     // e.g. 'topic_spotter'
   model: string;     // e.g. 'gpt-5.5'
-  db: ReturnType<typeof getDb>;
+  db: AtlasDb;
   r2: ReturnType<typeof createR2Client>;
 }
 
