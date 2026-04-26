@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { and, eq, inArray, getDb } from '@creatorcanon/db';
+import { and, eq, inArray } from '@creatorcanon/db';
+import type { AtlasDb } from '@creatorcanon/db';
 import { segment } from '@creatorcanon/db/schema';
 
 export const segmentRefSchema = z.object({
@@ -14,10 +15,10 @@ export type SegmentRef = z.infer<typeof segmentRefSchema>;
 export async function validateSegmentRefs(
   runId: string,
   refs: SegmentRef[],
+  db: AtlasDb,
 ): Promise<{ ok: true } | { ok: false; unknownIds: string[] }> {
   if (refs.length === 0) return { ok: true };
-  const db = getDb();
-  const ids = refs.map((r) => r.segmentId);
+  const ids = [...new Set(refs.map((r) => r.segmentId))];
   const found = await db
     .select({ id: segment.id })
     .from(segment)

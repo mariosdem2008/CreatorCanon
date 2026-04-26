@@ -19,6 +19,3 @@ export interface ToolDef<TInput, TOutput> {
   handler: (input: TInput, ctx: ToolCtx) => Promise<TOutput>;
 }
 
-export type ToolResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
