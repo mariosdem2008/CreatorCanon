@@ -11,10 +11,6 @@ import {
   project,
   videoSetItem,
 } from '@creatorcanon/db/schema';
-import {
-  draftPagesV0StageOutputSchema,
-  v0ReviewStageOutputSchema,
-} from '@creatorcanon/pipeline';
 
 import {
   LinkButton,
@@ -100,20 +96,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const publishedHub = publishedHubs[0];
   const publishedTemplate = getHubTemplate(publishedHub?.theme ?? selectedTemplate.id);
   const isActive = Boolean(run && activeRunStatuses.has(run.status));
-  const reviewStage = stageRuns.find(
-    (stage) => stage.stageName === 'synthesize_v0_review' && stage.status === 'succeeded',
-  );
-  const draftPagesStage = stageRuns.find(
-    (stage) => stage.stageName === 'draft_pages_v0' && stage.status === 'succeeded',
-  );
-  const parsedReview = reviewStage?.outputJson
-    ? v0ReviewStageOutputSchema.safeParse(reviewStage.outputJson)
-    : null;
-  const parsedDraftPages = draftPagesStage?.outputJson
-    ? draftPagesV0StageOutputSchema.safeParse(draftPagesStage.outputJson)
-    : null;
-  const reviewReady = parsedReview?.success === true;
-  const draftPagesReady = parsedDraftPages?.success === true && pages.length > 0;
+  const draftPagesReady = pages.length > 0;
   const approvedCount = pages.filter((item) => item.status === 'approved').length;
   const failedStageCount = stageRuns.filter((stage) =>
     stage.status.startsWith('failed'),
@@ -150,7 +133,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         title={proj.title}
         body={projectBrief(
           run?.status,
-          reviewReady,
           draftPagesReady,
           Boolean(publishedHub?.liveReleaseId),
         )}
@@ -166,14 +148,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
               <LinkButton href={`/app/checkout?projectId=${params.id}`} variant="primary">
                 Complete payment →
               </LinkButton>
-            ) : null}
-            {reviewReady ? (
-              <Link
-                href={`/app/projects/${params.id}/review`}
-                className="inline-flex h-9 items-center rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-ink-4)]"
-              >
-                Open review
-              </Link>
             ) : null}
             {draftPagesReady ? (
               <Link
@@ -250,15 +224,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                   href={`/app/projects/${params.id}`}
                   cta="View support IDs"
                   tone="danger"
-                />
-              ) : null}
-              {reviewReady ? (
-                <ActionCard
-                  title="Review archive brief"
-                  body="Atlas summarized the source set. Check themes and source coverage before approving pages."
-                  href={`/app/projects/${params.id}/review`}
-                  cta="Open review"
-                  tone="success"
                 />
               ) : null}
               {draftPagesReady ? (
@@ -366,7 +331,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
 function projectBrief(
   status?: string,
-  reviewReady?: boolean,
   draftPagesReady?: boolean,
   published?: boolean,
 ): string {
@@ -378,8 +342,6 @@ function projectBrief(
     return 'Generation is in progress. The timeline shows each stage as the worker advances.';
   if (draftPagesReady)
     return 'Draft pages are ready. Review evidence strength, approve strong pages, then publish.';
-  if (reviewReady)
-    return 'The archive review is ready. Use it to confirm direction before page approval.';
   if (status === 'awaiting_payment')
     return 'The plan exists, but payment must complete before the run can start.';
   return 'This project is waiting for its next setup step.';

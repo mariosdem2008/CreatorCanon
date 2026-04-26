@@ -88,8 +88,7 @@ export function startQueueRunner(log: LogFn) {
           const result = await runGenerationPipeline(payload);
           log('completed queued run', {
             runId: payload.runId,
-            mode: result.mode,
-            draftPageCount: result.mode === 'legacy_v0' ? result.draftPageCount : result.pageCount,
+            pageCount: result.pageCount,
             segmentsCreated: result.segmentsCreated,
             transcriptsFetched: result.transcriptsFetched,
           });

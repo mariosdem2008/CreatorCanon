@@ -806,7 +806,7 @@ async function main() {
     `  transcripts=${pipelineResult.transcriptsFetched}` +
     `  skipped=${pipelineResult.transcriptsSkipped}` +
     `  segments=${pipelineResult.segmentsCreated}` +
-    `  pages=${pipelineResult.mode === 'legacy_v0' ? pipelineResult.draftPageCount : pipelineResult.pageCount}\n\n`,
+    `  pages=${pipelineResult.pageCount}\n\n`,
   );
 
   // 3. Publish
@@ -855,9 +855,8 @@ async function main() {
           transcriptsFetched: pipelineResult.transcriptsFetched,
           transcriptsSkipped: pipelineResult.transcriptsSkipped,
           segmentsCreated: pipelineResult.segmentsCreated,
-          reviewArtifactKey: pipelineResult.mode === 'legacy_v0' ? pipelineResult.reviewArtifactKey : undefined,
-          draftPageCount: pipelineResult.mode === 'legacy_v0' ? pipelineResult.draftPageCount : pipelineResult.pageCount,
-          draftPagesArtifactKey: pipelineResult.mode === 'legacy_v0' ? pipelineResult.draftPagesArtifactKey : undefined,
+          pageCount: pipelineResult.pageCount,
+          manifestR2Key: pipelineResult.manifestR2Key,
         },
         hub: {
           hubId: publishResult.hubId,

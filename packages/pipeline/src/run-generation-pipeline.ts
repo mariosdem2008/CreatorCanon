@@ -1,14 +1,11 @@
 import { and, eq, getDb, sql } from '@creatorcanon/db';
-import { project, hub, release } from '@creatorcanon/db/schema';
+import { hub, release } from '@creatorcanon/db/schema';
 import { runStage, transitionRun } from './harness';
 import {
   importSelectionSnapshot,
   ensureTranscripts,
   normalizeTranscripts,
   segmentTranscripts,
-  synthesizeV0Review,
-  draftPagesV0,
-  type DraftPagesV0Config,
 } from './stages';
 import { runDiscoveryStage } from './stages/discovery';
 import { runSynthesisStage } from './stages/synthesis';
@@ -25,29 +22,16 @@ export interface RunGenerationPipelinePayload {
   pipelineVersion: string;
 }
 
-export type RunGenerationPipelineResult =
-  | {
-      mode: 'legacy_v0';
-      runId: string;
-      videoCount: number;
-      transcriptsFetched: number;
-      transcriptsSkipped: number;
-      segmentsCreated: number;
-      reviewArtifactKey: string;
-      draftPageCount: number;
-      draftPagesArtifactKey: string;
-    }
-  | {
-      mode: 'editorial_atlas';
-      runId: string;
-      videoCount: number;
-      transcriptsFetched: number;
-      transcriptsSkipped: number;
-      segmentsCreated: number;
-      findingCount: number;
-      pageCount: number;
-      manifestR2Key: string;
-    };
+export interface RunGenerationPipelineResult {
+  runId: string;
+  videoCount: number;
+  transcriptsFetched: number;
+  transcriptsSkipped: number;
+  segmentsCreated: number;
+  findingCount: number;
+  pageCount: number;
+  manifestR2Key: string;
+}
 
 export async function runGenerationPipeline(
   payload: RunGenerationPipelinePayload,
@@ -61,7 +45,7 @@ export async function runGenerationPipeline(
   await transitionRun(payload.runId, 'running', { startedAt: new Date() });
 
   try {
-    // Phase 0: shared ingestion stages (run for both paths).
+    // Phase 0: shared ingestion stages.
     const snapshot = await runStage({
       ctx,
       stage: 'import_selection_snapshot',
@@ -106,164 +90,99 @@ export async function runGenerationPipeline(
       run: segmentTranscripts,
     });
 
-    // Look up hub for this project to determine the template path.
+    // Require a hub row — the Editorial Atlas pipeline always publishes to a hub.
     const db = getDb();
     const hubRows = await db
-      .select({ id: hub.id, templateKey: hub.templateKey })
+      .select({ id: hub.id })
       .from(hub)
       .where(eq(hub.projectId, payload.projectId))
       .limit(1);
     const hubRow = hubRows[0];
-    const templateKey = hubRow?.templateKey ?? 'legacy_v0';
-
-    if (templateKey === 'editorial_atlas') {
-      if (!hubRow) {
-        throw new Error(
-          `Editorial Atlas pipeline requires a hub row for projectId='${payload.projectId}'`,
-        );
-      }
-
-      // Find or create a release for this run.
-      const releaseRows = await db
-        .select()
-        .from(release)
-        .where(and(eq(release.hubId, hubRow.id), eq(release.runId, payload.runId)))
-        .limit(1);
-      let releaseId = releaseRows[0]?.id;
-      if (!releaseId) {
-        releaseId = `rel_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
-        // Atomically compute and claim the next release number. Using a single
-        // INSERT...SELECT means the MAX subquery and the INSERT are evaluated
-        // together, preventing a concurrent-run race from assigning the same number.
-        await db.execute(sql`
-          INSERT INTO release (id, workspace_id, hub_id, run_id, release_number, status)
-          VALUES (
-            ${releaseId},
-            ${payload.workspaceId},
-            ${hubRow.id},
-            ${payload.runId},
-            (SELECT COALESCE(MAX(release_number), 0) + 1 FROM release WHERE hub_id = ${hubRow.id}),
-            'building'
-          )
-        `);
-      }
-
-      // Phase 1: discovery.
-      await assertWithinRunBudget(payload.runId);
-      const discovery = await runStage({
-        ctx,
-        stage: 'discovery',
-        input: { runId: payload.runId, workspaceId: payload.workspaceId },
-        run: async (i) => runDiscoveryStage(i),
-      });
-
-      // Phase 2: synthesis.
-      await assertWithinRunBudget(payload.runId);
-      const synthesis = await runStage({
-        ctx,
-        stage: 'synthesis',
-        input: { runId: payload.runId, workspaceId: payload.workspaceId },
-        run: async (i) => runSynthesisStage(i),
-      });
-
-      // Phase 3: verify.
-      await assertWithinRunBudget(payload.runId);
-      await runStage({
-        ctx,
-        stage: 'verify',
-        input: { runId: payload.runId, workspaceId: payload.workspaceId },
-        run: async (i) => runVerifyStage(i),
-      });
-
-      // Phase 4: merge.
-      await assertWithinRunBudget(payload.runId);
-      const merge = await runStage({
-        ctx,
-        stage: 'merge',
-        input: { runId: payload.runId, workspaceId: payload.workspaceId },
-        run: async (i) => runMergeStage(i),
-      });
-
-      // Phase 5: adapt.
-      await assertWithinRunBudget(payload.runId);
-      const adapt = await runStage({
-        ctx,
-        stage: 'adapt',
-        input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id, releaseId },
-        run: async (i) => runAdaptStage(i),
-      });
-
-      await transitionRun(payload.runId, 'awaiting_review', { completedAt: new Date() });
-
-      return {
-        mode: 'editorial_atlas',
-        runId: payload.runId,
-        videoCount: snapshot.videoCount,
-        transcriptsFetched: transcriptsResult.fetchedCount,
-        transcriptsSkipped: transcriptsResult.skippedCount,
-        segmentsCreated: segmentResult.totalSegments,
-        findingCount: (discovery.findingCount ?? 0) + (synthesis.findingCount ?? 0),
-        pageCount: merge.pageCount,
-        manifestR2Key: adapt.manifestR2Key,
-      };
+    if (!hubRow) {
+      throw new Error(
+        `Editorial Atlas pipeline requires a hub row for projectId='${payload.projectId}'`,
+      );
     }
 
-    // Legacy v0 path (preserved byte-for-byte from original).
-    const reviewResult = await runStage({
+    // Find or create a release for this run.
+    const releaseRows = await db
+      .select()
+      .from(release)
+      .where(and(eq(release.hubId, hubRow.id), eq(release.runId, payload.runId)))
+      .limit(1);
+    let releaseId = releaseRows[0]?.id;
+    if (!releaseId) {
+      releaseId = `rel_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      // Atomically compute and claim the next release number.
+      await db.execute(sql`
+        INSERT INTO release (id, workspace_id, hub_id, run_id, release_number, status)
+        VALUES (
+          ${releaseId},
+          ${payload.workspaceId},
+          ${hubRow.id},
+          ${payload.runId},
+          (SELECT COALESCE(MAX(release_number), 0) + 1 FROM release WHERE hub_id = ${hubRow.id}),
+          'building'
+        )
+      `);
+    }
+
+    // Phase 1: discovery.
+    await assertWithinRunBudget(payload.runId);
+    const discovery = await runStage({
       ctx,
-      stage: 'synthesize_v0_review',
-      input: {
-        runId: payload.runId,
-        workspaceId: payload.workspaceId,
-        videos: snapshot.videos,
-      },
-      run: synthesizeV0Review,
+      stage: 'discovery',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runDiscoveryStage(i),
     });
 
-    const projectRows = await db
-      .select({ config: project.config })
-      .from(project)
-      .where(
-        and(
-          eq(project.id, payload.projectId),
-          eq(project.workspaceId, payload.workspaceId),
-        ),
-      )
-      .limit(1);
-
-    const projectConfig = projectRows[0]?.config ?? null;
-    const draftConfig: DraftPagesV0Config | null = projectConfig
-      ? {
-          tone: projectConfig.tone ?? null,
-          length_preset: projectConfig.length_preset ?? null,
-          audience: projectConfig.audience ?? null,
-        }
-      : null;
-
-    const draftPagesResult = await runStage({
+    // Phase 2: synthesis.
+    await assertWithinRunBudget(payload.runId);
+    const synthesis = await runStage({
       ctx,
-      stage: 'draft_pages_v0',
-      input: {
-        runId: payload.runId,
-        projectId: payload.projectId,
-        workspaceId: payload.workspaceId,
-        config: draftConfig,
-      },
-      run: draftPagesV0,
+      stage: 'synthesis',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runSynthesisStage(i),
+    });
+
+    // Phase 3: verify.
+    await assertWithinRunBudget(payload.runId);
+    await runStage({
+      ctx,
+      stage: 'verify',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runVerifyStage(i),
+    });
+
+    // Phase 4: merge.
+    await assertWithinRunBudget(payload.runId);
+    const merge = await runStage({
+      ctx,
+      stage: 'merge',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runMergeStage(i),
+    });
+
+    // Phase 5: adapt.
+    await assertWithinRunBudget(payload.runId);
+    const adapt = await runStage({
+      ctx,
+      stage: 'adapt',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id, releaseId },
+      run: async (i) => runAdaptStage(i),
     });
 
     await transitionRun(payload.runId, 'awaiting_review', { completedAt: new Date() });
 
     return {
-      mode: 'legacy_v0',
       runId: payload.runId,
       videoCount: snapshot.videoCount,
       transcriptsFetched: transcriptsResult.fetchedCount,
       transcriptsSkipped: transcriptsResult.skippedCount,
       segmentsCreated: segmentResult.totalSegments,
-      reviewArtifactKey: reviewResult.r2Key,
-      draftPageCount: draftPagesResult.pageCount,
-      draftPagesArtifactKey: draftPagesResult.r2Key,
+      findingCount: (discovery.findingCount ?? 0) + (synthesis.findingCount ?? 0),
+      pageCount: merge.pageCount,
+      manifestR2Key: adapt.manifestR2Key,
     };
   } catch (err) {
     await transitionRun(payload.runId, 'failed');

@@ -24,8 +24,11 @@ const REQUIRED_STAGES = [
   'ensure_transcripts',
   'normalize_transcripts',
   'segment_transcripts',
-  'synthesize_v0_review',
-  'draft_pages_v0',
+  'discovery',
+  'synthesis',
+  'verify',
+  'merge',
+  'adapt',
 ] as const;
 
 function normalizeTheme(value: unknown): 'paper' | 'midnight' | 'field' {
@@ -114,14 +117,7 @@ async function verifyStageRows(runId: string) {
     assert(row.status === 'succeeded', `Expected ${stage} succeeded, got ${row.status}.`);
   }
 
-  const reviewStage = stageRows.find((item) => item.stageName === 'synthesize_v0_review');
-  const draftStage = stageRows.find((item) => item.stageName === 'draft_pages_v0');
-  const reviewArtifactKey = (reviewStage?.outputJson as { r2Key?: string } | undefined)?.r2Key;
-  const draftPagesArtifactKey = (draftStage?.outputJson as { r2Key?: string } | undefined)?.r2Key;
-  assert(reviewArtifactKey, 'Review stage did not expose an artifact key.');
-  assert(draftPagesArtifactKey, 'Draft pages stage did not expose an artifact key.');
-
-  return { stageRows, reviewArtifactKey, draftPagesArtifactKey };
+  return { stageRows };
 }
 
 async function verifyPublishedManifest(input: {
@@ -317,9 +313,7 @@ async function main() {
     r2RoundTrip: r2Check,
     stripeCheckout: stripeCheck,
     pipeline: pipelineResult,
-    reviewArtifactKey: stageCheck.reviewArtifactKey,
-    draftPagesArtifactKey: stageCheck.draftPagesArtifactKey,
-    draftPageRows: pages.length,
+    pageRows: pages.length,
     release: manifestCheck,
   }, null, 2));
 }

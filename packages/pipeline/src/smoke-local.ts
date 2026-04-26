@@ -26,8 +26,11 @@ const REQUIRED_STAGES = [
   'ensure_transcripts',
   'normalize_transcripts',
   'segment_transcripts',
-  'synthesize_v0_review',
-  'draft_pages_v0',
+  'discovery',
+  'synthesis',
+  'verify',
+  'merge',
+  'adapt',
 ] as const;
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -79,17 +82,7 @@ async function run() {
     assert(row.status === 'succeeded', `Expected ${stage} succeeded, got ${row.status}.`);
   }
 
-  const reviewStage = stageRows.find((item) => item.stageName === 'synthesize_v0_review');
-  const draftStage = stageRows.find((item) => item.stageName === 'draft_pages_v0');
-  const reviewKey = (reviewStage?.outputJson as { r2Key?: string } | null)?.r2Key;
-  const draftKey = (draftStage?.outputJson as { r2Key?: string } | null)?.r2Key;
-
-  assert(reviewKey, 'Review stage did not expose an artifact key.');
-  assert(draftKey, 'Draft pages stage did not expose an artifact key.');
-
-  const r2 = createR2Client(parseServerEnv(process.env));
-  await r2.headObject(reviewKey);
-  await r2.headObject(draftKey);
+  assert(result.manifestR2Key, 'Pipeline result did not include a manifestR2Key.');
 
   const pages = await db
     .select({ id: page.id, slug: page.slug })
@@ -145,6 +138,8 @@ async function run() {
     .where(and(eq(release.id, publishResult.releaseId), eq(release.status, 'live')))
     .limit(1);
   assert(releases[0]?.manifestR2Key, 'Expected live release manifest key.');
+
+  const r2 = createR2Client(parseServerEnv(process.env));
   const manifestObject = await r2.getObject(releases[0].manifestR2Key);
   const manifest = releaseManifestV0Schema.parse(
     JSON.parse(new TextDecoder().decode(manifestObject.body)),
@@ -183,9 +178,8 @@ async function run() {
     runId: result.runId,
     videoCount: result.videoCount,
     segmentsCreated: result.segmentsCreated,
-    reviewArtifactKey: result.mode === 'legacy_v0' ? result.reviewArtifactKey : undefined,
-    draftPageCount: result.mode === 'legacy_v0' ? result.draftPageCount : result.pageCount,
-    draftPagesArtifactKey: result.mode === 'legacy_v0' ? result.draftPagesArtifactKey : undefined,
+    pageCount: result.pageCount,
+    manifestR2Key: result.manifestR2Key,
     publicPath: publishResult.publicPath,
     releaseManifestKey: publishResult.manifestR2Key,
   }, null, 2));

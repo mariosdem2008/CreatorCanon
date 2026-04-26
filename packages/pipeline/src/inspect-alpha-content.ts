@@ -17,8 +17,6 @@ import {
 import {
   ensureTranscriptsStageOutputSchema,
   releaseManifestV0Schema,
-  type DraftPagesV0StageOutput,
-  type V0ReviewStageOutput,
 } from './contracts';
 import { loadDefaultEnvFiles } from './env-files';
 
@@ -161,11 +159,7 @@ async function main() {
     };
   }
 
-  const reviewStage = stageRows.find((row) => row.stageName === 'synthesize_v0_review');
-  const draftStage = stageRows.find((row) => row.stageName === 'draft_pages_v0');
   const ensureStage = stageRows.find((row) => row.stageName === 'ensure_transcripts');
-  const reviewOutput = (reviewStage?.outputJson ?? null) as V0ReviewStageOutput | null;
-  const draftOutput = (draftStage?.outputJson ?? null) as DraftPagesV0StageOutput | null;
   const ensureOutput = ensureStage?.outputJson
     ? ensureTranscriptsStageOutputSchema.safeParse(ensureStage.outputJson)
     : null;
@@ -208,11 +202,6 @@ async function main() {
         : 0,
       shortestDurationMs: segmentDurations.length > 0 ? Math.min(...segmentDurations) : 0,
       longestDurationMs: segmentDurations.length > 0 ? Math.max(...segmentDurations) : 0,
-    },
-    synthesis: {
-      reviewSynthMode: reviewOutput?.synthMode ?? null,
-      draftSynthMode: draftOutput?.synthMode ?? null,
-      groundingRatio: draftOutput?.groundingRatio ?? null,
     },
     release: liveHub ? {
       hubId: liveHub.hubId,
