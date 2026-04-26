@@ -34,7 +34,11 @@ export function fileExtFromContentType(ct: string): string {
   }
 }
 
-/** True for any video/* content type — controls whether audio extraction is needed. */
+/**
+ * True for video/* content types — controls whether audio extraction is needed.
+ * PRECONDITION: caller MUST have already verified `isAllowedContentType(ct) === true`.
+ * Do NOT call this directly on a client-supplied content-type string.
+ */
 export function isVideoContentType(ct: string): boolean {
   return ct.startsWith('video/');
 }

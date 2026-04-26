@@ -4,11 +4,14 @@ import { getOrCreateUploadChannel } from './synthetic-channel';
 import { getDb, eq } from '@creatorcanon/db';
 import { workspace, channel, user } from '@creatorcanon/db/schema';
 
-describe('getOrCreateUploadChannel', () => {
+const skipIfNoDb = !process.env.DATABASE_URL;
+
+describe('getOrCreateUploadChannel', { skip: skipIfNoDb ? 'DATABASE_URL not set' : false }, () => {
   let workspaceId: string;
   let userId: string;
 
   before(async () => {
+    if (!process.env.DATABASE_URL) return;
     const db = getDb();
     const seed = Math.random().toString(36).slice(2, 10);
     userId = `u_${seed}`;
@@ -18,6 +21,7 @@ describe('getOrCreateUploadChannel', () => {
   });
 
   after(async () => {
+    if (!process.env.DATABASE_URL) return;
     const db = getDb();
     await db.delete(channel).where(eq(channel.workspaceId, workspaceId));
     await db.delete(workspace).where(eq(workspace.id, workspaceId));
