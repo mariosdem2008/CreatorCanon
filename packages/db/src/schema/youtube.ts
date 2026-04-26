@@ -15,6 +15,9 @@ import {
 import { bytea } from './_vector';
 import {
   captionStatusEnum,
+  sourceKindEnum,
+  transcribeStatusEnum,
+  uploadStatusEnum,
   youtubeConnectionStatusEnum,
 } from './enums';
 import { workspace } from './workspace';
@@ -54,7 +57,7 @@ export const channel = pgTable(
     workspaceId: text('workspace_id')
       .notNull()
       .references(() => workspace.id, { onDelete: 'cascade' }),
-    youtubeChannelId: text('youtube_channel_id').notNull(),
+    youtubeChannelId: text('youtube_channel_id'),
     title: text('title'),
     handle: text('handle'),
     description: text('description'),
@@ -69,6 +72,7 @@ export const channel = pgTable(
       withTimezone: true,
       mode: 'date',
     }),
+    sourceKind: sourceKindEnum('source_kind').notNull().default('youtube'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
       .defaultNow()
       .notNull(),
@@ -92,7 +96,7 @@ export const video = pgTable(
     channelId: text('channel_id')
       .notNull()
       .references(() => channel.id, { onDelete: 'cascade' }),
-    youtubeVideoId: text('youtube_video_id').notNull(),
+    youtubeVideoId: text('youtube_video_id'),
     title: text('title'),
     description: text('description'),
     publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
@@ -120,6 +124,12 @@ export const video = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
       .defaultNow()
       .notNull(),
+    sourceKind: sourceKindEnum('source_kind').notNull().default('youtube'),
+    localR2Key: text('local_r2_key'),
+    uploadStatus: uploadStatusEnum('upload_status'),
+    transcribeStatus: transcribeStatusEnum('transcribe_status'),
+    fileSizeBytes: bigint('file_size_bytes', { mode: 'number' }),
+    contentType: text('content_type'),
   },
   (t) => ({
     youtubeIdWorkspaceIdx: uniqueIndex('video_workspace_youtube_id_unique').on(
