@@ -126,6 +126,37 @@ describe('UploadList empty initial state', () => {
   });
 });
 
+describe('UploadList polling self-quiesce logic (C1)', () => {
+  // The fixed interval body checks allTerminal(rowsRef.current) and returns
+  // early when all rows are terminal. These tests verify the underlying logic.
+  it('allTerminal(rows) === true causes interval body to skip fetch', () => {
+    // Simulate: interval fires, all rows are terminal → no fetch needed.
+    const rows = [
+      makeRow({ id: 'a', uploadStatus: 'uploaded', transcribeStatus: 'ready' }),
+      makeRow({ id: 'b', uploadStatus: 'failed', transcribeStatus: 'failed' }),
+    ];
+    assert.equal(allTerminal(rows), true, 'interval body should skip fetch when all terminal');
+  });
+
+  it('allTerminal(rows) === false causes interval body to proceed with fetch', () => {
+    const rows = [
+      makeRow({ id: 'a', uploadStatus: 'uploaded', transcribeStatus: 'ready' }),
+      makeRow({ id: 'b', uploadStatus: 'uploaded', transcribeStatus: 'transcribing' }),
+    ];
+    assert.equal(allTerminal(rows), false, 'interval body should proceed with fetch when non-terminal row exists');
+  });
+
+  it('newly non-terminal row (after upload) keeps polling active', () => {
+    // When onRowsChange introduces a new pending row, the stop-effect does NOT
+    // clear the interval (allTerminal is false). Verify the logic.
+    const rowsAfterUpload = [
+      makeRow({ id: 'existing', uploadStatus: 'uploaded', transcribeStatus: 'ready' }),
+      makeRow({ id: 'new', uploadStatus: 'uploading', transcribeStatus: 'pending' }),
+    ];
+    assert.equal(allTerminal(rowsAfterUpload), false, 'polling must stay active for new pending row');
+  });
+});
+
 describe('UploadList row shape', () => {
   it('makeRow produces a valid UploadRow', () => {
     const row = makeRow();

@@ -47,7 +47,10 @@ export async function DELETE(
     .where(and(eq(workspaceMember.userId, userId), eq(workspaceMember.workspaceId, row.workspaceId)))
     .limit(1);
   if (!member[0]) {
-    return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404 });
+    // The video exists but the caller is not a member of its workspace — 403,
+    // not 404, so we don't leak existence information to wrong-workspace callers
+    // while still distinguishing from a genuinely missing resource (404 above).
+    return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 });
   }
 
   const workspaceId = row.workspaceId;

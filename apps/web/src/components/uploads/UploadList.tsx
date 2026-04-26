@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { UploadStatusBadge } from './UploadStatusBadge';
 
@@ -16,7 +16,8 @@ export interface UploadRow {
 }
 
 export interface Props {
-  initialRows: UploadRow[];
+  rows: UploadRow[];
+  onRowsChange: (rows: UploadRow[]) => void;
   workspaceId: string;
 }
 
@@ -60,50 +61,54 @@ function formatDuration(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function UploadList({ initialRows, workspaceId }: Props) {
-  const [rows, setRows] = useState<UploadRow[]>(initialRows);
+export function UploadList({ rows, onRowsChange, workspaceId }: Props) {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Keep a ref in sync with latest rows so the interval body can read them
+  // without being included in the interval's dep array.
+  const rowsRef = useRef(rows);
 
-  const poll = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/uploads?workspaceId=${encodeURIComponent(workspaceId)}`);
-      if (!res.ok) return;
-      const data = await res.json() as ApiResponse;
-      setRows(data.uploads);
-    } catch {
-      // Silently ignore transient network errors; will retry on next tick
-    }
+  // Sync rowsRef to the latest rows on every render.
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  // Start polling once when workspaceId is established.
+  // The interval body reads rowsRef to get the latest state without
+  // causing the interval to be torn down and recreated on each poll response.
+  useEffect(() => {
+    pollingRef.current = setInterval(async () => {
+      if (allTerminal(rowsRef.current)) return; // self-quiesce when all terminal
+      try {
+        const res = await fetch(`/api/uploads?workspaceId=${encodeURIComponent(workspaceId)}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as ApiResponse;
+        onRowsChange(data.uploads);
+      } catch {
+        // Silently ignore transient network errors; will retry on next tick
+      }
+    }, 3000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
-  // Start/stop polling based on whether any rows are non-terminal
+  // Stop polling as soon as all rows reach a terminal state.
   useEffect(() => {
-    if (allTerminal(rows)) {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-      return;
+    if (allTerminal(rows) && pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
     }
-
-    if (!pollingRef.current) {
-      pollingRef.current = setInterval(poll, 3000);
-    }
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [rows, poll]);
+  }, [rows]);
 
   async function handleDelete(id: string) {
     setDeletingIds((prev) => new Set([...prev, id]));
     try {
       const res = await fetch(`/api/uploads/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (res.ok) {
-        setRows((prev) => prev.filter((r) => r.id !== id));
+        onRowsChange(rowsRef.current.filter((r) => r.id !== id));
       }
     } catch {
       // Silently ignore; user can retry

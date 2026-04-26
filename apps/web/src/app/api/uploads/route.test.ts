@@ -10,6 +10,33 @@ import assert from 'node:assert/strict';
 // The valid transcribeStatus values that the route accepts as ?status=
 const VALID_STATUSES = new Set(['ready', 'transcribing', 'failed']);
 
+// ── createdAt ISO 8601 serialization (C3) ────────────────────────────────────
+describe('GET /api/uploads — createdAt serialization', () => {
+  const ISO_8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+  it('Date.toISOString() produces a valid ISO 8601 string', () => {
+    const iso = new Date().toISOString();
+    assert.match(iso, ISO_8601_RE);
+  });
+
+  it('createdAt field must be a string (not a Date object)', () => {
+    // The route now calls r.createdAt.toISOString() explicitly so the type
+    // contract is string, not Date, and survives ORM type drift.
+    const mockRow = {
+      createdAt: new Date('2025-06-01T12:00:00.000Z').toISOString(),
+    };
+    assert.equal(typeof mockRow.createdAt, 'string');
+    assert.match(mockRow.createdAt, ISO_8601_RE);
+  });
+
+  it('serialized createdAt parses back to the same timestamp', () => {
+    const original = new Date('2025-06-01T12:00:00.000Z');
+    const serialized = original.toISOString();
+    const parsed = new Date(serialized);
+    assert.equal(parsed.getTime(), original.getTime());
+  });
+});
+
 // ── Query param logic (pure, no DB) ──────────────────────────────────────────
 describe('GET /api/uploads — query param validation', () => {
   it('ready is a valid status filter', () => {

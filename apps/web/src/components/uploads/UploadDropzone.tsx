@@ -186,6 +186,8 @@ export function UploadDropzone({
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files || files.length === 0) return;
+      // Reset BEFORE processing so onChange fires for re-selection of same file.
+      if (inputRef.current) inputRef.current.value = '';
       for (const file of Array.from(files)) {
         processFile(file).catch(() => {
           // errors already handled inside processFile
@@ -206,7 +208,13 @@ export function UploadDropzone({
     setDragging(true);
   }
 
-  function handleDragLeave() {
+  function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    // Guard against child-element transitions: only clear dragging when the
+    // pointer genuinely leaves the drop zone boundary (not just moves between
+    // child elements), which avoids the "flicker" caused by relatedTarget
+    // briefly pointing to an interior child.
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setDragging(false);
   }
 

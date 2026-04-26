@@ -94,7 +94,7 @@ export async function GET(req: Request) {
     durationSec: r.durationSeconds,
     uploadStatus: r.uploadStatus as UploadStatus | null,
     transcribeStatus: r.transcribeStatus as TranscribeStatus | null,
-    createdAt: r.createdAt,
+    createdAt: r.createdAt.toISOString(),
   }));
 
   return NextResponse.json({ uploads });

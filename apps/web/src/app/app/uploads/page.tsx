@@ -2,8 +2,7 @@ import { and, desc, eq } from '@creatorcanon/db';
 import { video } from '@creatorcanon/db/schema';
 
 import { LinkButton, PageHeader, Panel } from '@/components/cc';
-import { UploadDropzone } from '@/components/uploads/UploadDropzone';
-import { UploadList } from '@/components/uploads/UploadList';
+import { UploadsPanel } from '@/components/uploads/UploadsPanel';
 import type { UploadRow } from '@/components/uploads/UploadList';
 import { requireWorkspace } from '@/lib/workspace';
 
@@ -52,8 +51,7 @@ export default async function UploadsPage() {
         }
       />
       <Panel>
-        <UploadDropzone workspaceId={workspaceId} />
-        <UploadList initialRows={rowsForClient} workspaceId={workspaceId} />
+        <UploadsPanel workspaceId={workspaceId} initialRows={rowsForClient} />
       </Panel>
     </div>
   );

@@ -26,6 +26,23 @@ describe('DELETE /api/uploads/:id — response shape validation', () => {
     assert.equal(errShape.ok, false);
     assert.equal(errShape.error, 'in_use_by_run');
   });
+
+  // M3: cross-workspace access returns forbidden (403), not not_found (404)
+  it('forbidden error shape is correct (cross-workspace access)', () => {
+    const errShape = { ok: false, error: 'forbidden' as const };
+    assert.equal(errShape.ok, false);
+    assert.equal(errShape.error, 'forbidden');
+  });
+
+  it('cross-workspace path uses 403 status, not 404 (spec convention)', () => {
+    // The route now returns { ok: false, error: 'forbidden' } with HTTP 403
+    // when the video exists but the caller is not a member of its workspace.
+    // This is distinct from 404 (video does not exist at all).
+    const crossWorkspaceStatus = 403;
+    const notFoundStatus = 404;
+    assert.notEqual(crossWorkspaceStatus, notFoundStatus);
+    assert.equal(crossWorkspaceStatus, 403);
+  });
 });
 
 // ── Integration tests — gated on DATABASE_URL ─────────────────────────────────

@@ -283,25 +283,35 @@ export default function LibraryClient({
                 {filtered.map((video) => {
                   const isSelected = selected.has(video.id);
                   const ready = isSourceReady(video);
+                  // Disable selection for manual_upload rows not yet transcribed.
+                  const isPending =
+                    video.sourceKind === 'manual_upload' && video.transcribeStatus !== 'ready';
                   return (
                     <tr
                       key={video.id}
-                      onClick={() => toggle(video.id)}
+                      onClick={() => { if (!isPending) toggle(video.id); }}
                       className={cn(
-                        'cursor-pointer border-t border-[var(--cc-rule)] transition-colors',
+                        'border-t border-[var(--cc-rule)] transition-colors',
+                        isPending
+                          ? 'cursor-not-allowed opacity-50'
+                          : 'cursor-pointer',
                         isSelected
                           ? 'bg-[var(--cc-accent-wash)]/40'
-                          : 'hover:bg-[var(--cc-surface-2)]/50',
+                          : isPending
+                            ? ''
+                            : 'hover:bg-[var(--cc-surface-2)]/50',
                       )}
                     >
                       <td className="px-3 py-2.5">
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => toggle(video.id)}
+                          disabled={isPending}
+                          onChange={() => { if (!isPending) toggle(video.id); }}
                           onClick={(e) => e.stopPropagation()}
                           aria-label="Select video"
-                          className="size-3.5 cursor-pointer accent-[var(--cc-accent)]"
+                          title={isPending ? 'Transcription in progress — wait for it to complete' : undefined}
+                          className="size-3.5 accent-[var(--cc-accent)] disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="px-2 py-2.5">
