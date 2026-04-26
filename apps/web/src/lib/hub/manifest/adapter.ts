@@ -17,6 +17,7 @@
 import type { EditorialAtlasManifest } from './schema';
 
 export function buildEditorialAtlasManifestFromRelease(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _input: never,
 ): EditorialAtlasManifest {
   throw new Error(
