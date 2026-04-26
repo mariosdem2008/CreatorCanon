@@ -69,7 +69,9 @@ export const pageSchema = z.object({
 
   topicSlugs: z.array(z.string().min(1)),
   estimatedReadMinutes: z.number().int().min(1),
-  publishedAt: z.string().datetime(),
+  // Nullable so a `status: 'draft'` page can exist without fabricating a date.
+  // The renderer filters to status === 'published' before relying on this.
+  publishedAt: z.string().datetime().nullable(),
   updatedAt: z.string().datetime(),
 
   citationCount: z.number().int().min(0),
