@@ -29,6 +29,13 @@
       "when": 1777191728865,
       "tag": "0003_multi_agent_pipeline",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777219481520,
+      "tag": "0004_manual_video_upload",
+      "breakpoints": true
     }
   ]
 }
