@@ -1,9 +1,8 @@
 import { task, logger } from '@trigger.dev/sdk/v3';
-import OpenAI from 'openai';
 import { eq, getDb } from '@creatorcanon/db';
 import { video, transcriptAsset, normalizedTranscriptVersion } from '@creatorcanon/db/schema';
 import { extractAudioFromR2Source } from '@creatorcanon/pipeline';
-import { createR2Client, transcriptKey } from '@creatorcanon/adapters';
+import { createR2Client, createOpenAIClient, transcriptKey } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 
 interface Payload {
@@ -83,7 +82,7 @@ export const transcribeUploadedVideoTask = task({
   machine: 'medium-1x',
 
   run: async (payload: Payload) => {
-    logger.info('Transcribe uploaded video starting', payload);
+    logger.info('Transcribe uploaded video starting', payload as unknown as Record<string, unknown>);
     const db = getDb();
 
     // 1. Load video row; bail on unexpected states.
@@ -101,6 +100,7 @@ export const transcribeUploadedVideoTask = task({
     try {
       const env = parseServerEnv(process.env);
       const r2 = createR2Client(env);
+      const openaiClient = createOpenAIClient(env);
 
       // 2. Extract audio (or passthrough for audio uploads).
       const audioR2Key = `workspaces/${payload.workspaceId}/uploads/${payload.videoId}/audio.m4a`;
@@ -118,8 +118,8 @@ export const transcribeUploadedVideoTask = task({
         durationSec: extracted.durationSec,
       });
 
-      // 3. Transcribe via OpenAI Whisper.
-      const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+      // 3. Transcribe via OpenAI Whisper (gpt-4o-mini-transcribe).
+      const openai = openaiClient.raw;
       const audioObj = await r2.getObject(audioR2Key);
       const audioBytes = audioObj.body;
 

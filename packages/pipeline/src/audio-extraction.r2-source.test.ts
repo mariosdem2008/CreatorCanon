@@ -167,7 +167,7 @@ describe('file extension inference from MIME type', () => {
     const unknownMime = 'application/octet-stream';
     const mimeToExt: Record<string, string> = {};
     const fallbackKey = 'uploads/noext';
-    const ext = mimeToExt[unknownMime] ?? path.extname(fallbackKey) || '.bin';
+    const ext = mimeToExt[unknownMime] ?? (path.extname(fallbackKey) || '.bin');
     assert.equal(ext, '.bin');
   });
 });

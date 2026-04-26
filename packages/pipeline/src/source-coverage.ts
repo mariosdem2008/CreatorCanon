@@ -16,6 +16,7 @@ export interface SourceCoverageVideo {
   youtubeVideoId: string | null;
   title: string | null;
   captionStatus: 'available' | 'auto_only' | 'none' | 'unknown';
+  sourceKind: 'youtube' | 'manual_upload';
   hasCanonicalTranscript: boolean;
   hasAudioAsset: boolean;
   readinessLabel: SourceReadinessLabel;
@@ -78,6 +79,7 @@ export async function getSourceCoverage(input: {
       youtubeVideoId: video.youtubeVideoId,
       title: video.title,
       captionStatus: video.captionStatus,
+      sourceKind: video.sourceKind,
     })
     .from(video)
     .where(and(eq(video.workspaceId, input.workspaceId), inArray(video.id, ids)));
@@ -134,6 +136,7 @@ export async function getSourceCoverage(input: {
         youtubeVideoId: row.youtubeVideoId,
         title: row.title,
         captionStatus: row.captionStatus,
+        sourceKind: row.sourceKind,
         hasCanonicalTranscript,
         hasAudioAsset,
         readinessLabel,
@@ -177,6 +180,7 @@ export async function preflightSourceCoverage(input: {
         youtubeVideoId: row.youtubeVideoId,
         title: row.title,
         durationSeconds: null,
+        sourceKind: row.sourceKind,
       })),
   });
 

@@ -76,7 +76,7 @@ function countVttWords(vtt: string): number {
 
 describe('transcribeUploadedVideoTask — state guard logic', () => {
   it('returns { skipped: true } when transcribeStatus is not "transcribing"', () => {
-    const statuses = ['pending', 'ready', 'failed'] as const;
+    const statuses: string[] = ['pending', 'ready', 'failed'];
     for (const status of statuses) {
       // Simulate the guard check
       const shouldSkip = status !== 'transcribing';

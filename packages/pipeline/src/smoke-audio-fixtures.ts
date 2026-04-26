@@ -55,6 +55,7 @@ async function main() {
       youtubeVideoId: video.youtubeVideoId,
       title: video.title,
       durationSeconds: video.durationSeconds,
+      sourceKind: video.sourceKind,
       audioKey: mediaAsset.r2Key,
     })
     .from(mediaAsset)
@@ -124,6 +125,7 @@ async function main() {
       youtubeVideoId: target.youtubeVideoId,
       title: target.title,
       durationSeconds: target.durationSeconds,
+      sourceKind: target.sourceKind,
     }],
   });
 
