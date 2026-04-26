@@ -10,16 +10,14 @@ import { AnswerCitationList } from './AnswerCitationList';
 type Props = {
   hubSlug: string;
   response: Extract<AskResponse, { citations: unknown[] }>;
-  /** The question that produced this answer — shown above the answer card. */
-  question: string;
 };
 
-export function GroundedAnswer({ hubSlug, response, question }: Props) {
+export function GroundedAnswer({ hubSlug, response }: Props) {
   const { answer, citations, relatedPages, suggestedFollowups } = response;
   return (
     <article className="space-y-5 rounded-[14px] border border-[#E5DECF] bg-white p-6">
-      <header className="flex items-start justify-between gap-4">
-        <p className="text-[14px] leading-[1.5] text-[#9A8E7C]">{question}</p>
+      <header className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A8E7C]">Answer</p>
         <EvidenceQualityBadge quality={answer.evidenceQuality} />
       </header>
 

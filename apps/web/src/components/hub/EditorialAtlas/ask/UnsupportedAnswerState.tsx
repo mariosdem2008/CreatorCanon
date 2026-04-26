@@ -7,13 +7,12 @@ import { getSearchRoute, getTopicRoute } from '@/lib/hub/routes';
 type Props = {
   hubSlug: string;
   response: Extract<AskResponse, { unsupported: true }>;
-  question: string;
 };
 
-export function UnsupportedAnswerState({ hubSlug, response, question }: Props) {
+export function UnsupportedAnswerState({ hubSlug, response }: Props) {
   return (
     <article className="space-y-4 rounded-[14px] border border-[#E5DECF] bg-white p-6">
-      <p className="text-[14px] leading-[1.5] text-[#9A8E7C]">{question}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A8E7C]">Not enough source support</p>
       <p className="rounded-[10px] border border-[#E5DECF] bg-[#FAF6EE] p-4 text-[14px] leading-[1.55] text-[#3D352A]">{response.message}</p>
 
       {response.suggestedSearches.length > 0 && (
