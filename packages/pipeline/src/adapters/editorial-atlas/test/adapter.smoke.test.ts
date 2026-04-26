@@ -16,11 +16,11 @@ import {
   makeCtx,
   type SeedResult,
 } from '../../../../test-helpers/fixtures';
-// apps/web has no "type":"module" so tsx wraps its exports under `default`.
-// We import the default export and extract the schema from it.
-import schemaModule from '../../../../../../apps/web/src/lib/hub/manifest/schema';
+// Cross-package import for runtime test only — apps/web is not in pipeline's
+// tsconfig include. Resolves at runtime via tsx; types not needed here.
+import * as schemaModule from '../../../../../../apps/web/src/lib/hub/manifest/schema';
 const { editorialAtlasManifestSchema } = (schemaModule as any).default
-  ? ((schemaModule as any).default as typeof schemaModule)
+  ? (schemaModule as any).default
   : schemaModule;
 import { eq, getDb } from '@creatorcanon/db';
 import { hub, release } from '@creatorcanon/db/schema';

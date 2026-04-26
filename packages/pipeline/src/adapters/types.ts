@@ -1,4 +1,4 @@
-import type { EditorialAtlasManifest } from '../../../../apps/web/src/lib/hub/manifest/schema';
+import type { EditorialAtlasManifest } from './editorial-atlas/manifest-types';
 
 export interface AdapterInput {
   runId: string;

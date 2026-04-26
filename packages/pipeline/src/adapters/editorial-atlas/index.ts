@@ -1,6 +1,6 @@
 import { eq, getDb } from '@creatorcanon/db';
 import { hub, release, project } from '@creatorcanon/db/schema';
-import type { EditorialAtlasManifest } from '../../../../apps/web/src/lib/hub/manifest/schema';
+import type { EditorialAtlasManifest } from './manifest-types';
 import type { AdapterFn } from '../types';
 import { projectCreator } from './project-creator';
 import { projectStats } from './project-stats';
