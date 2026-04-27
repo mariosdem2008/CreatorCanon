@@ -133,9 +133,26 @@ export async function runVideoIntelligenceStage(
   });
 
   const allResults = [...oversizedResults, ...results];
+  const videosAnalyzed = allResults.filter((r) => r.ok).length;
+  const videosFailed = allResults.filter((r) => !r.ok).length;
+
+  // Loud-fail: a stage that produced ZERO VICs (despite having eligible
+  // videos) is a hard error. Otherwise the runStage cache pins this empty
+  // output and the next dispatch hits a "succeeded" stage_run with no rows
+  // downstream. Surface the per-video errors so the operator can see why.
+  if (videosAnalyzed === 0 && eligibleVideoIds.length > 0) {
+    const errors = allResults
+      .filter((r) => !r.ok && r.error)
+      .map((r) => `  ${r.videoId}: ${r.error}`)
+      .join('\n');
+    throw new Error(
+      `video_intelligence produced 0 cards from ${eligibleVideoIds.length} eligible videos:\n${errors}`,
+    );
+  }
+
   return {
-    videosAnalyzed: allResults.filter((r) => r.ok).length,
-    videosFailed: allResults.filter((r) => !r.ok).length,
+    videosAnalyzed,
+    videosFailed,
     costCents: allResults.reduce((acc, r) => acc + (r.summary?.costCents ?? 0), 0),
     perVideo: allResults,
   };

@@ -52,13 +52,7 @@ export async function runPageBriefsStage(input: PageBriefsStageInput): Promise<P
     .where(eq(canonNode.runId, input.runId));
 
   if (nodes.length === 0) {
-    return {
-      ok: false,
-      briefCount: 0,
-      costCents: 0,
-      summary: null,
-      error: 'No canon nodes in this run; page-briefs stage cannot run.',
-    };
+    throw new Error('page-briefs stage cannot run: no canon_node rows in this run');
   }
 
   const frameworkCount = nodes.filter((n) => n.type === 'framework').length;
@@ -90,9 +84,12 @@ export async function runPageBriefsStage(input: PageBriefsStageInput): Promise<P
       .select({ id: pageBrief.id })
       .from(pageBrief)
       .where(eq(pageBrief.runId, input.runId));
+    if (finalBriefs.length === 0) {
+      throw new Error('page-briefs stage produced 0 page_brief rows; agent likely hit a quota or schema-validation error');
+    }
     return { ok: true, briefCount: finalBriefs.length, costCents: summary.costCents, summary };
   } catch (err) {
-    return { ok: false, briefCount: 0, costCents: 0, summary: null, error: (err as Error).message };
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 

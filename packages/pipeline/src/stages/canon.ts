@@ -47,13 +47,9 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
     .from(videoIntelligenceCard)
     .where(eq(videoIntelligenceCard.runId, input.runId));
   if (cards.length === 0) {
-    return {
-      ok: false,
-      nodeCount: 0,
-      costCents: 0,
-      summary: null,
-      error: 'No video_intelligence_card rows in this run; canon stage cannot run.',
-    };
+    // Loud-fail so runStage marks this as failed_terminal and downstream
+    // stages don't get cached as empty-but-succeeded.
+    throw new Error('canon stage cannot run: no video_intelligence_card rows in this run');
   }
 
   const bootstrap =
@@ -82,9 +78,17 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
       .select({ id: canonNode.id })
       .from(canonNode)
       .where(eq(canonNode.runId, input.runId));
+    if (finalNodes.length === 0) {
+      // Agent ran but produced zero canon_nodes — fail loudly so the cache
+      // doesn't pin this empty state.
+      throw new Error('canon stage produced 0 canon_node rows; agent likely hit a quota or schema-validation error');
+    }
     return { ok: true, nodeCount: finalNodes.length, costCents: summary.costCents, summary };
   } catch (err) {
-    return { ok: false, nodeCount: 0, costCents: 0, summary: null, error: (err as Error).message };
+    // Re-throw so runStage records failed_terminal. The legacy `ok: false`
+    // return-shape is still useful for callers that want diagnostics, but the
+    // orchestrator path should treat a canon failure as a stage failure.
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
