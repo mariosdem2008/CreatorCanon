@@ -5,7 +5,8 @@
   "description": "Trigger.dev worker process — hosts the 16-stage pipeline tasks.",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/dev-server.ts",
+    "dev": "concurrently -n queue,trigger -c blue,magenta \"tsx watch src/dev-server.ts\" \"trigger dev\"",
+    "dev:queue": "tsx watch src/dev-server.ts",
     "start": "node --import tsx/esm src/dev-server.ts",
     "trigger:dev": "trigger dev",
     "trigger:deploy": "trigger deploy",
