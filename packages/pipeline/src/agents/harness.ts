@@ -46,6 +46,49 @@ const PROPOSE_TOOL_RESULT_HAS_FINDING_ID = (result: unknown): boolean =>
     && 'ok' in result && (result as { ok: unknown }).ok === true
     && 'findingId' in result;
 
+/**
+ * Detect transient provider errors that benefit from a short backoff retry.
+ * Covers OpenAI / Gemini / Anthropic shapes — message-substring match is
+ * coarse but works across SDK versions without coupling to error classes.
+ */
+function isTransientProviderError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /\b429\b/.test(msg) ||
+    /\b5\d\d\b/.test(msg) ||
+    /Service Unavailable/i.test(msg) ||
+    /Too Many Requests/i.test(msg) ||
+    /high demand/i.test(msg) ||
+    /timed out/i.test(msg) ||
+    /ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(msg)
+  );
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Wrap a provider.chat() call with bounded retry on transient errors.
+ * Attempts 3x with 2s, 4s, 8s backoff (max 14s total per call). Non-transient
+ * errors (auth, schema, malformed JSON) re-throw on the first attempt.
+ */
+async function chatWithRetry<T>(fn: () => Promise<T>, agent: string, modelId: string): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientProviderError(err) || attempt === 3) throw err;
+      const wait = 1000 * Math.pow(2, attempt); // 2s, 4s, 8s
+      const reason = err instanceof Error ? err.message.slice(0, 120) : String(err).slice(0, 120);
+      // eslint-disable-next-line no-console
+      console.warn(`[harness] ${agent}/${modelId} transient error (attempt ${attempt}/3, sleeping ${wait}ms): ${reason}`);
+      await sleep(wait);
+    }
+  }
+  throw lastErr;
+}
+
 
 export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
   const caps: StopCaps = { ...DEFAULT_STOP_CAPS, ...(input.caps ?? {}) };
@@ -96,7 +139,11 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
       warnedSoftCap = true;
     }
 
-    const response = await input.provider.chat({ modelId: input.modelId, messages, tools });
+    const response = await chatWithRetry(
+      () => input.provider.chat({ modelId: input.modelId, messages, tools }),
+      input.agent,
+      input.modelId,
+    );
     const callCost = tokenCostCents(input.modelId, response.usage.inputTokens, response.usage.outputTokens);
     costCents += callCost;
     stop.recordCall(callCost);
