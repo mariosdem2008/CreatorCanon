@@ -11,6 +11,13 @@ import { initBody } from './validation';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function filenameToTitle(filename: string): string {
+  const noExt = filename.replace(/\.[^./\\]{1,8}$/, '');
+  const trimmed = noExt.trim();
+  if (!trimmed) return filename.slice(0, 200);
+  return trimmed.slice(0, 200);
+}
+
 export async function POST(req: Request) {
   // 1. Auth
   const session = await auth();
@@ -27,7 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
-  const { filename: _filename, fileSize, contentType, durationSec, workspaceId: bodyWorkspaceId } = body;
+  const { filename, fileSize, contentType, durationSec, workspaceId: bodyWorkspaceId } = body;
 
   // 3. Workspace lookup
   const db = getDb();
@@ -101,7 +108,10 @@ export async function POST(req: Request) {
       fileSizeBytes: fileSize,
       contentType,
       durationSeconds: durationSec ?? null,
-      title: null,
+      // Default the title to the upload filename (without extension, truncated).
+      // The user can rename later; this just makes uploads identifiable in the
+      // source library, where they otherwise all show as "Untitled video".
+      title: filenameToTitle(filename),
     });
   } catch (err) {
     console.error('[upload-init] DB insert failed:', err);
