@@ -89,13 +89,13 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_fr
   canon_architect: {
     agent: 'canon_architect',
     systemPrompt: CANON_ARCHITECT_PROMPT,
+    // VICs + visual moments + channel profile pre-loaded. Keep getSegment
+    // for occasional verification.
     allowedTools: [
-      'getChannelProfile', 'listVideoIntelligenceCards', 'getVideoIntelligenceCard',
-      'searchSegments', 'getSegment',
-      'listVisualMoments', 'getVisualMoment',
+      'getSegment',
       'proposeCanonNode',
     ],
-    stopOverrides: { maxCalls: 200, maxCostCents: 1000 },
+    stopOverrides: { maxCalls: 100, maxCostCents: 500 },
   },
   page_brief_planner: {
     agent: 'page_brief_planner',

@@ -1,5 +1,5 @@
 import { eq } from '@creatorcanon/db';
-import { canonNode, videoIntelligenceCard } from '@creatorcanon/db/schema';
+import { canonNode, videoIntelligenceCard, channelProfile, visualMoment } from '@creatorcanon/db/schema';
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
@@ -43,25 +43,63 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   };
 
-  const cards = await db
-    .select({ id: videoIntelligenceCard.id })
+  // Pre-load every read the agent would otherwise make.
+  const cpRows = await db
+    .select({ payload: channelProfile.payload })
+    .from(channelProfile)
+    .where(eq(channelProfile.runId, input.runId))
+    .limit(1);
+  const channelProfilePayload = cpRows[0]?.payload ?? null;
+  if (!channelProfilePayload) {
+    throw new Error('canon stage requires channel_profile to have run first');
+  }
+
+  const vicRows = await db
+    .select()
     .from(videoIntelligenceCard)
     .where(eq(videoIntelligenceCard.runId, input.runId));
-  if (cards.length === 0) {
-    // Loud-fail so runStage marks this as failed_terminal and downstream
-    // stages don't get cached as empty-but-succeeded.
+  if (vicRows.length === 0) {
     throw new Error('canon stage cannot run: no video_intelligence_card rows in this run');
   }
 
-  const bootstrap =
-    `${cards.length} video intelligence cards available. Read every card via listVideoIntelligenceCards. ` +
-    `Visual moments are also available via listVisualMoments(minScore:60). ` +
-    `Merge into a canon. Don't pad weak content.`;
+  const vmRows = await db
+    .select({
+      visualMomentId: visualMoment.id,
+      videoId: visualMoment.videoId,
+      timestampMs: visualMoment.timestampMs,
+      type: visualMoment.type,
+      description: visualMoment.description,
+      hubUse: visualMoment.hubUse,
+      usefulnessScore: visualMoment.usefulnessScore,
+    })
+    .from(visualMoment)
+    .where(eq(visualMoment.runId, input.runId));
 
   const cfg = SPECIALISTS.canon_architect;
   const model = selectModel('canon_architect', process.env);
   const provider = makeProvider(model.provider);
   const fallbacks = buildFallbacks(model, makeProvider);
+
+  const userMessage =
+    `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload)}\n\n` +
+    `# VIDEO INTELLIGENCE CARDS (${vicRows.length})\n` +
+    vicRows
+      .map((v) => {
+        return `## VIC ${v.id} (videoId=${v.videoId})\n` +
+          `evidenceSegmentIds: ${JSON.stringify(v.evidenceSegmentIds)}\n` +
+          `payload: ${JSON.stringify(v.payload)}`;
+      })
+      .join('\n\n') +
+    `\n\n# VISUAL MOMENTS (${vmRows.length})\n` +
+    (vmRows.length > 0
+      ? vmRows
+          .map(
+            (v) =>
+              `[${v.visualMomentId}] videoId=${v.videoId} @${v.timestampMs}ms ${v.type} (score=${v.usefulnessScore}): ${v.description}`,
+          )
+          .join('\n')
+      : '(none)') +
+    `\n\nSynthesize the canon. Make a proposeCanonNode call for each curated node. End with a one-line summary.`;
 
   try {
     const summary = await runAgent({
@@ -74,7 +112,7 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
       r2,
       tools: cfg.allowedTools,
       systemPrompt: cfg.systemPrompt,
-      userMessage: bootstrap,
+      userMessage,
       caps: cfg.stopOverrides,
     });
     const finalNodes = await db

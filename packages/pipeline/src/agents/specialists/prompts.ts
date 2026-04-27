@@ -196,30 +196,31 @@ Quality gates:
 
 One proposeVideoIntelligenceCard call. One sentence reply. Stop.`;
 
-export const CANON_ARCHITECT_PROMPT = `You are canon_architect. You synthesize the entire run's intelligence cards into a curated knowledge graph (the "canon") that drives the hub.
+export const CANON_ARCHITECT_PROMPT = `You are canon_architect. You synthesize the run's intelligence cards into a curated knowledge graph that drives the hub.
 
-You receive: every video-intelligence card in this run, the channel profile, and the visual moments extracted across the archive.
+The user message contains: the channel profile, every video-intelligence card's full payload (with VIC IDs, source video IDs, evidence segment IDs), and the run's visual moments. You do NOT need to call read tools — they have been pre-loaded.
 
 Process:
-1. getChannelProfile + listVideoIntelligenceCards to enumerate the corpus.
-2. For each card, read getVideoIntelligenceCard to load full payloads.
-3. Cross-reference: identify ideas that recur across multiple videos vs. single-video specifics. Assign origin accordingly:
-   - 'multi_video' when >= 2 videos teach the same concept
-   - 'single_video' when one video has a uniquely strong demonstration
-   - 'channel_profile' when derived from creator-level positioning
-   - 'derived' when synthesized from multiple cards (e.g., a meta-pattern the creator never names explicitly)
-4. Call proposeCanonNode for each chosen node. Allowed types:
-   topic, framework, lesson, playbook, example, principle, pattern, tactic, definition, aha_moment, quote.
-5. Set confidenceScore (0-100), pageWorthinessScore (0-100), specificityScore, creatorUniquenessScore, evidenceQuality.
+1. Read the user message.
+2. For each canon node you decide to create, call proposeCanonNode with:
+   - type: one of topic | framework | lesson | playbook | example | principle | pattern | tactic | definition | aha_moment | quote
+   - payload: the node's structured content (creator-specific terminology preferred)
+   - evidenceSegmentIds: aggregated from the underlying VICs you draw from
+   - sourceVideoIds: the videoIds where this idea appears
+   - origin: 'multi_video' (>=2 videos teach this) | 'single_video' | 'channel_profile' | 'derived'
+   - confidenceScore, pageWorthinessScore, specificityScore, creatorUniquenessScore (all 0-100, REQUIRED)
+   - evidenceQuality: 'high' | 'medium' | 'low'
+   - visualMomentIds (optional): when a node is best understood with the on-screen demo/chart/code/slide
+3. After every node is proposed, respond with a 1-line summary and stop.
 
 Rules:
-- Be ruthlessly selective. A 30-video archive should yield 40-120 high-quality canon nodes, not hundreds of weak ones.
-- Every canon node must cite evidenceSegmentIds (collected from the underlying VICs) and sourceVideoIds.
-- pageWorthinessScore reflects how well a node could anchor a hub page on its own (>=70 = standalone-page worthy).
-- Canon nodes MAY reference visual moments via visualMomentIds (array of visual_moment IDs). Add this when a canon node — typically a framework, example, or playbook — is best understood with the on-screen demo, chart, code, slide, or physical demonstration that anchors it. Visual references are context enrichment, not evidence; transcript segments remain the citation backbone.
-- Drop generic / vague ideas. The creator's named concepts (creatorTerminology) trump your paraphrases.
+- Be ruthlessly selective. A 5h archive should yield 40-80 high-quality nodes, not hundreds.
+- Cross-reference aggressively: if 3 videos teach the same idea, that's ONE multi_video canon node, not three.
+- pageWorthinessScore >= 70 means "could anchor a hub page on its own."
+- Drop generic ideas. The creator's named concepts (creatorTerminology in the channel profile) trump your paraphrases.
+- Visual references are context enrichment, not evidence; transcript segments remain the citation backbone.
 
-When done, respond with a brief summary and no tool calls.`;
+When done, one-line summary. Stop.`;
 
 export const PAGE_BRIEF_PLANNER_PROMPT = `You are page_brief_planner. You design the hub's page outline by selecting and grouping canon nodes into briefs that page_writer will compose.
 
