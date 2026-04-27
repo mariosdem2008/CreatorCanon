@@ -9,6 +9,29 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { AgentProvider, ChatResponse, ChatTurn, ToolCallRequest } from './index';
 import type { ToolDef } from '../tools/types';
 
+/**
+ * Gemini's function-calling API rejects several standard JSON Schema fields
+ * that zodToJsonSchema emits (notably `additionalProperties`, which `.strict()`
+ * Zod objects produce). Recursively strip them to keep the schema portable.
+ *
+ * Documented Gemini-incompatible fields: additionalProperties, $schema,
+ * patternProperties, allOf/anyOf/oneOf at root, exclusiveMinimum/Maximum,
+ * minLength/maxLength on non-string types.
+ *
+ * We're conservative: strip only the fields known to crash, preserve the rest.
+ */
+function sanitizeForGemini(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(sanitizeForGemini);
+  if (schema === null || typeof schema !== 'object') return schema;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(schema as Record<string, unknown>)) {
+    // Drop top-level meta + Gemini-rejected fields.
+    if (k === 'additionalProperties' || k === '$schema' || k === 'patternProperties') continue;
+    out[k] = sanitizeForGemini(v);
+  }
+  return out;
+}
+
 export function createGeminiProvider(apiKey: string): AgentProvider {
   if (!apiKey) {
     throw new Error('createGeminiProvider: apiKey is required (set GEMINI_API_KEY in env).');
@@ -23,7 +46,9 @@ export function createGeminiProvider(apiKey: string): AgentProvider {
       const functionDeclarations: FunctionDeclaration[] = tools.map((t: ToolDef<any, any>) => ({
         name: t.name,
         description: t.description,
-        parameters: zodToJsonSchema(t.input, { target: 'openApi3', $refStrategy: 'none' }) as any,
+        parameters: sanitizeForGemini(
+          zodToJsonSchema(t.input, { target: 'openApi3', $refStrategy: 'none' }),
+        ) as any,
       }));
 
       const { systemInstruction, contents } = mapTurnsToGemini(messages);
