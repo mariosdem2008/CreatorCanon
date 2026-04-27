@@ -20,7 +20,6 @@ interface AgentConfig {
 
 const M = (modelId: string, provider: ProviderName): ModelChoice => ({ modelId, provider });
 
-/** Per spec § 9.1 + Stage 1 v4 hybrid routing. */
 const REGISTRY: Record<AgentName, AgentConfig> = {
   topic_spotter:        { envVar: 'PIPELINE_MODEL_TOPIC_SPOTTER',        default: M('gemini-2.5-flash','gemini'), fallbackChain: [M('gpt-5.4','openai'), M('gpt-5.5','openai')] },
   framework_extractor:  { envVar: 'PIPELINE_MODEL_FRAMEWORK_EXTRACTOR',  default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
@@ -31,20 +30,50 @@ const REGISTRY: Record<AgentName, AgentConfig> = {
   aha_moment_detector:  { envVar: 'PIPELINE_MODEL_AHA_MOMENT_DETECTOR',  default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai')] },
   citation_grounder:    { envVar: 'PIPELINE_MODEL_CITATION_GROUNDER',    default: M('gpt-5.4','openai'),          fallbackChain: [M('gemini-2.5-flash','gemini')] },
   page_composer:        { envVar: 'PIPELINE_MODEL_PAGE_COMPOSER',        default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai')] },
-  // canon_v1 text agents — GPT-heavy (Gemini available as fallback)
   channel_profiler:     { envVar: 'PIPELINE_MODEL_CHANNEL_PROFILER',     default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
   video_analyst:        { envVar: 'PIPELINE_MODEL_VIDEO_ANALYST',        default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
   canon_architect:      { envVar: 'PIPELINE_MODEL_CANON_ARCHITECT',      default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
   page_brief_planner:   { envVar: 'PIPELINE_MODEL_PAGE_BRIEF_PLANNER',   default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
   page_writer:          { envVar: 'PIPELINE_MODEL_PAGE_WRITER',          default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
-  // visual — always Gemini regardless of mode
   visual_frame_analyst: { envVar: 'PIPELINE_MODEL_VISUAL_FRAME_ANALYST', default: M('gemini-2.5-flash','gemini'), fallbackChain: [M('gemini-2.5-pro','gemini')] },
 };
 
 type ModelMode = 'hybrid' | 'gemini_only' | 'openai_only';
+type QualityMode = 'lean' | 'production_economy' | 'premium';
+
+// Per-quality-mode model assignment for each canon_v1 agent.
+// visual_frame_analyst is intentionally excluded — vision always uses Flash.
+const QUALITY_PRESETS: Record<QualityMode, Partial<Record<AgentName, ModelChoice>>> = {
+  // Cheapest viable. Canon synthesis stays on Pro because it's the
+  // highest-leverage judgment call; everything else uses Flash.
+  lean: {
+    channel_profiler:   M('gemini-2.5-flash', 'gemini'),
+    video_analyst:      M('gemini-2.5-flash', 'gemini'),
+    canon_architect:    M('gemini-2.5-pro',   'gemini'),
+    page_brief_planner: M('gemini-2.5-flash', 'gemini'),
+    page_writer:        M('gemini-2.5-flash', 'gemini'),
+  },
+  // Recommended default. Right-sized: Flash for extraction/structural agents,
+  // Pro for long-context reading (video_analyst), gpt-5.5 only for the
+  // single agent where premium reasoning pays off (canon_architect).
+  production_economy: {
+    channel_profiler:   M('gemini-2.5-flash', 'gemini'),
+    video_analyst:      M('gemini-2.5-pro',   'gemini'),
+    canon_architect:    M('gpt-5.5',          'openai'),
+    page_brief_planner: M('gemini-2.5-flash', 'gemini'),
+    page_writer:        M('gemini-2.5-flash', 'gemini'),
+  },
+  // Maximum quality. Every text agent on gpt-5.5.
+  premium: {
+    channel_profiler:   M('gpt-5.5', 'openai'),
+    video_analyst:      M('gpt-5.5', 'openai'),
+    canon_architect:    M('gpt-5.5', 'openai'),
+    page_brief_planner: M('gpt-5.5', 'openai'),
+    page_writer:        M('gpt-5.5', 'openai'),
+  },
+};
 
 function modeRouted(agent: AgentName, mode: ModelMode): ModelChoice {
-  // visual_frame_analyst always Gemini regardless of mode.
   if (agent === 'visual_frame_analyst') return REGISTRY[agent].default;
   if (mode === 'hybrid') return REGISTRY[agent].default;
   if (mode === 'gemini_only') {
@@ -68,6 +97,12 @@ function parseMode(raw: string | undefined): ModelMode {
   throw new Error(`Invalid PIPELINE_MODEL_MODE: ${raw}. Supported: hybrid | gemini_only | openai_only.`);
 }
 
+function parseQualityMode(raw: string | undefined): QualityMode | null {
+  if (!raw) return null;
+  if (raw === 'lean' || raw === 'production_economy' || raw === 'premium') return raw;
+  throw new Error(`Invalid PIPELINE_QUALITY_MODE: ${raw}. Supported: lean | production_economy | premium.`);
+}
+
 function inferProvider(modelId: string): ProviderName {
   if (modelId.startsWith('gpt-') || modelId.startsWith('o1')) return 'openai';
   if (modelId.startsWith('gemini-')) return 'gemini';
@@ -81,16 +116,34 @@ export interface ResolvedModel {
 }
 
 /**
- * Resolve which model to use for an agent. Override priority:
- * per-agent env (PIPELINE_MODEL_<AGENT>) > PIPELINE_MODEL_MODE routing > REGISTRY default.
+ * Resolution priority (most specific first):
+ *   1. PIPELINE_MODEL_<AGENT>      — per-agent explicit override
+ *   2. PIPELINE_QUALITY_MODE       — preset that picks a model per agent
+ *   3. PIPELINE_MODEL_MODE         — provider preference (hybrid|gemini_only|openai_only)
+ *   4. REGISTRY[agent].default     — plan-default
+ *
+ * visual_frame_analyst always uses its REGISTRY default regardless of mode/preset.
  */
 export function selectModel(agent: AgentName, env: Record<string, string | undefined>): ResolvedModel {
   const cfg = REGISTRY[agent];
   if (!cfg) throw new Error(`Unknown agent: ${agent}`);
+
+  // 1. per-agent env override
   const explicit = env[cfg.envVar];
   if (explicit) {
     return { modelId: explicit, provider: inferProvider(explicit), fallbackChain: cfg.fallbackChain };
   }
+
+  // 2. quality-mode preset (visual_frame_analyst exempt)
+  const quality = parseQualityMode(env.PIPELINE_QUALITY_MODE);
+  if (quality && agent !== 'visual_frame_analyst') {
+    const preset = QUALITY_PRESETS[quality][agent];
+    if (preset) {
+      return { ...preset, fallbackChain: cfg.fallbackChain };
+    }
+  }
+
+  // 3. provider-mode routing
   const mode = parseMode(env.PIPELINE_MODEL_MODE);
   const chosen = modeRouted(agent, mode);
   return { ...chosen, fallbackChain: cfg.fallbackChain };
