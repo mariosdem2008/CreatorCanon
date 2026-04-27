@@ -20,6 +20,13 @@ import {
   getFullTranscriptTool,
   getSegmentedTranscriptTool,
 } from './read-canon';
+import {
+  proposeChannelProfileTool,
+  proposeVideoIntelligenceCardTool,
+  proposeCanonNodeTool,
+  proposePageBriefTool,
+  proposeVisualMomentTool,
+} from './propose-canon';
 
 /** Process-level singleton. Tools register at module import time and never clear in production. */
 const REGISTRY = new Map<string, ToolDef<any, any>>();
@@ -85,6 +92,12 @@ const ALL_TOOLS: ToolDef<any, any>[] = [
   getPageBriefTool, listPageBriefsTool,
   listVisualMomentsTool, getVisualMomentTool,
   getFullTranscriptTool, getSegmentedTranscriptTool,
+  // Canon-layer propose tools (Stage 1 v4)
+  proposeChannelProfileTool,
+  proposeVideoIntelligenceCardTool,
+  proposeCanonNodeTool,
+  proposePageBriefTool,
+  proposeVisualMomentTool,
 ];
 
 export function registerAllTools(): void {
