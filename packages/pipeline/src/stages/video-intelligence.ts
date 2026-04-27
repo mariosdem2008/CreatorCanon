@@ -1,5 +1,5 @@
-import { and, eq, inArray, asc } from '@creatorcanon/db';
-import { segment, videoIntelligenceCard, transcriptAsset, channelProfile, visualMoment } from '@creatorcanon/db/schema';
+import { eq, inArray } from '@creatorcanon/db';
+import { segment, videoIntelligenceCard, transcriptAsset, channelProfile } from '@creatorcanon/db/schema';
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
@@ -13,6 +13,7 @@ import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import { CANON_LIMITS } from '../canon-limits';
 import type { StageContext } from '../harness';
 import { buildFallbacks } from './fallback-chain';
+import { loadVideoContext, buildVideoAnalystUserMessage } from './preload-context';
 
 const CONCURRENCY = 3;
 
@@ -124,40 +125,17 @@ export async function runVideoIntelligenceStage(
     const fallbacks = buildFallbacks(model, makeProvider);
 
     // Pre-load every read the agent would otherwise make.
-    const segs = await db
-      .select({
-        segmentId: segment.id,
-        startMs: segment.startMs,
-        endMs: segment.endMs,
-        text: segment.text,
-      })
-      .from(segment)
-      .where(and(eq(segment.runId, input.runId), eq(segment.videoId, videoId)))
-      .orderBy(asc(segment.startMs));
-    if (segs.length === 0) {
+    const { segments: videoSegments, visualMoments } = await loadVideoContext(db, input.runId, videoId);
+    if (videoSegments.length === 0) {
       return { videoId, ok: false, summary: null, error: 'no segments for video' };
     }
-    const vms = await db
-      .select({
-        visualMomentId: visualMoment.id,
-        timestampMs: visualMoment.timestampMs,
-        type: visualMoment.type,
-        description: visualMoment.description,
-        hubUse: visualMoment.hubUse,
-        usefulnessScore: visualMoment.usefulnessScore,
-      })
-      .from(visualMoment)
-      .where(and(eq(visualMoment.runId, input.runId), eq(visualMoment.videoId, videoId)));
 
-    const userMessage =
-      `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload, null, 2)}\n\n` +
-      `# VIDEO ${videoId} — TRANSCRIPT (${segs.length} segments)\n` +
-      segs.map((s) => `[${s.segmentId}] ${s.startMs}ms-${s.endMs}ms: ${s.text}`).join('\n') +
-      `\n\n# VISUAL MOMENTS for ${videoId} (${vms.length})\n` +
-      (vms.length > 0
-        ? vms.map((v) => `[${v.visualMomentId}] @${v.timestampMs}ms ${v.type} (score=${v.usefulnessScore}): ${v.description} — hubUse: ${v.hubUse}`).join('\n')
-        : '(none)') +
-      `\n\nProduce one proposeVideoIntelligenceCard call for video ${videoId}. The card's evidenceSegmentIds MUST be drawn only from the segmentIds shown above.`;
+    const userMessage = buildVideoAnalystUserMessage(
+      channelProfilePayload,
+      videoId,
+      videoSegments,
+      visualMoments,
+    );
 
     try {
       const summary = await runAgent({

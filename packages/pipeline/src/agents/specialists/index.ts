@@ -84,7 +84,7 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_fr
       'proposeVideoIntelligenceCard',
     ],
     // Tighter caps reflect the single-shot expectation.
-    stopOverrides: { maxCalls: 8, maxCostCents: 150 },
+    stopOverrides: { maxCalls: 8, maxCostCents: 50 },
   },
   canon_architect: {
     agent: 'canon_architect',
