@@ -11,6 +11,7 @@ import { parseServerEnv } from '@creatorcanon/core';
 import { getDb } from '@creatorcanon/db';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import type { StageContext } from '../harness';
+import { buildFallbacks } from './fallback-chain';
 
 export interface CanonStageInput {
   runId: string;
@@ -60,6 +61,7 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
   const cfg = SPECIALISTS.canon_architect;
   const model = selectModel('canon_architect', process.env);
   const provider = makeProvider(model.provider);
+  const fallbacks = buildFallbacks(model, makeProvider);
 
   try {
     const summary = await runAgent({
@@ -68,6 +70,7 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
       agent: cfg.agent,
       modelId: model.modelId,
       provider,
+      fallbacks,
       r2,
       tools: cfg.allowedTools,
       systemPrompt: cfg.systemPrompt,

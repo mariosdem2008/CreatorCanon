@@ -28,6 +28,14 @@ export interface RunAgentInput {
   userMessage: string;
   /** Override caps for this run; merged with `DEFAULT_STOP_CAPS`. */
   caps?: Partial<StopCaps>;
+  /**
+   * Optional fallback chain. When the primary {provider, modelId} exhausts its
+   * retry budget on a transient error, the harness promotes to the next entry
+   * in the chain. Chain order matters; the first entry is tried after primary,
+   * etc. Each entry brings its own provider so we can cross provider boundaries
+   * (e.g. gemini-2.5-flash -> gemini-2.5-pro -> gpt-5.4).
+   */
+  fallbacks?: Array<{ modelId: string; provider: AgentProvider }>;
 }
 
 export interface RunAgentSummary {
@@ -67,11 +75,15 @@ function isTransientProviderError(err: unknown): boolean {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Wrap a provider.chat() call with bounded retry on transient errors.
- * Attempts 3x with 2s, 4s, 8s backoff (max 14s total per call). Non-transient
- * errors (auth, schema, malformed JSON) re-throw on the first attempt.
+ * Wrap a single (modelId, provider) pair with bounded retry on transient
+ * errors. 3 attempts with 2s/4s/8s backoff. Non-transient errors (auth,
+ * schema, malformed JSON) re-throw on the first attempt.
  */
-async function chatWithRetry<T>(fn: () => Promise<T>, agent: string, modelId: string): Promise<T> {
+async function chatWithRetry<T>(
+  fn: () => Promise<T>,
+  agent: string,
+  modelId: string,
+): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -84,6 +96,50 @@ async function chatWithRetry<T>(fn: () => Promise<T>, agent: string, modelId: st
       // eslint-disable-next-line no-console
       console.warn(`[harness] ${agent}/${modelId} transient error (attempt ${attempt}/3, sleeping ${wait}ms): ${reason}`);
       await sleep(wait);
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Try the primary (modelId, provider). If it exhausts retry budget on a
+ * transient error, promote to the next entry in the fallback chain and try
+ * again. Non-transient errors short-circuit (no fallback) — those mean the
+ * request is malformed, not the provider being unavailable.
+ *
+ * The chat call closure receives (modelId, provider) so the same `messages`
+ * and `tools` are reused across promotions without re-walking the agent loop.
+ */
+async function chatWithFallbackChain<T>(
+  agent: string,
+  primaryModelId: string,
+  primaryProvider: AgentProvider,
+  fallbacks: Array<{ modelId: string; provider: AgentProvider }>,
+  call: (modelId: string, provider: AgentProvider) => Promise<T>,
+): Promise<T> {
+  const chain = [
+    { modelId: primaryModelId, provider: primaryProvider },
+    ...fallbacks,
+  ];
+  let lastErr: unknown;
+  for (let i = 0; i < chain.length; i += 1) {
+    const link = chain[i]!;
+    try {
+      const result = await chatWithRetry(() => call(link.modelId, link.provider), agent, link.modelId);
+      if (i > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(`[harness] ${agent} succeeded after promoting to fallback model ${link.modelId} (link ${i}/${chain.length - 1}).`);
+      }
+      return result;
+    } catch (err) {
+      lastErr = err;
+      const isLast = i === chain.length - 1;
+      const transient = isTransientProviderError(err);
+      if (!transient || isLast) throw err;
+      const next = chain[i + 1]!;
+      const reason = err instanceof Error ? err.message.slice(0, 100) : String(err).slice(0, 100);
+      // eslint-disable-next-line no-console
+      console.warn(`[harness] ${agent}/${link.modelId} exhausted retries, promoting to ${next.modelId}: ${reason}`);
     }
   }
   throw lastErr;
@@ -139,10 +195,12 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
       warnedSoftCap = true;
     }
 
-    const response = await chatWithRetry(
-      () => input.provider.chat({ modelId: input.modelId, messages, tools }),
+    const response = await chatWithFallbackChain(
       input.agent,
       input.modelId,
+      input.provider,
+      input.fallbacks ?? [],
+      (modelId, provider) => provider.chat({ modelId, messages, tools }),
     );
     const callCost = tokenCostCents(input.modelId, response.usage.inputTokens, response.usage.outputTokens);
     costCents += callCost;

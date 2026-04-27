@@ -12,6 +12,7 @@ import { getDb } from '@creatorcanon/db';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import { CANON_LIMITS } from '../canon-limits';
 import type { StageContext } from '../harness';
+import { buildFallbacks } from './fallback-chain';
 
 const CONCURRENCY = 3;
 
@@ -109,6 +110,7 @@ export async function runVideoIntelligenceStage(
     // Fresh provider per task — providers are cheap to construct and this avoids
     // any shared-state surprises on retries.
     const provider = makeProvider(model.provider);
+    const fallbacks = buildFallbacks(model, makeProvider);
     const userMessage =
       `Analyze video ${videoId}. Read getChannelProfile, then ` +
       `getSegmentedTranscript({videoId: '${videoId}'}), then ` +
@@ -120,6 +122,7 @@ export async function runVideoIntelligenceStage(
         agent: cfg.agent,
         modelId: model.modelId,
         provider,
+        fallbacks,
         r2,
         tools: cfg.allowedTools,
         systemPrompt: cfg.systemPrompt,

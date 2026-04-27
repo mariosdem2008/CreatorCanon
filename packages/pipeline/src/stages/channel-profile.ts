@@ -13,6 +13,7 @@ import { parseServerEnv } from '@creatorcanon/core';
 import { getDb } from '@creatorcanon/db';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import type { StageContext } from '../harness';
+import { buildFallbacks } from './fallback-chain';
 
 export interface ChannelProfileStageInput {
   runId: string;
@@ -68,6 +69,7 @@ export async function runChannelProfileStage(
   const cfg = SPECIALISTS.channel_profiler;
   const model = selectModel('channel_profiler', process.env);
   const provider = makeProvider(model.provider);
+  const fallbacks = buildFallbacks(model, makeProvider);
 
   try {
     const summary = await runAgent({
@@ -76,6 +78,7 @@ export async function runChannelProfileStage(
       agent: cfg.agent,
       modelId: model.modelId,
       provider,
+      fallbacks,
       r2,
       tools: cfg.allowedTools,
       systemPrompt: cfg.systemPrompt,
