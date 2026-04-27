@@ -69,7 +69,11 @@ export default async function HubHomePage({ params }: { params: { hubSlug: strin
         <Stat label="Videos"           value={m.stats.videoCount.toLocaleString()} />
         <Stat label="Sources"          value={m.stats.sourceCount.toLocaleString()} />
         <Stat label="With transcripts" value={`${Math.round(m.stats.transcriptPercent * 100)}%`} />
-        <Stat label="Years of archive" value={`${m.stats.archiveYears} yrs`} />
+        {m.stats.archiveYears >= 1 ? (
+          <Stat label="Years of archive" value={`${m.stats.archiveYears} yrs`} />
+        ) : (
+          <Stat label="Footage" value={`${m.stats.totalDurationMinutes} min`} />
+        )}
         <Stat label="Pages"            value={m.stats.pageCount.toLocaleString()} />
       </dl>
 

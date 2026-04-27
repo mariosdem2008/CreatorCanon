@@ -674,6 +674,7 @@ export const mockManifest: EditorialAtlasManifest = {
     sourceCount: sources.length,
     transcriptPercent: 0.87,
     archiveYears: 9.4,
+    totalDurationMinutes: 1430,
     pageCount: pages.length,
   },
 

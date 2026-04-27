@@ -59,7 +59,7 @@ test('top-level manifest: schemaVersion is fixed', () => {
     publishedAt: null, generatedAt: '2026-04-25T10:00:00Z',
     title: 'x', tagline: 'y',
     creator: { name: 'A', handle: '@a', avatarUrl: '', bio: '', youtubeChannelUrl: '' },
-    stats: { videoCount: 0, sourceCount: 0, transcriptPercent: 0, archiveYears: 0, pageCount: 0 },
+    stats: { videoCount: 0, sourceCount: 0, transcriptPercent: 0, archiveYears: 0, totalDurationMinutes: 0, pageCount: 0 },
     topics: [], pages: [], sources: [],
     navigation: { primary: [], secondary: [] },
     trust: { methodologySummary: '', qualityPrinciples: [], creationProcess: [], faq: [] },

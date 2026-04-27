@@ -161,6 +161,7 @@ export const editorialAtlasManifestSchema = z.object({
     sourceCount: z.number().int().min(0),
     transcriptPercent: z.number().min(0).max(1),
     archiveYears: z.number().min(0),
+    totalDurationMinutes: z.number().int().min(0),
     pageCount: z.number().int().min(0),
   }),
 

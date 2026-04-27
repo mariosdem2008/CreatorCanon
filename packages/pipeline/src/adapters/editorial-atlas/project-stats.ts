@@ -22,9 +22,10 @@ export async function projectStats({
   const videoCount = videoIds.length;
 
   let archiveYears = 0;
+  let totalDurationMinutes = 0;
   if (videoCount > 0) {
     const videos = await db
-      .select({ id: video.id, publishedAt: video.publishedAt })
+      .select({ id: video.id, publishedAt: video.publishedAt, durationSeconds: video.durationSeconds })
       .from(video)
       .where(inArray(video.id, videoIds));
 
@@ -37,6 +38,9 @@ export async function projectStats({
       const max = Math.max(...dates.map((d) => d.getTime()));
       archiveYears = Math.round(((max - min) / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10;
     }
+
+    const totalSec = videos.reduce((sum, v) => sum + (v.durationSeconds ?? 0), 0);
+    totalDurationMinutes = Math.round(totalSec / 60);
   }
 
   let transcriptPercent = 0;
@@ -55,6 +59,7 @@ export async function projectStats({
     sourceCount,
     transcriptPercent,
     archiveYears: Math.max(0, archiveYears),
+    totalDurationMinutes,
     pageCount,
   };
 }
