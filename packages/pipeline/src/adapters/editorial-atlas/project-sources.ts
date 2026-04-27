@@ -66,9 +66,14 @@ export async function projectSources({
     return {
       id: v.id,
       youtubeId: v.youtubeVideoId,
-      // Use the upload's title (filename-defaulted via /api/upload/init) or
-      // fall back to YT-style "Untitled" only if truly absent.
-      title: v.title ?? 'Untitled',
+      // Use the upload's title (filename-defaulted via /api/upload/init).
+      // For pre-fix legacy uploads with no title, fall back to a duration-
+      // labelled "Source N min" so the row is at least distinguishable.
+      title:
+        v.title ??
+        (v.durationSeconds
+          ? `Source · ${Math.round((v.durationSeconds ?? 0) / 60)} min`
+          : 'Untitled source'),
       // Real creator name (passed in from the adapter root) so manual uploads
       // don't show a placeholder "Creator" string.
       channelName: creatorName,
