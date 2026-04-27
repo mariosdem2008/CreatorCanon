@@ -6,3 +6,6 @@ export * from './segment-transcripts';
 // Canon v1 (Stage 1 deep knowledge extraction)
 export * from './channel-profile';
 export * from './visual-context';
+export * from './video-intelligence';
+export * from './canon';
+export * from './page-briefs';
