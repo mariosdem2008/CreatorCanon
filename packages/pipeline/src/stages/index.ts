@@ -9,3 +9,5 @@ export * from './visual-context';
 export * from './video-intelligence';
 export * from './canon';
 export * from './page-briefs';
+export * from './page-composition';
+export * from './page-quality';
