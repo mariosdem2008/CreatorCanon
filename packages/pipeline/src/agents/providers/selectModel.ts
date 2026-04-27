@@ -42,7 +42,18 @@ type ModelMode = 'hybrid' | 'gemini_only' | 'openai_only';
 type QualityMode = 'lean' | 'production_economy' | 'premium';
 
 // Per-quality-mode model assignment for each canon_v1 agent.
-// visual_frame_analyst is intentionally excluded — vision always uses Flash.
+//
+// SCOPE: Quality presets ONLY apply to canon_v1 agents (channel_profiler,
+// video_analyst, canon_architect, page_brief_planner, page_writer). Phase-1
+// agents (framework_extractor, lesson_extractor, etc.) and visual_frame_analyst
+// intentionally fall through to PIPELINE_MODEL_MODE / REGISTRY default — they
+// have their own well-tuned defaults that don't need the cost-quality knob.
+// The Partial<Record<...>> type makes this fall-through explicit without
+// the compiler complaining about missing entries.
+//
+// visual_frame_analyst is also explicitly exempted at the call-site
+// (selectModel() body, agent !== 'visual_frame_analyst' guard) for defense
+// in depth — vision always uses Flash.
 const QUALITY_PRESETS: Record<QualityMode, Partial<Record<AgentName, ModelChoice>>> = {
   // Cheapest viable. Canon synthesis stays on Pro because it's the
   // highest-leverage judgment call; everything else uses Flash.

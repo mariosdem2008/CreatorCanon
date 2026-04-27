@@ -63,4 +63,41 @@ describe('selectModel — PIPELINE_QUALITY_MODE', () => {
       /Invalid PIPELINE_QUALITY_MODE/,
     );
   });
+
+  it('Phase-1 agents fall through quality preset to REGISTRY default', () => {
+    // framework_extractor is NOT in QUALITY_PRESETS — should ignore the
+    // preset entirely and use its REGISTRY default (gpt-5.5).
+    const r = selectModel('framework_extractor', { PIPELINE_QUALITY_MODE: 'lean' });
+    assert.equal(r.modelId, 'gpt-5.5');
+    assert.equal(r.provider, 'openai');
+  });
+
+  it('priority: PIPELINE_MODEL_<AGENT> beats PIPELINE_MODEL_MODE', () => {
+    // env override should win even without a quality mode in the picture.
+    const r = selectModel('video_analyst', {
+      PIPELINE_MODEL_VIDEO_ANALYST: 'gemini-2.5-flash',
+      PIPELINE_MODEL_MODE: 'openai_only',
+    });
+    assert.equal(r.modelId, 'gemini-2.5-flash');
+    assert.equal(r.provider, 'gemini');
+  });
+
+  it('priority: PIPELINE_MODEL_<AGENT> beats REGISTRY default', () => {
+    const r = selectModel('video_analyst', {
+      PIPELINE_MODEL_VIDEO_ANALYST: 'gemini-2.5-pro',
+    });
+    assert.equal(r.modelId, 'gemini-2.5-pro');
+  });
+
+  it('priority: PIPELINE_QUALITY_MODE beats REGISTRY default', () => {
+    // No PIPELINE_MODEL_MODE set — quality preset should still apply.
+    const r = selectModel('video_analyst', { PIPELINE_QUALITY_MODE: 'lean' });
+    assert.equal(r.modelId, 'gemini-2.5-flash');
+  });
+
+  it('priority: PIPELINE_MODEL_MODE beats REGISTRY default', () => {
+    // gemini_only routes video_analyst to its first Gemini fallback (gemini-2.5-pro).
+    const r = selectModel('video_analyst', { PIPELINE_MODEL_MODE: 'gemini_only' });
+    assert.equal(r.modelId, 'gemini-2.5-pro');
+  });
 });
