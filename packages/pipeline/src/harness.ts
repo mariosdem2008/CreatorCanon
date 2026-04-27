@@ -15,6 +15,16 @@ export interface StageRunOptions<TInput, TOutput> {
   stage: PipelineStage;
   input: TInput;
   run: (input: TInput) => Promise<TOutput>;
+  /**
+   * Optional. Called after a cache hit (succeeded stage_run with matching
+   * inputHash) to confirm the output's downstream materialized rows still
+   * exist. Returning false logs a warning and re-executes the stage.
+   *
+   * Use this for stages that persist canonical rows in their own tables
+   * (e.g. channel_profile, video_intelligence_card, canon_node, page_brief)
+   * — if those rows were truncated/restored, the cached output is stale.
+   */
+  validateMaterializedOutput?: (output: TOutput, ctx: StageContext) => Promise<boolean>;
 }
 
 /**
@@ -45,7 +55,17 @@ export async function runStage<TInput, TOutput>(
   );
 
   if (match?.status === 'succeeded' && match.outputJson != null) {
-    return match.outputJson as TOutput;
+    const cached = match.outputJson as TOutput;
+    if (opts.validateMaterializedOutput) {
+      const ok = await opts.validateMaterializedOutput(cached, ctx);
+      if (ok) return cached;
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[harness] cached stage_run ${stage} (${match.id}) lost materialized rows; re-running.`,
+      );
+    } else {
+      return cached;
+    }
   }
 
   const stageRunId = crypto.randomUUID();
