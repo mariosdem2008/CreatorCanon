@@ -27,6 +27,14 @@ export const PIPELINE_STAGES = [
   'qa_and_repair', // 14
   'index_chat', // 15
   'build_release', // 16
+  // canon_v1 (Stage 1 deep knowledge extraction — feature-flagged)
+  'channel_profile',
+  'visual_context',
+  'video_intelligence',
+  'canon',
+  'page_briefs',
+  'page_composition',
+  'page_quality',
 ] as const;
 
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];

@@ -12,7 +12,31 @@ import { runSynthesisStage } from './stages/synthesis';
 import { runVerifyStage } from './stages/verify';
 import { runMergeStage } from './stages/merge';
 import { runAdaptStage } from './stages/adapt';
+import {
+  runChannelProfileStage,
+  validateChannelProfileMaterialization,
+  runVisualContextStage,
+  validateVisualContextMaterialization,
+  runVideoIntelligenceStage,
+  validateVideoIntelligenceMaterialization,
+  runCanonStage,
+  validateCanonMaterialization,
+  runPageBriefsStage,
+  validatePageBriefsMaterialization,
+  runPageCompositionStage,
+  validatePageCompositionMaterialization,
+  runPageQualityStage,
+  validatePageQualityMaterialization,
+} from './stages';
 import { assertWithinRunBudget } from './agents/run-budget';
+
+type ContentEngine = 'findings_v1' | 'canon_v1';
+
+function resolveContentEngine(): ContentEngine {
+  const raw = process.env.PIPELINE_CONTENT_ENGINE?.trim();
+  if (raw === 'canon_v1') return 'canon_v1';
+  return 'findings_v1';
+}
 
 export interface RunGenerationPipelinePayload {
   runId: string;
@@ -104,50 +128,137 @@ export async function runGenerationPipeline(
       );
     }
 
-    // Phase 1: discovery.
-    await assertWithinRunBudget(payload.runId);
-    const discovery = await runStage({
-      ctx,
-      stage: 'discovery',
-      input: { runId: payload.runId, workspaceId: payload.workspaceId },
-      run: async (i) => runDiscoveryStage(i),
-    });
+    const contentEngine = resolveContentEngine();
+    let findingCount = 0;
+    let pageCount = 0;
+    let manifestR2Key = '';
 
-    // Phase 2: synthesis.
-    await assertWithinRunBudget(payload.runId);
-    const synthesis = await runStage({
-      ctx,
-      stage: 'synthesis',
-      input: { runId: payload.runId, workspaceId: payload.workspaceId },
-      run: async (i) => runSynthesisStage(i),
-    });
+    if (contentEngine === 'canon_v1') {
+      // canon_v1: deep-knowledge-extraction engine. Seven stages with
+      // materialization validators wired so cache hits revalidate the
+      // downstream rows still exist before short-circuiting.
+      await assertWithinRunBudget(payload.runId);
+      await runStage({
+        ctx,
+        stage: 'channel_profile',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runChannelProfileStage(i),
+        validateMaterializedOutput: validateChannelProfileMaterialization,
+      });
 
-    // Phase 3: verify.
-    await assertWithinRunBudget(payload.runId);
-    await runStage({
-      ctx,
-      stage: 'verify',
-      input: { runId: payload.runId, workspaceId: payload.workspaceId },
-      run: async (i) => runVerifyStage(i),
-    });
+      await assertWithinRunBudget(payload.runId);
+      await runStage({
+        ctx,
+        stage: 'visual_context',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runVisualContextStage(i),
+        validateMaterializedOutput: validateVisualContextMaterialization,
+      });
 
-    // Phase 4: merge.
-    await assertWithinRunBudget(payload.runId);
-    const merge = await runStage({
-      ctx,
-      stage: 'merge',
-      input: { runId: payload.runId, workspaceId: payload.workspaceId },
-      run: async (i) => runMergeStage(i),
-    });
+      await assertWithinRunBudget(payload.runId);
+      const vic = await runStage({
+        ctx,
+        stage: 'video_intelligence',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runVideoIntelligenceStage(i),
+        validateMaterializedOutput: validateVideoIntelligenceMaterialization,
+      });
 
-    // Phase 5: adapt.
-    await assertWithinRunBudget(payload.runId);
-    const adapt = await runStage({
-      ctx,
-      stage: 'adapt',
-      input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id },
-      run: async (i) => runAdaptStage(i),
-    });
+      await assertWithinRunBudget(payload.runId);
+      const canon = await runStage({
+        ctx,
+        stage: 'canon',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runCanonStage(i),
+        validateMaterializedOutput: validateCanonMaterialization,
+      });
+
+      await assertWithinRunBudget(payload.runId);
+      const briefs = await runStage({
+        ctx,
+        stage: 'page_briefs',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runPageBriefsStage(i),
+        validateMaterializedOutput: validatePageBriefsMaterialization,
+      });
+
+      await assertWithinRunBudget(payload.runId);
+      const composition = await runStage({
+        ctx,
+        stage: 'page_composition',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runPageCompositionStage(i),
+        validateMaterializedOutput: validatePageCompositionMaterialization,
+      });
+
+      await assertWithinRunBudget(payload.runId);
+      await runStage({
+        ctx,
+        stage: 'page_quality',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runPageQualityStage(i),
+        validateMaterializedOutput: validatePageQualityMaterialization,
+      });
+
+      // canon_v1 still emits the editorial-atlas manifest via the existing
+      // adapter — Phase 8 retargeted it to read canon_node when present.
+      await assertWithinRunBudget(payload.runId);
+      const adapt = await runStage({
+        ctx,
+        stage: 'adapt',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id },
+        run: async (i) => runAdaptStage(i),
+      });
+
+      findingCount = vic.videosAnalyzed + canon.nodeCount + briefs.briefCount;
+      pageCount = composition.pageCount;
+      manifestR2Key = adapt.manifestR2Key;
+    } else {
+      // findings_v1: the original 5-phase agentic pipeline (unchanged).
+      await assertWithinRunBudget(payload.runId);
+      const discovery = await runStage({
+        ctx,
+        stage: 'discovery',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runDiscoveryStage(i),
+      });
+
+      await assertWithinRunBudget(payload.runId);
+      const synthesis = await runStage({
+        ctx,
+        stage: 'synthesis',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runSynthesisStage(i),
+      });
+
+      await assertWithinRunBudget(payload.runId);
+      await runStage({
+        ctx,
+        stage: 'verify',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runVerifyStage(i),
+      });
+
+      await assertWithinRunBudget(payload.runId);
+      const merge = await runStage({
+        ctx,
+        stage: 'merge',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId },
+        run: async (i) => runMergeStage(i),
+      });
+
+      await assertWithinRunBudget(payload.runId);
+      const adapt = await runStage({
+        ctx,
+        stage: 'adapt',
+        input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id },
+        run: async (i) => runAdaptStage(i),
+      });
+
+      findingCount = (discovery.findingCount ?? 0) + (synthesis.findingCount ?? 0);
+      pageCount = merge.pageCount;
+      manifestR2Key = adapt.manifestR2Key;
+    }
 
     await transitionRun(payload.runId, 'awaiting_review', { completedAt: new Date() });
 
@@ -157,9 +268,9 @@ export async function runGenerationPipeline(
       transcriptsFetched: transcriptsResult.fetchedCount,
       transcriptsSkipped: transcriptsResult.skippedCount,
       segmentsCreated: segmentResult.totalSegments,
-      findingCount: (discovery.findingCount ?? 0) + (synthesis.findingCount ?? 0),
-      pageCount: merge.pageCount,
-      manifestR2Key: adapt.manifestR2Key,
+      findingCount,
+      pageCount,
+      manifestR2Key,
     };
   } catch (err) {
     await transitionRun(payload.runId, 'failed');
