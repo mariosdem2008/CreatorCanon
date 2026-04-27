@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { tasks } from '@trigger.dev/sdk/v3';
 import { auth } from '@creatorcanon/auth';
 import { and, eq, getDb } from '@creatorcanon/db';
-import { workspaceMember, video } from '@creatorcanon/db/schema';
+import { workspaceMember, video, mediaAsset } from '@creatorcanon/db/schema';
 import { createR2Client } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import { z } from 'zod';
@@ -107,6 +107,26 @@ export async function POST(req: Request) {
     .update(video)
     .set({ uploadStatus: 'uploaded', transcribeStatus: 'transcribing' })
     .where(and(eq(video.id, videoId), eq(video.workspaceId, workspaceId)));
+
+  // 8b. Persist the source mp4 as a mediaAsset so the canon_v1
+  //     visual_context stage can find it later. onConflictDoNothing
+  //     keeps this idempotent across upload retries.
+  try {
+    await db
+      .insert(mediaAsset)
+      .values({
+        id: `ma_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`,
+        workspaceId,
+        videoId,
+        type: 'video_mp4',
+        r2Key,
+      })
+      .onConflictDoNothing();
+  } catch (err) {
+    // Non-fatal — visual_context will simply skip this video. Log so we
+    // can spot persistent failures.
+    console.warn('[upload-complete] failed to persist video_mp4 mediaAsset', err);
+  }
 
   // 9. Enqueue Trigger.dev transcription task.
   try {
