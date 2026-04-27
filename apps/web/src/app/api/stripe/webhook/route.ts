@@ -26,8 +26,28 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function runInProcess(payload: RunGenerationPipelinePayload): void {
-  void runGenerationPipeline(payload).catch((err) => {
+  void runGenerationPipeline(payload).catch(async (err) => {
     console.error('[stripe-webhook] In-process pipeline run failed:', err);
+    // If the pipeline threw before its first transitionRun('running'), the run
+    // would otherwise sit in 'queued' forever. Mark it failed so the project
+    // page shows a real error and the user can retry instead of waiting.
+    try {
+      const db = getDb();
+      await db
+        .update(generationRun)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(
+          and(
+            eq(generationRun.id, payload.runId),
+            eq(generationRun.status, 'queued'),
+          ),
+        );
+    } catch (transitionErr) {
+      console.error(
+        '[stripe-webhook] Failed to transition run to failed after pipeline error:',
+        transitionErr,
+      );
+    }
   });
 }
 
