@@ -9,16 +9,21 @@ import {
   QUOTE_FINDER_PROMPT,
   AHA_MOMENT_DETECTOR_PROMPT,
   CITATION_GROUNDER_PROMPT,
+  CHANNEL_PROFILER_PROMPT,
+  VIDEO_ANALYST_PROMPT,
+  CANON_ARCHITECT_PROMPT,
+  PAGE_BRIEF_PLANNER_PROMPT,
+  PAGE_WRITER_PROMPT,
 } from './prompts';
 
 export interface SpecialistConfig {
-  agent: Exclude<AgentName, 'page_composer'>;
+  agent: Exclude<AgentName, 'page_composer' | 'visual_frame_analyst'>;
   systemPrompt: string;
   allowedTools: string[];
   stopOverrides?: Partial<StopCaps>;
 }
 
-export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer'>, SpecialistConfig> = {
+export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_frame_analyst'>, SpecialistConfig> = {
   topic_spotter: {
     agent: 'topic_spotter',
     systemPrompt: TOPIC_SPOTTER_PROMPT,
@@ -58,5 +63,52 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer'>, Specialist
     agent: 'citation_grounder',
     systemPrompt: CITATION_GROUNDER_PROMPT,
     allowedTools: ['listFindings','getSegment','markFindingEvidence'],
+  },
+  // ---------------------------------------------------------------------
+  // Canon v1 specialists (Stage 1 deep knowledge extraction)
+  // visual_frame_analyst is NOT a specialist — it is a direct-call stage.
+  // ---------------------------------------------------------------------
+  channel_profiler: {
+    agent: 'channel_profiler',
+    systemPrompt: CHANNEL_PROFILER_PROMPT,
+    allowedTools: ['listVideos', 'getSegmentedTranscript', 'getFullTranscript', 'proposeChannelProfile'],
+    stopOverrides: { maxCalls: 30, maxCostCents: 200 },
+  },
+  video_analyst: {
+    agent: 'video_analyst',
+    systemPrompt: VIDEO_ANALYST_PROMPT,
+    allowedTools: [
+      'getChannelProfile', 'getSegmentedTranscript', 'searchSegments', 'getSegment',
+      'listVisualMoments', 'getVisualMoment', 'getFullTranscript',
+      'proposeVideoIntelligenceCard',
+    ],
+    stopOverrides: { maxCalls: 80, maxCostCents: 400 },
+  },
+  canon_architect: {
+    agent: 'canon_architect',
+    systemPrompt: CANON_ARCHITECT_PROMPT,
+    allowedTools: [
+      'getChannelProfile', 'listVideoIntelligenceCards', 'getVideoIntelligenceCard',
+      'searchSegments', 'getSegment',
+      'listVisualMoments', 'getVisualMoment',
+      'proposeCanonNode',
+    ],
+    stopOverrides: { maxCalls: 200, maxCostCents: 1000 },
+  },
+  page_brief_planner: {
+    agent: 'page_brief_planner',
+    systemPrompt: PAGE_BRIEF_PLANNER_PROMPT,
+    allowedTools: [
+      'getChannelProfile', 'listCanonNodes', 'getCanonNode', 'getSegment',
+      'listVisualMoments',
+      'proposePageBrief',
+    ],
+    stopOverrides: { maxCalls: 60, maxCostCents: 300 },
+  },
+  page_writer: {
+    agent: 'page_writer',
+    systemPrompt: PAGE_WRITER_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 200 },
   },
 };
