@@ -68,26 +68,44 @@ export async function runVideoIntelligenceStage(
     );
   }
 
-  // Transcript-size guard: a single video over 120K chars (~20K words) is rejected
-  // before we pay for the agent call.
+  // Transcript-size guard: skip per-video when oversized (do NOT abort the
+  // whole stage). 5.5 chars/word = English avg + space; * 6 was 10-20% high.
   const transcripts = await db
     .select({ videoId: transcriptAsset.videoId, wordCount: transcriptAsset.wordCount })
     .from(transcriptAsset)
     .where(inArray(transcriptAsset.videoId, videoIds));
+  const oversized = new Map<string, number>(); // videoId -> approxChars
   for (const t of transcripts) {
-    const approxChars = (t.wordCount ?? 0) * 6;
+    const approxChars = Math.round((t.wordCount ?? 0) * 5.5);
     if (approxChars > CANON_LIMITS.maxTranscriptCharsPerVideo) {
-      throw new Error(
-        `Transcript for ${t.videoId} ~${approxChars} chars exceeds canon_v1 cap of ${CANON_LIMITS.maxTranscriptCharsPerVideo}. ` +
-        `Run with findings_v1 or shorten the source.`,
-      );
+      oversized.set(t.videoId, approxChars);
     }
+  }
+  const eligibleVideoIds = videoIds.filter((id) => !oversized.has(id));
+  if (eligibleVideoIds.length === 0) {
+    throw new Error(
+      `All ${videoIds.length} videos exceed canon_v1 transcript cap of ${CANON_LIMITS.maxTranscriptCharsPerVideo} chars. ` +
+        `Run with findings_v1 or shorten the sources.`,
+    );
   }
 
   const cfg = SPECIALISTS.video_analyst;
   const model = selectModel('video_analyst', process.env);
 
-  const results = await runWithConcurrency(videoIds, CONCURRENCY, async (videoId) => {
+  // Pre-populate oversized-video failures so the run-result reflects them.
+  const oversizedResults: Array<{
+    videoId: string;
+    ok: boolean;
+    summary: null;
+    error: string;
+  }> = [...oversized.entries()].map(([videoId, approxChars]) => ({
+    videoId,
+    ok: false,
+    summary: null,
+    error: `Transcript ~${approxChars} chars exceeds canon_v1 cap of ${CANON_LIMITS.maxTranscriptCharsPerVideo}; skipped.`,
+  }));
+
+  const results = await runWithConcurrency(eligibleVideoIds, CONCURRENCY, async (videoId) => {
     // Fresh provider per task — providers are cheap to construct and this avoids
     // any shared-state surprises on retries.
     const provider = makeProvider(model.provider);
@@ -114,33 +132,34 @@ export async function runVideoIntelligenceStage(
     }
   });
 
+  const allResults = [...oversizedResults, ...results];
   return {
-    videosAnalyzed: results.filter((r) => r.ok).length,
-    videosFailed: results.filter((r) => !r.ok).length,
-    costCents: results.reduce((acc, r) => acc + (r.summary?.costCents ?? 0), 0),
-    perVideo: results,
+    videosAnalyzed: allResults.filter((r) => r.ok).length,
+    videosFailed: allResults.filter((r) => !r.ok).length,
+    costCents: allResults.reduce((acc, r) => acc + (r.summary?.costCents ?? 0), 0),
+    perVideo: allResults,
   };
 }
 
 /**
- * Materialization validator: every video that had segments in the run must
- * have produced exactly one VIC. Cardinality check — the unique index on
- * (run_id, video_id) means duplicates are impossible at the DB level.
+ * Materialization validator. The cached output.videosAnalyzed is the
+ * authoritative count of cards we expected to land — not segs.length, which
+ * would over-demand when some videos legitimately failed (oversized
+ * transcripts, agent errors). The unique index on (run_id, video_id) means
+ * duplicates are impossible at the DB level, so cards.length >= analyzed
+ * is the right comparison.
  */
 export async function validateVideoIntelligenceMaterialization(
-  _output: VideoIntelligenceStageOutput,
+  output: VideoIntelligenceStageOutput,
   ctx: StageContext,
 ): Promise<boolean> {
+  if (output.videosAnalyzed === 0) return true;
   const db = getDb();
-  const segs = await db
-    .selectDistinct({ videoId: segment.videoId })
-    .from(segment)
-    .where(eq(segment.runId, ctx.runId));
   const cards = await db
     .select({ id: videoIntelligenceCard.id })
     .from(videoIntelligenceCard)
     .where(eq(videoIntelligenceCard.runId, ctx.runId));
-  return cards.length === segs.length;
+  return cards.length >= output.videosAnalyzed;
 }
 
 async function runWithConcurrency<T, U>(

@@ -43,37 +43,57 @@ export interface PageCompositionStageOutput {
   costCents: number;
 }
 
-// Section block schema. Strict: every block needs citationIds (may be empty
-// for visual_example blocks but must be present).
+// Block schema MUST match PAGE_WRITER_PROMPT verbatim. Block kinds and the
+// outer { title, subtitle, blocks } wrapper are dictated by the prompt at
+// packages/pipeline/src/agents/specialists/prompts.ts:254-283.
 const blockKindEnum = z.enum([
-  'overview', 'paragraph', 'principles', 'steps', 'scenes',
-  'workflow', 'common_mistakes', 'failure_points',
-  'quote', 'callout', 'visual_example',
+  'intro',
+  'section',
+  'framework',
+  'callout',
+  'quote',
+  'list',
+  'visual_example',
 ]);
 
-const sectionSchema = z
-  .array(
-    z.object({
-      kind: blockKindEnum,
-      body: z.string().optional(),
-      title: z.string().optional(),
-      items: z
-        .array(z.union([z.string(), z.object({ title: z.string(), body: z.string() })]))
-        .optional(),
-      schedule: z.array(z.object({ day: z.string(), items: z.array(z.string()).min(1) })).optional(),
-      attribution: z.string().optional(),
-      sourceVideoId: z.string().optional(),
-      timestampStart: z.number().optional(),
-      tone: z.enum(['note', 'warn', 'success']).optional(),
-      visualMomentId: z.string().optional(),
-      description: z.string().optional(),
-      citationIds: z.array(z.string()),
-    }),
-  )
-  .min(3)
-  .max(9);
+// Each block carries citationIds (required; may be empty only for visual_example).
+const blockSchema = z.object({
+  kind: blockKindEnum,
+  // intro/section/callout/quote
+  body: z.string().optional(),
+  // section/list/callout/visual_example
+  title: z.string().optional(),
+  // section/list
+  heading: z.string().optional(),
+  // callout
+  tone: z.enum(['tip', 'warning', 'definition', 'example']).optional(),
+  // framework
+  steps: z
+    .array(z.object({ label: z.string(), detail: z.string(), citationIds: z.array(z.string()) }))
+    .optional(),
+  // list
+  items: z
+    .array(z.object({ label: z.string(), detail: z.string(), citationIds: z.array(z.string()) }))
+    .optional(),
+  // quote
+  text: z.string().optional(),
+  attribution: z.string().optional(),
+  // visual_example
+  description: z.string().optional(),
+  visualMomentId: z.string().optional(),
+  timestampMs: z.number().optional(),
+  // every block
+  citationIds: z.array(z.string()),
+});
 
-type Section = z.infer<typeof sectionSchema>[number];
+const writerOutputSchema = z.object({
+  title: z.string(),
+  subtitle: z.string().optional().default(''),
+  blocks: z.array(blockSchema).min(3).max(12),
+});
+
+type WriterOutput = z.infer<typeof writerOutputSchema>;
+type Section = z.infer<typeof blockSchema>;
 
 interface SourcePacketSegment {
   segmentId: string;
@@ -192,11 +212,11 @@ export async function runPageCompositionStage(
       p.recommendedVisualMomentIds ?? [],
     );
 
-    const pageType = (p.pageType ?? 'lesson') as 'lesson' | 'framework' | 'playbook';
+    const pageType = mapBriefPageTypeToEnum(p.pageType);
     const title = p.title ?? 'Untitled';
     const slug = p.slug ?? `pg-${nano()}`;
 
-    let sections: Section[] | null = null;
+    let writerResult: WriterOutput | null = null;
 
     if (writer) {
       try {
@@ -205,7 +225,9 @@ export async function runPageCompositionStage(
           `PRIMARY CANON NODE:\n${JSON.stringify(primary.payload)}\n\n` +
           `SUPPORTING CANON NODES:\n${JSON.stringify(supporting.map((n) => ({ id: n.id, type: n.type, payload: n.payload })))}\n\n` +
           `SOURCE PACKET:\n${JSON.stringify(sourcePacket)}\n\n` +
-          `Return ONE JSON array of section blocks. No prose around it.`;
+          `Return ONE JSON object with shape { title, subtitle, blocks: [...] }. ` +
+          `Every block must include "kind" (intro|section|framework|callout|quote|list|visual_example) ` +
+          `and a non-empty citationIds array referencing segmentIds from the source packet. No prose around the JSON.`;
         const response = await writer.chat({
           modelId: writerModel.modelId,
           messages: [
@@ -214,22 +236,28 @@ export async function runPageCompositionStage(
           ],
           tools: [],
         });
-        const content = response.message.content ?? '[]';
-        // Strip ```json fences if the model adds them despite the prompt.
+        const content = response.message.content ?? '{}';
         const cleaned = stripJsonFence(content);
         const parsed = JSON.parse(cleaned);
-        const validation = sectionSchema.safeParse(parsed);
+        const validation = writerOutputSchema.safeParse(parsed);
         if (validation.success) {
           const validSegIds = new Set(sourcePacket.requiredSegments.map((s) => s.segmentId));
           const validVmIds = new Set(sourcePacket.visuals.map((v) => v.visualMomentId));
-          const cited = validation.data.flatMap((s) => s.citationIds);
+          // Citation IDs come from each block's citationIds AND from nested
+          // step/item citationIds (framework + list blocks).
+          const cited: string[] = [];
+          for (const b of validation.data.blocks) {
+            for (const id of b.citationIds) cited.push(id);
+            for (const s of b.steps ?? []) for (const id of s.citationIds) cited.push(id);
+            for (const it of b.items ?? []) for (const id of it.citationIds) cited.push(id);
+          }
           const invalidCites = cited.filter((id) => !validSegIds.has(id));
-          const visualBlocks = validation.data.filter((s) => s.kind === 'visual_example');
+          const visualBlocks = validation.data.blocks.filter((s) => s.kind === 'visual_example');
           const invalidVms = visualBlocks.filter(
             (b) => !b.visualMomentId || !validVmIds.has(b.visualMomentId),
           );
           if (invalidCites.length === 0 && invalidVms.length === 0) {
-            sections = validation.data;
+            writerResult = validation.data;
             llmWrittenCount += 1;
             costCents += tokenCostCents(
               writerModel.modelId,
@@ -239,14 +267,30 @@ export async function runPageCompositionStage(
           }
         }
       } catch {
-        // Writer call or JSON parse failed → deterministic fallback.
-        sections = null;
+        // Writer call, JSON parse, or schema validation failed -> deterministic fallback.
+        writerResult = null;
       }
     }
 
-    if (!sections) {
+    // Build the final block list. If writer succeeded use its blocks; otherwise
+    // build deterministic ones. The writer's title overrides the brief title.
+    let sections: Section[];
+    let resolvedTitle = title;
+    let resolvedSubtitle = '';
+    if (writerResult) {
+      sections = writerResult.blocks;
+      resolvedTitle = writerResult.title || title;
+      resolvedSubtitle = writerResult.subtitle ?? '';
+    } else {
       sections = buildDeterministicSections(
-        { pageType, readerProblem: p.readerProblem ?? '', promisedOutcome: p.promisedOutcome ?? '', whyThisMatters: p.whyThisMatters ?? '', outline: p.outline ?? [], ctaOrNextStep: p.ctaOrNextStep },
+        {
+          pageType,
+          readerProblem: p.readerProblem ?? '',
+          promisedOutcome: p.promisedOutcome ?? '',
+          whyThisMatters: p.whyThisMatters ?? '',
+          outline: p.outline ?? [],
+          ctaOrNextStep: p.ctaOrNextStep,
+        },
         primary,
         supporting,
         sourcePacket.visuals,
@@ -265,7 +309,7 @@ export async function runPageCompositionStage(
       workspaceId: input.workspaceId,
       runId: input.runId,
       slug,
-      pageType: pageType === 'lesson' || pageType === 'framework' || pageType === 'playbook' ? pageType : 'lesson',
+      pageType,
       position: position++,
       supportLabel: 'review_recommended',
       currentVersionId: versionId,
@@ -279,11 +323,14 @@ export async function runPageCompositionStage(
           s.kind === 'visual_example'
             ? {
                 tone: 'note',
+                title: s.title ?? 'Visual example',
                 body: `Visual example from source: ${s.description ?? ''}`,
                 _visualMomentId: s.visualMomentId,
+                _timestampMs: s.timestampMs,
               }
-            : (({ kind: _k, citationIds: _c, ...rest }) => rest)(s as Record<string, unknown>),
-        citations: s.citationIds,
+            : // Strip kind + citationIds from content (citations live alongside).
+              (({ kind: _k, citationIds: _c, ...rest }) => rest)(s as Record<string, unknown>),
+        citations: collectCitationIds(s),
       })),
       atlasMeta: {
         evidenceQuality: primary.evidenceQuality,
@@ -293,7 +340,7 @@ export async function runPageCompositionStage(
         relatedPageIds: [] as string[],
         hero: {
           illustrationKey:
-            pageType === 'framework' ? 'desk' : pageType === 'playbook' ? 'desk' : 'open-notebook',
+            pageType === 'framework' || pageType === 'playbook' ? 'desk' : 'open-notebook',
         },
         evidenceSegmentIds,
         primaryFindingId: primary.id,
@@ -312,7 +359,8 @@ export async function runPageCompositionStage(
       pageId,
       runId: input.runId,
       version: 1,
-      title,
+      title: resolvedTitle,
+      subtitle: resolvedSubtitle || null,
       summary: p.promisedOutcome,
       blockTreeJson: blockTree,
       isCurrent: true,
@@ -334,6 +382,50 @@ export async function validatePageCompositionMaterialization(
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+type PageTypeEnum = 'hub_home' | 'topic_overview' | 'lesson' | 'playbook' | 'framework' | 'about';
+
+/**
+ * Map the page-brief planner's pageType (which uses an editorial vocabulary —
+ * topic, example_collection, definition, principle, etc.) to the actual DB
+ * `pageTypeEnum`. Unknown values get an honest neighbor (NOT all collapsed
+ * silently to 'lesson').
+ */
+function mapBriefPageTypeToEnum(raw: unknown): PageTypeEnum {
+  if (typeof raw !== 'string') return 'lesson';
+  switch (raw.toLowerCase()) {
+    case 'lesson':
+    case 'definition':
+    case 'principle':
+      return 'lesson';
+    case 'framework':
+      return 'framework';
+    case 'playbook':
+      return 'playbook';
+    case 'topic':
+    case 'topic_overview':
+    case 'example_collection':
+      return 'topic_overview';
+    case 'hub_home':
+      return 'hub_home';
+    case 'about':
+      return 'about';
+    default:
+      return 'lesson';
+  }
+}
+
+/**
+ * Aggregate citationIds for a block. Framework `steps` and list `items` carry
+ * their own per-step citationIds — surface them so the page-quality stage can
+ * count them as transcript-cited.
+ */
+function collectCitationIds(s: Section): string[] {
+  const ids = new Set<string>(s.citationIds);
+  for (const step of s.steps ?? []) for (const id of step.citationIds) ids.add(id);
+  for (const item of s.items ?? []) for (const id of item.citationIds) ids.add(id);
+  return [...ids];
+}
 
 function stripJsonFence(s: string): string {
   const trimmed = s.trim();
@@ -412,6 +504,12 @@ function collectEvidenceSegmentIds(primary: CanonNodeRow, supporting: CanonNodeR
   return [...set];
 }
 
+/**
+ * Deterministic section builder used when the page_writer agent fails or is
+ * unavailable. Emits blocks matching the canonical writer schema (intro,
+ * section, framework, callout, quote, list, visual_example) so a fallback
+ * page passes the same downstream validators as an LLM-written one.
+ */
 function buildDeterministicSections(
   brief: {
     pageType: string;
@@ -429,18 +527,37 @@ function buildDeterministicSections(
   const pp = primary.payload as Record<string, unknown>;
   const cite = primary.evidenceSegmentIds.slice(0, 5);
 
-  out.push({ kind: 'overview', body: brief.whyThisMatters || 'Overview from source material.', citationIds: cite.slice(0, 2) });
-  out.push({ kind: 'callout', tone: 'note', body: brief.readerProblem || 'Why this matters.', citationIds: cite.slice(0, 2) });
+  // 1) intro — required by prompt as exactly one, first.
+  out.push({
+    kind: 'intro',
+    body: brief.whyThisMatters || brief.promisedOutcome || 'Source-grounded summary from the creator archive.',
+    citationIds: cite.slice(0, 2),
+  });
 
-  if (brief.pageType === 'framework' && Array.isArray(pp.principles)) {
-    const items = (pp.principles as Array<{ title?: string; body?: string } | string>)
-      .map((it) =>
-        typeof it === 'string'
-          ? { title: it.slice(0, 60), body: it }
-          : { title: it.title ?? 'Principle', body: it.body ?? '' },
-      )
-      .filter((it) => it.body);
-    if (items.length > 0) out.push({ kind: 'principles', items, citationIds: cite });
+  // 2) reader-problem callout
+  if (brief.readerProblem) {
+    out.push({
+      kind: 'callout',
+      tone: 'definition',
+      title: 'The problem',
+      body: brief.readerProblem,
+      citationIds: cite.slice(0, 2),
+    });
+  }
+
+  // 3) framework | list (depending on page type)
+  if (brief.pageType === 'framework' && Array.isArray(pp.steps) && (pp.steps as unknown[]).length > 0) {
+    const steps = (pp.steps as Array<string | { title?: string; body?: string }>).map((s, i) => {
+      const label = typeof s === 'string' ? `Step ${i + 1}` : s.title ?? `Step ${i + 1}`;
+      const detail = typeof s === 'string' ? s : s.body ?? '';
+      return { label, detail, citationIds: cite.slice(0, 2) };
+    });
+    out.push({
+      kind: 'framework',
+      title: brief.outline[0] ?? 'Framework',
+      steps,
+      citationIds: cite,
+    });
   } else if (brief.pageType === 'playbook' && (Array.isArray(pp.workflow) || Array.isArray(pp.scenes))) {
     const sched = (pp.workflow ?? pp.scenes) as Array<{
       day?: string;
@@ -448,54 +565,107 @@ function buildDeterministicSections(
       items?: string[];
       description?: string;
     }>;
-    const schedule = sched
+    const items = sched
       .map((s) => ({
-        day: s.day ?? s.title ?? 'Step',
-        items: s.items ?? (s.description ? [s.description] : []),
+        label: s.day ?? s.title ?? 'Step',
+        detail: (s.items ?? []).join('; ') || s.description || '',
+        citationIds: cite.slice(0, 2),
       }))
-      .filter((s) => s.items.length > 0 && s.items.every((i) => i));
-    if (schedule.length > 0) out.push({ kind: 'workflow', schedule, citationIds: cite });
-  } else if (typeof pp.idea === 'string') {
-    out.push({ kind: 'paragraph', body: pp.idea, citationIds: cite });
+      .filter((it) => it.detail);
+    if (items.length > 0) {
+      out.push({
+        kind: 'list',
+        title: 'Workflow',
+        items,
+        citationIds: cite,
+      });
+    }
+  } else if (Array.isArray(pp.principles)) {
+    const items = (pp.principles as Array<{ title?: string; body?: string } | string>)
+      .map((it) =>
+        typeof it === 'string'
+          ? { label: it.slice(0, 60), detail: it, citationIds: cite.slice(0, 2) }
+          : { label: it.title ?? 'Principle', detail: it.body ?? '', citationIds: cite.slice(0, 2) },
+      )
+      .filter((it) => it.detail);
+    if (items.length > 0) {
+      out.push({
+        kind: 'list',
+        title: 'Principles',
+        items,
+        citationIds: cite,
+      });
+    }
   }
 
-  if (brief.pageType === 'framework' && Array.isArray(pp.steps) && (pp.steps as unknown[]).length > 0) {
-    const items = (pp.steps as Array<string | { title?: string; body?: string }>).map((s, i) =>
-      typeof s === 'string' ? { title: `Step ${i + 1}`, body: s } : { title: s.title ?? `Step ${i + 1}`, body: s.body ?? '' },
-    );
-    out.push({ kind: 'steps', title: 'Steps', items, citationIds: cite });
+  // 4) supporting paragraph from primary canon node text
+  if (typeof pp.idea === 'string') {
+    out.push({ kind: 'section', heading: 'Why it works', body: pp.idea, citationIds: cite });
   }
 
+  // 5) example (if a supporting example or quote-style node exists)
+  const exampleNode = supporting.find((s) => s.type === 'example');
+  if (exampleNode) {
+    const ep = exampleNode.payload as { text?: string; description?: string };
+    const body = ep.description ?? ep.text ?? '';
+    if (body) {
+      out.push({
+        kind: 'section',
+        heading: 'Example from the archive',
+        body,
+        citationIds: exampleNode.evidenceSegmentIds.slice(0, 2),
+      });
+    }
+  }
+
+  // 6) visual_example (if a recommended visual moment is in the source packet)
   if (visuals.length > 0) {
     out.push({
       kind: 'visual_example',
-      visualMomentId: visuals[0]!.visualMomentId,
+      title: 'See it in the source',
       description: visuals[0]!.description,
+      visualMomentId: visuals[0]!.visualMomentId,
+      timestampMs: visuals[0]!.timestampMs,
+      // Visual blocks intentionally have empty citationIds — the segment cite
+      // travels with their adjacent transcript blocks.
       citationIds: [],
     });
   }
 
-  const exampleNode = supporting.find((s) => s.type === 'example' || s.type === 'quote');
-  if (exampleNode) {
-    const ep = exampleNode.payload as { text?: string; description?: string; quote?: string };
-    const body = ep.description ?? ep.text ?? ep.quote ?? '';
-    if (body) out.push({ kind: 'paragraph', body, citationIds: exampleNode.evidenceSegmentIds.slice(0, 2) });
+  // 7) quote (closing or standalone)
+  const quoteNode = supporting.find((s) => s.type === 'quote' || s.type === 'aha_moment');
+  if (quoteNode) {
+    const qp = quoteNode.payload as { text?: string; quote?: string; attribution?: string };
+    const text = qp.text ?? qp.quote ?? '';
+    if (text) {
+      out.push({
+        kind: 'quote',
+        text,
+        attribution: qp.attribution,
+        citationIds: quoteNode.evidenceSegmentIds.slice(0, 1),
+      });
+    }
   }
 
-  const quote = supporting.find((s) => s.type === 'quote' || s.type === 'aha_moment');
-  if (quote) {
-    const qp = quote.payload as { text?: string; quote?: string; attribution?: string };
-    const body = qp.text ?? qp.quote ?? '';
-    if (body) out.push({ kind: 'quote', body, attribution: qp.attribution, citationIds: quote.evidenceSegmentIds.slice(0, 1) });
-  }
-
+  // 8) cta callout
   if (brief.ctaOrNextStep) {
-    out.push({ kind: 'callout', tone: 'note', body: brief.ctaOrNextStep, citationIds: [] });
+    out.push({
+      kind: 'callout',
+      tone: 'tip',
+      title: 'Next',
+      body: brief.ctaOrNextStep,
+      citationIds: cite.slice(0, 1),
+    });
   }
 
-  // Schema requires min 3 sections — pad with a generic close if needed.
+  // Pad to minimum 3 if a sparse canon node leaves us too short.
   while (out.length < 3) {
-    out.push({ kind: 'paragraph', body: brief.promisedOutcome || 'See the source material for more.', citationIds: cite.slice(0, 1) });
+    out.push({
+      kind: 'section',
+      heading: brief.outline[out.length] ?? 'Notes',
+      body: brief.promisedOutcome || 'See the source material for more.',
+      citationIds: cite.slice(0, 1),
+    });
   }
 
   return out;
