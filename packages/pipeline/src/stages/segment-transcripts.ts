@@ -126,8 +126,8 @@ export async function segmentTranscripts(
       runId: input.runId,
       videoId: norm.videoId,
       normalizedTranscriptVersionId: normVersionId,
-      startMs: s.startMs,
-      endMs: s.endMs,
+      startMs: Math.round(s.startMs),
+      endMs: Math.round(s.endMs),
       text: s.text,
     }));
 

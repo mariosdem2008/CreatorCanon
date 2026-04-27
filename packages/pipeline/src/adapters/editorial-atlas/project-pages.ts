@@ -83,8 +83,15 @@ export async function projectPages({
           b.type === 'quote' && 'text' in content
             ? { ...content, body: (content as Record<string, unknown>)['text'], text: undefined }
             : content;
+        // 'steps' sections require a top-level title in the manifest schema;
+        // the composer doesn't always produce one, so fall back to "Steps".
+        const titleFallback =
+          b.type === 'steps' && !(normalizedContent as Record<string, unknown>)['title']
+            ? { title: 'Steps' }
+            : {};
         return {
           kind: b.type,
+          ...titleFallback,
           ...normalizedContent,
           citationIds: b.citations,
         };

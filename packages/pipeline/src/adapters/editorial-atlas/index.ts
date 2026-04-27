@@ -15,12 +15,21 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
   const db = getDb();
 
   const hubRow = (await db.select().from(hub).where(eq(hub.id, hubId)).limit(1))[0];
-  const releaseRow = (
-    await db.select().from(release).where(eq(release.id, releaseId)).limit(1)
-  )[0];
-  if (!hubRow || !releaseRow) {
+  // releaseId='unpublished' is a sentinel meaning the manifest is being
+  // generated before a release row exists (publishRunAsHub will overwrite
+  // releaseId in the published copy of this manifest). Treat as missing.
+  const releaseRow =
+    releaseId === 'unpublished'
+      ? undefined
+      : (
+          await db.select().from(release).where(eq(release.id, releaseId)).limit(1)
+        )[0];
+  if (!hubRow) {
+    throw new Error(`Adapter: hub not found (hubId=${hubId})`);
+  }
+  if (releaseId !== 'unpublished' && !releaseRow) {
     throw new Error(
-      `Adapter: hub or release not found (hubId=${hubId}, releaseId=${releaseId})`,
+      `Adapter: release not found (hubId=${hubId}, releaseId=${releaseId})`,
     );
   }
   const projectRow = (
@@ -66,7 +75,7 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
     releaseId,
     hubSlug: hubRow.subdomain,
     visibility,
-    publishedAt: releaseRow.liveAt?.toISOString() ?? null,
+    publishedAt: releaseRow?.liveAt?.toISOString() ?? null,
     generatedAt: new Date().toISOString(),
     title: projectRow.title,
     tagline:
