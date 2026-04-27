@@ -108,8 +108,11 @@ export async function projectPages({
             : {};
         return {
           kind: b.type,
-          ...titleFallback,
+          // normalizedContent first so a real title from the composer wins;
+          // titleFallback only kicks in (and overrides title:undefined) when
+          // the composer didn't supply one.
           ...normalizedContent,
+          ...titleFallback,
           citationIds: b.citations,
         };
       }).map((s) => enrichQuoteSection(s as SectionLike, segmentLookup))
