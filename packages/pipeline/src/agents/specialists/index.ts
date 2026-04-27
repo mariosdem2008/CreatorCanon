@@ -77,15 +77,14 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_fr
   video_analyst: {
     agent: 'video_analyst',
     systemPrompt: VIDEO_ANALYST_PROMPT,
-    // getFullTranscript intentionally excluded — agent must cite segmentIds it
-    // actually loaded via getSegmentedTranscript. Concatenated text returns no
-    // IDs and would invite hallucinated citations.
+    // Channel profile + transcript + visual moments are pre-loaded in the
+    // user message. Only getSegment is kept for last-mile quote verification.
     allowedTools: [
-      'getChannelProfile', 'getSegmentedTranscript', 'searchSegments', 'getSegment',
-      'listVisualMoments', 'getVisualMoment',
+      'getSegment',
       'proposeVideoIntelligenceCard',
     ],
-    stopOverrides: { maxCalls: 80, maxCostCents: 600 },
+    // Tighter caps reflect the single-shot expectation.
+    stopOverrides: { maxCalls: 8, maxCostCents: 150 },
   },
   canon_architect: {
     agent: 'canon_architect',

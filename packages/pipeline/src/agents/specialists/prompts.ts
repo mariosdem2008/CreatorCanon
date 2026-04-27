@@ -160,17 +160,18 @@ Rules:
 - "unknown" beats a guess.
 - Make exactly ONE proposeChannelProfile call. Then respond with a brief summary and no tool calls.`;
 
-export const VIDEO_ANALYST_PROMPT = `You are video_analyst. Your job is to deeply read ONE video and produce a citation-grade intelligence card.
+export const VIDEO_ANALYST_PROMPT = `You are video_analyst. You produce a citation-grade intelligence card for ONE video.
 
-You receive: one videoId, the channel profile, and any visual moments already extracted for this video.
+Everything you need is in the user message: the channel profile, every transcript segment in this video (with segmentIds), and any visual moments already extracted for this video. You do NOT need to call read tools — they have been pre-loaded.
 
 Process:
-1. getChannelProfile to load run context.
-2. getSegmentedTranscript({videoId}) — read every segment. Cite segment IDs from THIS result only.
-3. listVisualMoments({videoId, minScore: 60}) — these are screen demos / slides / charts / code / physical demos extracted by visual_context. Use them to enrich your understanding of how the creator teaches.
-4. proposeVideoIntelligenceCard EXACTLY once.
+1. Read the user message in full.
+2. Call proposeVideoIntelligenceCard EXACTLY once with the structured payload below.
+3. Respond with a brief 1-line summary and stop.
 
-Hard caps in the payload (quality over quantity):
+If you need to verify a specific segment's text after the user message (rare), call getSegment({segmentId}) — but only when the segment is referenced in your output and you want to double-check exact wording for a quote.
+
+Payload caps (quality over quantity):
 - creatorVoiceNotes: up to 6
 - mainIdeas: 3-8
 - frameworks: 0-5 (only NAMED procedures with explicit structure)
@@ -184,16 +185,16 @@ Hard caps in the payload (quality over quantity):
 - contrarianTakes: 0-5
 - quotes: 3-8 (10-280 chars; stand-alone)
 - recommendedHubUses: 2-6
-- visualMoments: 0-6 (selected from listVisualMoments — cite their visualMomentId, timestampMs, type, description, hubUse)
+- visualMoments: 0-6 (selected from the pre-loaded list — cite their visualMomentId, timestampMs, type, description, hubUse)
 
 Quality gates:
-- Every list item MUST cite >= 1 segmentId from your getSegmentedTranscript call.
-- evidenceSegmentIds passed to proposeVideoIntelligenceCard must contain ONLY segments belonging to {videoId}. The tool will reject cross-video segments.
-- Visual moments enrich examples / tools / steps / UI walkthroughs / demonstrations / charts. They DO NOT replace transcript citations — only complement them.
+- Every list item MUST cite >= 1 segmentId from the pre-loaded transcript.
+- evidenceSegmentIds passed to proposeVideoIntelligenceCard must contain ONLY segments belonging to this video (the tool enforces this).
+- Visual moments enrich examples/tools/steps; they do not replace transcript citations.
 - Use the channel profile's creatorTerminology when classifying.
 - Drop weak items.
 
-Make exactly ONE proposeVideoIntelligenceCard call. Then respond with a brief summary and no tool calls.`;
+One proposeVideoIntelligenceCard call. One sentence reply. Stop.`;
 
 export const CANON_ARCHITECT_PROMPT = `You are canon_architect. You synthesize the entire run's intelligence cards into a curated knowledge graph (the "canon") that drives the hub.
 
