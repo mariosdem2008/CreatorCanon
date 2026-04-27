@@ -17,7 +17,7 @@ export const channelProfile = pgTable('channel_profile', {
   workspaceId: text('workspace_id').notNull().references(() => workspace.id, { onDelete: 'cascade' }),
   runId: text('run_id').notNull().references(() => generationRun.id, { onDelete: 'cascade' }),
   payload: jsonb('payload').notNull(),
-  costCents: numeric('cost_cents', { precision: 10, scale: 4 }).notNull().default('0'),
+  costCents: numeric('cost_cents', { precision: 12, scale: 4 }).notNull().default('0'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (t) => ({
   runUnique: uniqueIndex('channel_profile_run_unique').on(t.runId),
@@ -30,7 +30,7 @@ export const videoIntelligenceCard = pgTable('video_intelligence_card', {
   videoId: text('video_id').notNull().references(() => video.id, { onDelete: 'cascade' }),
   payload: jsonb('payload').notNull(),
   evidenceSegmentIds: text('evidence_segment_ids').array().notNull().default([]),
-  costCents: numeric('cost_cents', { precision: 10, scale: 4 }).notNull().default('0'),
+  costCents: numeric('cost_cents', { precision: 12, scale: 4 }).notNull().default('0'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (t) => ({
   runVideoUnique: uniqueIndex('vic_run_video_unique').on(t.runId, t.videoId),

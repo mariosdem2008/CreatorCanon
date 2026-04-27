@@ -330,15 +330,18 @@ export const getVisualMomentTool: ToolDef<{ id: string }, z.infer<typeof visualM
 // Transcript helpers (for channel/video analysts that ingest full text)
 // ---------------------------------------------------------------------------
 
+const TRUNCATION_MARKER = '\n[... transcript truncated at character cap ...]';
+
 const fullTranscriptSchema = z.object({
   videoId: z.string(),
   text: z.string(),
   segmentCount: z.number().int(),
+  truncated: z.boolean(),
 });
 
 export const getFullTranscriptTool: ToolDef<{ videoId: string; maxChars?: number }, z.infer<typeof fullTranscriptSchema>> = {
   name: 'getFullTranscript',
-  description: 'Concatenate all segments of one video into a single transcript string. Defaults to 120K char cap; truncates with "[...]" marker.',
+  description: 'Concatenate all segments of one video into a single transcript string. Defaults to 120K char cap; if exceeded, returns truncated=true and a "[...]" marker (the marker counts toward the cap, so the returned string never exceeds maxChars).',
   input: z.object({
     videoId: z.string().min(1),
     maxChars: z.number().int().min(1000).max(500_000).optional(),
@@ -352,17 +355,20 @@ export const getFullTranscriptTool: ToolDef<{ videoId: string; maxChars?: number
       .where(and(eq(segment.runId, ctx.runId), eq(segment.workspaceId, ctx.workspaceId), eq(segment.videoId, videoId)))
       .orderBy(asc(segment.startMs));
     if (rows.length === 0) throw new Error(`No segments for video '${videoId}' in run '${ctx.runId}'`);
+    // Budget the truncation marker length up front so the returned string can never exceed `cap`.
+    const usableCap = Math.max(0, cap - TRUNCATION_MARKER.length);
     let acc = '';
     let truncated = false;
     for (const r of rows) {
-      if (acc.length + r.text.length + 1 > cap) {
-        acc += '\n[... transcript truncated at character cap ...]';
+      const sep = acc ? 1 : 0;
+      if (acc.length + r.text.length + sep > usableCap) {
+        acc += TRUNCATION_MARKER;
         truncated = true;
         break;
       }
       acc += (acc ? '\n' : '') + r.text;
     }
-    return { videoId, text: acc, segmentCount: rows.length };
+    return { videoId, text: acc, segmentCount: rows.length, truncated };
   },
 };
 

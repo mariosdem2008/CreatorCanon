@@ -7,8 +7,30 @@ import {
   pageBrief,
   visualMoment,
   segment,
+  generationRun,
 } from '@creatorcanon/db/schema';
 import type { ToolDef, ToolCtx } from './types';
+
+// Defense-in-depth: every propose handler asserts the run belongs to ctx.workspaceId
+// before doing any work. The harness controls ctx, but this guards against future
+// refactors or tests that synthesize a ctx with mismatched ids.
+let runWorkspaceCache: { runId: string; workspaceId: string } | null = null;
+async function assertRunInWorkspace(ctx: ToolCtx): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (runWorkspaceCache && runWorkspaceCache.runId === ctx.runId && runWorkspaceCache.workspaceId === ctx.workspaceId) {
+    return { ok: true };
+  }
+  const rows = await ctx.db
+    .select({ workspaceId: generationRun.workspaceId })
+    .from(generationRun)
+    .where(eq(generationRun.id, ctx.runId))
+    .limit(1);
+  if (!rows[0]) return { ok: false, error: `Run ${ctx.runId} not found` };
+  if (rows[0].workspaceId !== ctx.workspaceId) {
+    return { ok: false, error: `Run ${ctx.runId} does not belong to workspace ${ctx.workspaceId}` };
+  }
+  runWorkspaceCache = { runId: ctx.runId, workspaceId: ctx.workspaceId };
+  return { ok: true };
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -111,35 +133,37 @@ const channelProfileInput = z.object({
 
 export const proposeChannelProfileTool: ToolDef<z.infer<typeof channelProfileInput>, Result> = {
   name: 'proposeChannelProfile',
-  description: 'Upsert the channel profile for this run. Idempotent on runId — re-calling overwrites the prior payload.',
+  description: 'Upsert the channel profile for this run. Atomic on runId — concurrent calls cannot create duplicates.',
   input: channelProfileInput,
   output: resultSchema,
   handler: async (input, ctx) => {
-    const existing = await ctx.db
-      .select({ id: channelProfile.id })
-      .from(channelProfile)
-      .where(and(eq(channelProfile.runId, ctx.runId), eq(channelProfile.workspaceId, ctx.workspaceId)))
-      .limit(1);
-    if (existing[0]) {
-      await ctx.db
-        .update(channelProfile)
-        .set({ payload: input.payload, costCents: String(input.costCents ?? 0) })
-        .where(eq(channelProfile.id, existing[0].id));
-      return { ok: true, id: existing[0].id };
-    }
+    const runCheck = await assertRunInWorkspace(ctx);
+    if (!runCheck.ok) return { ok: false, error: runCheck.error };
+
     const id = makeId('cp');
     try {
-      await ctx.db.insert(channelProfile).values({
-        id,
-        workspaceId: ctx.workspaceId,
-        runId: ctx.runId,
-        payload: input.payload,
-        costCents: String(input.costCents ?? 0),
-      });
+      const inserted = await ctx.db
+        .insert(channelProfile)
+        .values({
+          id,
+          workspaceId: ctx.workspaceId,
+          runId: ctx.runId,
+          payload: input.payload,
+          costCents: String(input.costCents ?? 0),
+        })
+        .onConflictDoUpdate({
+          target: channelProfile.runId,
+          set: {
+            payload: input.payload,
+            costCents: String(input.costCents ?? 0),
+          },
+        })
+        .returning({ id: channelProfile.id });
+      const persistedId = inserted[0]?.id ?? id;
+      return { ok: true, id: persistedId };
     } catch (err) {
-      return { ok: false, error: `channel_profile insert failed: ${(err as Error).message}` };
+      return { ok: false, error: `channel_profile upsert failed: ${(err as Error).message}` };
     }
-    return { ok: true, id };
   },
 };
 
@@ -166,10 +190,13 @@ const videoIntelligenceCardInput = z.object({
 export const proposeVideoIntelligenceCardTool: ToolDef<z.infer<typeof videoIntelligenceCardInput>, Result> = {
   name: 'proposeVideoIntelligenceCard',
   description:
-    'Upsert the intelligence card for one video in this run. evidenceSegmentIds must all belong to {videoId}. visualMoments (if any) must reference moments persisted in this run.',
+    'Upsert the intelligence card for one video in this run. evidenceSegmentIds must all belong to {videoId}. visualMoments (if any) must reference moments persisted in this run. Any payload.visualMoments key smuggled by the agent is stripped — only the validated input.visualMoments are persisted.',
   input: videoIntelligenceCardInput,
   output: resultSchema,
   handler: async (input, ctx) => {
+    const runCheck = await assertRunInWorkspace(ctx);
+    if (!runCheck.ok) return { ok: false, error: runCheck.error };
+
     // 1) videoId must have segments in this run.
     const own = await ctx.db
       .select({ id: segment.id })
@@ -191,48 +218,39 @@ export const proposeVideoIntelligenceCardTool: ToolDef<z.infer<typeof videoIntel
       if (!vmCheck.ok) return { ok: false, error: vmCheck.error };
     }
 
-    // 4) Embed visualMoments inside payload (canonical place agents read from).
+    // 4) Sanitize: strip any payload.visualMoments the agent might smuggle (only validated input.visualMoments allowed).
     const payloadOut: Record<string, unknown> = { ...input.payload };
+    delete payloadOut.visualMoments;
     if (input.visualMoments) payloadOut.visualMoments = input.visualMoments;
 
-    // 5) Upsert on (runId, videoId).
-    const existing = await ctx.db
-      .select({ id: videoIntelligenceCard.id })
-      .from(videoIntelligenceCard)
-      .where(and(
-        eq(videoIntelligenceCard.runId, ctx.runId),
-        eq(videoIntelligenceCard.workspaceId, ctx.workspaceId),
-        eq(videoIntelligenceCard.videoId, input.videoId),
-      ))
-      .limit(1);
-
-    if (existing[0]) {
-      await ctx.db
-        .update(videoIntelligenceCard)
-        .set({
+    // 5) Atomic upsert on (runId, videoId).
+    const id = makeId('vic');
+    try {
+      const inserted = await ctx.db
+        .insert(videoIntelligenceCard)
+        .values({
+          id,
+          workspaceId: ctx.workspaceId,
+          runId: ctx.runId,
+          videoId: input.videoId,
           payload: payloadOut,
           evidenceSegmentIds: [...new Set(input.evidenceSegmentIds)],
           costCents: String(input.costCents ?? 0),
         })
-        .where(eq(videoIntelligenceCard.id, existing[0].id));
-      return { ok: true, id: existing[0].id };
-    }
-
-    const id = makeId('vic');
-    try {
-      await ctx.db.insert(videoIntelligenceCard).values({
-        id,
-        workspaceId: ctx.workspaceId,
-        runId: ctx.runId,
-        videoId: input.videoId,
-        payload: payloadOut,
-        evidenceSegmentIds: [...new Set(input.evidenceSegmentIds)],
-        costCents: String(input.costCents ?? 0),
-      });
+        .onConflictDoUpdate({
+          target: [videoIntelligenceCard.runId, videoIntelligenceCard.videoId],
+          set: {
+            payload: payloadOut,
+            evidenceSegmentIds: [...new Set(input.evidenceSegmentIds)],
+            costCents: String(input.costCents ?? 0),
+          },
+        })
+        .returning({ id: videoIntelligenceCard.id });
+      const persistedId = inserted[0]?.id ?? id;
+      return { ok: true, id: persistedId };
     } catch (err) {
-      return { ok: false, error: `video_intelligence_card insert failed: ${(err as Error).message}` };
+      return { ok: false, error: `video_intelligence_card upsert failed: ${(err as Error).message}` };
     }
-    return { ok: true, id };
   },
 };
 
@@ -261,14 +279,16 @@ const canonNodeInput = z.object({
   type: canonNodeTypeEnum,
   payload: z.record(z.unknown()),
   evidenceSegmentIds: z.array(z.string()).max(200),
-  sourceVideoIds: z.array(z.string()).min(1).max(50),
+  sourceVideoIds: z.array(z.string().min(1)).min(1).max(50),
   evidenceQuality: evidenceQualityEnum,
   origin: originEnum.optional(),
-  confidenceScore: z.number().int().min(0).max(100).optional(),
-  pageWorthinessScore: z.number().int().min(0).max(100).optional(),
-  specificityScore: z.number().int().min(0).max(100).optional(),
-  creatorUniquenessScore: z.number().int().min(0).max(100).optional(),
-  visualMomentIds: z.array(z.string()).max(20).optional(),
+  // Scores are required (0-100). Default-zero made it impossible to distinguish
+  // "agent forgot" from "explicitly low-confidence" — agents must commit a number.
+  confidenceScore: z.number().int().min(0).max(100),
+  pageWorthinessScore: z.number().int().min(0).max(100),
+  specificityScore: z.number().int().min(0).max(100),
+  creatorUniquenessScore: z.number().int().min(0).max(100),
+  visualMomentIds: z.array(z.string().min(1)).max(20).optional(),
 }).strict();
 
 export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Result> = {
@@ -278,6 +298,9 @@ export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Resul
   input: canonNodeInput,
   output: resultSchema,
   handler: async (input, ctx) => {
+    const runCheck = await assertRunInWorkspace(ctx);
+    if (!runCheck.ok) return { ok: false, error: runCheck.error };
+
     // Segments in run (any video).
     const segCheck = await validateSegmentsInRun(input.evidenceSegmentIds, ctx);
     if (!segCheck.ok) return { ok: false, error: segCheck.error };
@@ -305,8 +328,9 @@ export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Resul
       if (!vmCheck.ok) return { ok: false, error: vmCheck.error };
     }
 
-    // Embed visualMomentIds in payload for downstream readers.
+    // Sanitize: agents may smuggle visualMomentIds via raw payload; only validated input.visualMomentIds count.
     const payloadOut: Record<string, unknown> = { ...input.payload };
+    delete payloadOut.visualMomentIds;
     if (input.visualMomentIds && input.visualMomentIds.length > 0) {
       payloadOut.visualMomentIds = [...new Set(input.visualMomentIds)];
     }
@@ -328,12 +352,12 @@ export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Resul
         sourceVideoIds: [...new Set(input.sourceVideoIds)],
         evidenceQuality: input.evidenceQuality,
         origin,
-        confidenceScore: input.confidenceScore ?? 0,
+        confidenceScore: input.confidenceScore,
         citationCount,
         sourceCoverage,
-        pageWorthinessScore: input.pageWorthinessScore ?? 0,
-        specificityScore: input.specificityScore ?? 0,
-        creatorUniquenessScore: input.creatorUniquenessScore ?? 0,
+        pageWorthinessScore: input.pageWorthinessScore,
+        specificityScore: input.specificityScore,
+        creatorUniquenessScore: input.creatorUniquenessScore,
       });
     } catch (err) {
       return { ok: false, error: `canon_node insert failed: ${(err as Error).message}` };
@@ -362,6 +386,9 @@ export const proposePageBriefTool: ToolDef<z.infer<typeof pageBriefInput>, Resul
   input: pageBriefInput,
   output: resultSchema,
   handler: async (input, ctx) => {
+    const runCheck = await assertRunInWorkspace(ctx);
+    if (!runCheck.ok) return { ok: false, error: runCheck.error };
+
     const allNodeIds = [...input.primaryCanonNodeIds, ...(input.supportingCanonNodeIds ?? [])];
     const nodeCheck = await validateCanonNodesInRun(allNodeIds, ctx);
     if (!nodeCheck.ok) return { ok: false, error: nodeCheck.error };
@@ -371,11 +398,13 @@ export const proposePageBriefTool: ToolDef<z.infer<typeof pageBriefInput>, Resul
       if (!vmCheck.ok) return { ok: false, error: vmCheck.error };
     }
 
-    const payloadOut: Record<string, unknown> = {
-      ...input.payload,
-      primaryCanonNodeIds: [...new Set(input.primaryCanonNodeIds)],
-      supportingCanonNodeIds: [...new Set(input.supportingCanonNodeIds ?? [])],
-    };
+    // Sanitize: only validated arg-level IDs win — strip any matching keys from raw payload.
+    const payloadOut: Record<string, unknown> = { ...input.payload };
+    delete payloadOut.primaryCanonNodeIds;
+    delete payloadOut.supportingCanonNodeIds;
+    delete payloadOut.recommendedVisualMomentIds;
+    payloadOut.primaryCanonNodeIds = [...new Set(input.primaryCanonNodeIds)];
+    payloadOut.supportingCanonNodeIds = [...new Set(input.supportingCanonNodeIds ?? [])];
     if (input.recommendedVisualMomentIds && input.recommendedVisualMomentIds.length > 0) {
       payloadOut.recommendedVisualMomentIds = [...new Set(input.recommendedVisualMomentIds)];
     }
@@ -408,10 +437,11 @@ const visualMomentTypeEnum = z.enum([
 
 const visualMomentInput = z.object({
   videoId: z.string().min(1),
-  segmentId: z.string().optional(),
+  // .min(1) prevents empty-string from sneaking past `if (input.segmentId)` later.
+  segmentId: z.string().min(1).optional(),
   timestampMs: z.number().int().min(0),
-  frameR2Key: z.string().optional(),
-  thumbnailR2Key: z.string().optional(),
+  frameR2Key: z.string().min(1).optional(),
+  thumbnailR2Key: z.string().min(1).optional(),
   type: visualMomentTypeEnum,
   description: z.string().min(1),
   extractedText: z.string().optional(),
@@ -427,6 +457,9 @@ export const proposeVisualMomentTool: ToolDef<z.infer<typeof visualMomentInput>,
   input: visualMomentInput,
   output: resultSchema,
   handler: async (input, ctx) => {
+    const runCheck = await assertRunInWorkspace(ctx);
+    if (!runCheck.ok) return { ok: false, error: runCheck.error };
+
     // 1) videoId in run.
     const own = await ctx.db
       .select({ id: segment.id })
@@ -435,7 +468,7 @@ export const proposeVisualMomentTool: ToolDef<z.infer<typeof visualMomentInput>,
       .limit(1);
     if (!own[0]) return { ok: false, error: `videoId ${input.videoId} has no segments in run ${ctx.runId}` };
 
-    // 2) segmentId ownership (if provided).
+    // 2) segmentId ownership (if provided — schema enforces .min(1), so empty string can never reach here).
     if (input.segmentId) {
       const segCheck = await validateSegmentsInRun([input.segmentId], ctx, input.videoId);
       if (!segCheck.ok) return { ok: false, error: segCheck.error };
