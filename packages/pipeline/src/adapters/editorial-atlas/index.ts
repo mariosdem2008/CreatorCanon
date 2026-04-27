@@ -1,5 +1,5 @@
-import { eq, getDb } from '@creatorcanon/db';
-import { hub, release, project } from '@creatorcanon/db/schema';
+import { eq, getDb, inArray } from '@creatorcanon/db';
+import { hub, release, project, segment, video as videoTable } from '@creatorcanon/db/schema';
 import type { EditorialAtlasManifest } from './manifest-types';
 import type { AdapterFn } from '../types';
 import { projectCreator } from './project-creator';
@@ -10,6 +10,7 @@ import { projectSources } from './project-sources';
 import { projectNavigation } from './project-navigation';
 import { projectTrust } from './project-trust';
 import { projectHighlights } from './project-highlights';
+import { buildPageCitations } from './project-citations';
 
 export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, releaseId }) => {
   const db = getDb();
@@ -49,10 +50,42 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
   const highlights = await projectHighlights({ runId, db, publishedPageFindingIds });
   const sources = await projectSources({ runId, db, pages: pagesWithInternal });
 
-  // Strip _internal from pages and cast citations to the correct (empty) shape.
+  // Build per-page citations from segment + video lookups so the manifest
+  // carries real evidence references (matches the citationSchema in apps/web).
+  const allSegmentIds = new Set<string>();
+  for (const p of pagesWithInternal) {
+    for (const id of p._internal.evidenceSegmentIds) allSegmentIds.add(id);
+  }
+  const segmentRows = allSegmentIds.size
+    ? await db
+        .select({
+          id: segment.id,
+          videoId: segment.videoId,
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+          text: segment.text,
+        })
+        .from(segment)
+        .where(inArray(segment.id, [...allSegmentIds]))
+    : [];
+  const citationVideoIds = [...new Set(segmentRows.map((s) => s.videoId))];
+  const citationVideoRows = citationVideoIds.length
+    ? await db
+        .select({ id: videoTable.id, title: videoTable.title, youtubeVideoId: videoTable.youtubeVideoId })
+        .from(videoTable)
+        .where(inArray(videoTable.id, citationVideoIds))
+    : [];
+  const citationsByPage = buildPageCitations({
+    pages: pagesWithInternal.map((p) => ({
+      id: p.id,
+      evidenceSegmentIds: p._internal.evidenceSegmentIds,
+    })),
+    segments: segmentRows,
+    videos: citationVideoRows,
+  });
   const pages = pagesWithInternal.map(({ _internal: _dropped, ...rest }) => ({
     ...rest,
-    citations: [] as EditorialAtlasManifest['pages'][number]['citations'],
+    citations: (citationsByPage.get(rest.id) ?? []) as EditorialAtlasManifest['pages'][number]['citations'],
   }));
 
   const stats = await projectStats({
