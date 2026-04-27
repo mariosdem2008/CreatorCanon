@@ -35,9 +35,11 @@ function deriveSourceCoveragePercent(meta: { sourceCoveragePercent?: number } | 
   const distinct = m.distinctSourceVideos;
   const total = m.totalSelectedVideos;
   if (typeof distinct === 'number' && typeof total === 'number' && total > 0) {
-    return Math.min(1, distinct / total);
+    return Math.min(1, Math.max(0, distinct / total));
   }
-  return typeof m.sourceCoveragePercent === 'number' ? m.sourceCoveragePercent : 0;
+  // Legacy runs may have written sourceCoveragePercent unbounded; clamp on read.
+  const raw = typeof m.sourceCoveragePercent === 'number' ? m.sourceCoveragePercent : 0;
+  return Math.min(1, Math.max(0, raw));
 }
 
 function plainText(s: string): string {
@@ -112,10 +114,16 @@ export async function projectPages({
       const sections = tree.blocks.map((b) => {
         const content = b.content ?? {};
         // For quote sections, `text` → `body` to satisfy the manifest schema.
-        const normalizedContent =
-          b.type === 'quote' && 'text' in content
-            ? { ...content, body: (content as Record<string, unknown>)['text'], text: undefined }
-            : content;
+        // Drop the `text` key cleanly via destructure rather than leaving
+        // `text: undefined` on the object (would survive JSON.stringify in
+        // some shapes and confuse strict schema validators).
+        let normalizedContent: Record<string, unknown>;
+        if (b.type === 'quote' && 'text' in content) {
+          const { text: quoteText, ...rest } = content as Record<string, unknown>;
+          normalizedContent = { ...rest, body: quoteText };
+        } else {
+          normalizedContent = content as Record<string, unknown>;
+        }
         // 'steps' sections require a top-level title in the manifest schema;
         // the composer doesn't always produce one, so fall back to "Steps".
         const titleFallback =

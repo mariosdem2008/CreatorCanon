@@ -70,9 +70,21 @@ export async function POST(req: Request) {
     );
   }
 
-  // 6. HEAD the R2 object to confirm upload
+  // 6. HEAD the R2 object to confirm upload. localR2Key should always be
+  //    populated for an uploading row, but guard explicitly so a corrupt row
+  //    does not cause a non-null assertion to throw mid-handler.
+  if (!row.localR2Key) {
+    await db
+      .update(video)
+      .set({ uploadStatus: 'failed' })
+      .where(and(eq(video.id, videoId), eq(video.workspaceId, workspaceId)));
+    return NextResponse.json(
+      { error: 'Upload row is missing localR2Key', videoId },
+      { status: 422 },
+    );
+  }
   const r2 = createR2Client(parseServerEnv(process.env));
-  const r2Key = row.localR2Key!;
+  const r2Key = row.localR2Key;
   let head;
   try {
     head = await r2.headObject(r2Key);

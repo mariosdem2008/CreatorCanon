@@ -46,10 +46,16 @@ async function synthesizeTopicsFromPages(runId: string, db: AtlasDb): Promise<Pr
   }
 
   const buckets: Record<string, ProjectedTopic> = {};
+  // Covers every value `mapBriefPageTypeToEnum` (canon_v1 page-composition)
+  // can emit into `page.page_type`, so the synthesizer never silently drops a
+  // legitimate page type.
   const TYPE_META: Record<string, { title: string; description: string; iconKey: string; accentColor: ProjectedTopic['accentColor'] }> = {
-    framework: { title: 'Frameworks', description: 'Named methods and procedures the creator teaches.', iconKey: 'grid', accentColor: 'mint' },
-    lesson:    { title: 'Lessons',    description: 'Self-contained mental models and ideas.',           iconKey: 'lightbulb', accentColor: 'peach' },
-    playbook:  { title: 'Playbooks',  description: 'End-to-end systems and workflows.',                  iconKey: 'compass',  accentColor: 'lilac' },
+    framework:      { title: 'Frameworks',      description: 'Named methods and procedures the creator teaches.', iconKey: 'grid',       accentColor: 'mint'   },
+    lesson:         { title: 'Lessons',         description: 'Self-contained mental models and ideas.',           iconKey: 'lightbulb',  accentColor: 'peach'  },
+    playbook:       { title: 'Playbooks',       description: 'End-to-end systems and workflows.',                  iconKey: 'compass',    accentColor: 'lilac'  },
+    topic_overview: { title: 'Topics',          description: 'Topic-level overviews collected from the archive.',   iconKey: 'compass',    accentColor: 'blue'   },
+    about:          { title: 'About',           description: 'Background on the creator and how this hub was made.', iconKey: 'lightbulb',  accentColor: 'sage'   },
+    hub_home:       { title: 'Home',            description: 'The hub home page.',                                  iconKey: 'lightbulb',  accentColor: 'amber'  },
   };
   for (const p of pages) {
     const meta = TYPE_META[p.pageType];

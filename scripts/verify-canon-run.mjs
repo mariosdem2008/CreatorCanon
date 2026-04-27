@@ -122,14 +122,20 @@ try {
   }
   check('generic titles <= 1', genericCount <= 1, `${genericCount} generic`);
 
-  // Avg citations per page >= 5
-  let totalCitations = 0;
-  for (const v of versions) {
+  // Citation distribution. The plan asks for "avg citations per page >= 5".
+  // We additionally guard against the average masking a single uncited page:
+  // every page must have at least 3 citations (the plan's per-page floor).
+  const perPageCites = versions.map((v) => {
     const blocks = (v.block_tree_json && v.block_tree_json.blocks) || [];
-    for (const b of blocks) totalCitations += (b.citations ?? []).length;
-  }
+    return blocks.reduce((acc, b) => acc + ((b.citations ?? []).length), 0);
+  });
+  const totalCitations = perPageCites.reduce((a, b) => a + b, 0);
   const avgCites = versions.length > 0 ? totalCitations / versions.length : 0;
+  const minCites = perPageCites.length > 0 ? Math.min(...perPageCites) : 0;
+  const pagesWithoutCitations = perPageCites.filter((n) => n === 0).length;
   check('avg citations per page >= 5', avgCites >= 5, avgCites.toFixed(2));
+  check('every page has >= 3 citations', minCites >= 3, `min=${minCites}`);
+  check('pages with 0 citations == 0', pagesWithoutCitations === 0, `${pagesWithoutCitations}`);
 
   // >= 1 canon node with origin in {merged, multi_video, derived} AND >= 2 source videos
   const mergedRow = await sql`
