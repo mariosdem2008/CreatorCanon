@@ -1,10 +1,12 @@
 import { inArray } from '@creatorcanon/db';
 import { segment, video, transcriptAsset } from '@creatorcanon/db/schema';
 import type { AtlasDb } from '@creatorcanon/db';
+import { sourceThumbnail } from './source-thumbnail';
 
 export async function projectSources({
   db,
   pages,
+  creatorName,
 }: {
   runId: string;
   db: AtlasDb;
@@ -12,8 +14,8 @@ export async function projectSources({
     id: string;
     _internal?: { evidenceSegmentIds: string[] };
   }>;
+  creatorName: string;
 }) {
-  // Find every segment referenced by any page's evidence.
   const allSegmentIds = new Set<string>();
   for (const p of pages) {
     for (const id of p._internal?.evidenceSegmentIds ?? []) allSegmentIds.add(id);
@@ -60,21 +62,24 @@ export async function projectSources({
         (p._internal?.evidenceSegmentIds ?? []).some((id) => segs.some((s) => s.id === id)),
       )
       .map((p) => p.id);
-    const topicSlugs: string[] = []; // optional enrichment; leave empty for now
 
     return {
       id: v.id,
       youtubeId: v.youtubeVideoId,
+      // Use the upload's title (filename-defaulted via /api/upload/init) or
+      // fall back to YT-style "Untitled" only if truly absent.
       title: v.title ?? 'Untitled',
-      channelName: 'Creator', // placeholder satisfies min(1) constraint
+      // Real creator name (passed in from the adapter root) so manual uploads
+      // don't show a placeholder "Creator" string.
+      channelName: creatorName,
       publishedAt: v.publishedAt ? v.publishedAt.toISOString() : new Date().toISOString(),
       durationSec: v.durationSeconds ?? null,
-      thumbnailUrl:
-        (v.thumbnails as { medium?: string; small?: string } | null)?.medium ??
-        (v.thumbnails as { medium?: string; small?: string } | null)?.small ??
-        (v.youtubeVideoId ? `https://i.ytimg.com/vi/${v.youtubeVideoId}/hqdefault.jpg` : 'https://placehold.co/480x270/E5DECF/3D352A?text=Video'),
+      thumbnailUrl: sourceThumbnail({
+        youtubeVideoId: v.youtubeVideoId,
+        thumbnails: v.thumbnails as { medium?: string; small?: string } | null,
+      }),
       transcriptStatus: canonicalSet.has(v.id) ? ('available' as const) : ('unavailable' as const),
-      topicSlugs,
+      topicSlugs: [] as string[],
       citedPageIds,
       keyMoments: segs.slice(0, 5).map((s) => ({
         timestampStart: Math.floor(s.startMs / 1000),

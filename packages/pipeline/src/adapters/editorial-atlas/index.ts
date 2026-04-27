@@ -48,7 +48,12 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
     pagesWithInternal.map((p) => p._internal.primaryFindingId),
   );
   const highlights = await projectHighlights({ runId, db, publishedPageFindingIds });
-  const sources = await projectSources({ runId, db, pages: pagesWithInternal });
+  const sources = await projectSources({
+    runId,
+    db,
+    pages: pagesWithInternal,
+    creatorName: creator.name,
+  });
 
   // Build per-page citations from segment + video lookups so the manifest
   // carries real evidence references (matches the citationSchema in apps/web).
