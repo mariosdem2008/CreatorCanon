@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@creatorcanon/auth';
-import { and, eq, getDb, ne } from '@creatorcanon/db';
+import { and, eq, getDb, inArray } from '@creatorcanon/db';
 import { workspaceMember, video, videoSetItem, videoSet, generationRun } from '@creatorcanon/db/schema';
 import { createR2Client } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
@@ -55,7 +55,10 @@ export async function DELETE(
 
   const workspaceId = row.workspaceId;
 
-  // 4. Check if video is in use by any non-failed generation run
+  // 4. Block delete only while a pipeline run is actively reading the video.
+  //    Once a run reaches awaiting_review/published/failed/canceled the upload
+  //    row can be safely removed; the run keeps its outputs (manifest, segments)
+  //    but the source row is no longer dereferenced.
   //    Path: video → videoSetItem → videoSet → generationRun
   const inUseRows = await db
     .select({ runId: generationRun.id })
@@ -65,7 +68,7 @@ export async function DELETE(
     .where(
       and(
         eq(videoSetItem.videoId, videoId),
-        ne(generationRun.status, 'failed'),
+        inArray(generationRun.status, ['queued', 'running']),
       ),
     )
     .limit(1);
