@@ -29,6 +29,7 @@ export const transcriptProviderEnum = pgEnum('transcript_provider', [
   'youtube_captions',
   'gpt-4o-mini-transcribe',
   'gpt-4o-transcribe',
+  'whisper-1',
   'manual_upload',
 ]);
 

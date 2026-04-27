@@ -8,7 +8,7 @@ export interface TranscriptResult {
   videoId: string;
   youtubeVideoId: string | null;
   r2Key: string;
-  provider: 'youtube_captions' | 'gpt-4o-mini-transcribe' | 'existing';
+  provider: 'youtube_captions' | 'whisper-1' | 'existing';
   wordCount: number;
   language: string;
   skipped: boolean;

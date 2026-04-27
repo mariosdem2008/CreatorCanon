@@ -1,6 +1,6 @@
 import { task, logger } from '@trigger.dev/sdk/v3';
 import { and, eq, getDb } from '@creatorcanon/db';
-import { video, transcriptAsset, normalizedTranscriptVersion } from '@creatorcanon/db/schema';
+import { video, transcriptAsset } from '@creatorcanon/db/schema';
 import { extractAudioFromR2Source } from '@creatorcanon/pipeline';
 import { createR2Client, createOpenAIClient, transcriptKey } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
@@ -118,7 +118,7 @@ export const transcribeUploadedVideoTask = task({
         durationSec: extracted.durationSec,
       });
 
-      // 3. Transcribe via OpenAI Whisper (gpt-4o-mini-transcribe).
+      // 3. Transcribe via OpenAI Whisper (whisper-1 for verbose_json + segments).
       const openai = openaiClient.raw;
       const audioObj = await r2.getObject(audioR2Key);
       const audioBytes = audioObj.body;
@@ -133,7 +133,7 @@ export const transcribeUploadedVideoTask = task({
         });
         const file = new File([audioBytes], `${payload.videoId}.m4a`, { type: 'audio/mp4' });
         const res = await openai.audio.transcriptions.create({
-          model: 'gpt-4o-mini-transcribe',
+          model: 'whisper-1',
           file,
           response_format: 'verbose_json',
           timestamp_granularities: ['segment'],
@@ -175,7 +175,7 @@ export const transcribeUploadedVideoTask = task({
         id: taId,
         workspaceId: payload.workspaceId,
         videoId: payload.videoId,
-        provider: 'gpt-4o-mini-transcribe',
+        provider: 'whisper-1',
         r2Key: vttKey,
         wordCount,
         isCanonical: true,
@@ -192,18 +192,11 @@ export const transcribeUploadedVideoTask = task({
       const canonicalTaId = existing[0]?.id;
       if (!canonicalTaId) throw new Error(`No canonical transcript_asset for video ${payload.videoId}`);
 
-      // 6. Insert normalizedTranscriptVersion row (VTT is the initial normalized form, idempotent).
-      const ntvId = crypto.randomUUID();
-      await db.insert(normalizedTranscriptVersion).values({
-        id: ntvId,
-        workspaceId: payload.workspaceId,
-        videoId: payload.videoId,
-        transcriptAssetId: canonicalTaId,
-        r2Key: vttKey,
-        version: 1,
-      }).onConflictDoNothing();
-
-      // 7. Mark video ready + capture duration.
+      // 6. Mark video ready + capture duration.
+      // The normalizedTranscriptVersion row is created later by the pipeline's
+      // normalize_transcripts stage, which converts the VTT into a sentence-
+      // segmented JSON document. Pre-creating it here pointing at the VTT key
+      // would cause segment_transcripts to JSON.parse a VTT file and crash.
       const durationSeconds = extracted.durationSec > 0
         ? Math.round(extracted.durationSec)
         : null;
