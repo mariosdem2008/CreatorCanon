@@ -111,7 +111,17 @@ export async function projectPages({
           ...normalizedContent,
           citationIds: b.citations,
         };
-      }).map((s) => enrichQuoteSection(s as SectionLike, segmentLookup));
+      }).map((s) => enrichQuoteSection(s as SectionLike, segmentLookup))
+        .filter((s, i) => {
+          if (i !== 0) return true;
+          if (s.kind !== 'overview') return true;
+          // Drop the leading overview section when its body is just a copy of
+          // the page summary — the renderer already shows summary in the
+          // header, so keeping a duplicate "Overview" tile wastes the slot.
+          const overviewBody = (s as { body?: string }).body?.trim() ?? '';
+          const summary = (v.summary ?? '').trim();
+          return overviewBody.length > 0 && overviewBody !== summary;
+        });
 
       // topicSlugs: topics whose evidenceSegmentIds overlap with this page's
       // evidenceSegmentIds. Falls back to a keyword match against the topic
