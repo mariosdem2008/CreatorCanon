@@ -36,6 +36,9 @@ export * from './release';
 // Multi-agent pipeline findings
 export * from './archive_finding';
 
+// Canon layer (deep knowledge extraction — Stage 1 v4)
+export * from './canon';
+
 // Billing + cost
 export * from './billing';
 
