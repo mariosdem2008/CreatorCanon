@@ -329,7 +329,7 @@ export default function LibraryClient({
                             <div className="size-9 w-16 rounded-[6px] bg-[var(--cc-surface-2)] shrink-0" />
                           )}
                           <span className="min-w-0 truncate font-medium text-[var(--cc-ink)]">
-                            {video.title ?? 'Untitled video'}
+                            {displayVideoTitle(video)}
                           </span>
                         </div>
                       </td>
@@ -445,6 +445,21 @@ function FilterChip<V extends string>({
 function isSourceReady(video: VideoRow): boolean {
   if (video.sourceKind === 'manual_upload') return video.transcribeStatus === 'ready';
   return video.hasCanonicalTranscript || video.captionStatus === 'available';
+}
+
+function displayVideoTitle(video: VideoRow): string {
+  if (video.title) return video.title;
+  // Manual uploads created before titles were defaulted to filename show as
+  // "Manual upload — 17:39" so the user can at least tell their uploads apart
+  // from each other (and from YouTube videos that have a real title) by
+  // duration. New uploads default the title to filename in /api/upload/init.
+  if (video.sourceKind === 'manual_upload') {
+    const dur = video.durationSeconds
+      ? ` — ${fmtDuration(video.durationSeconds)}`
+      : '';
+    return `Manual upload${dur}`;
+  }
+  return 'Untitled video';
 }
 
 type Tone = 'success' | 'warn' | 'danger' | 'info' | 'neutral';
