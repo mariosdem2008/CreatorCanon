@@ -1,7 +1,8 @@
-import { eq } from '@creatorcanon/db';
-import { page, pageVersion } from '@creatorcanon/db/schema';
+import { eq, inArray } from '@creatorcanon/db';
+import { page, pageVersion, segment } from '@creatorcanon/db/schema';
 import type { AtlasDb } from '@creatorcanon/db';
 import type { ProjectedTopic } from './project-topics';
+import { enrichQuoteSection, type SectionLike } from './quote-enrichment';
 
 interface AtlasMeta {
   evidenceQuality: 'strong' | 'moderate' | 'limited' | 'unverified';
@@ -56,6 +57,21 @@ export async function projectPages({
     .where(eq(pageVersion.runId, runId));
   const versionByPageId = new Map(versionRows.map((v) => [v.pageId, v]));
 
+  // Load every segment referenced by any page so we can attach
+  // sourceVideoId + timestampStart to quote sections.
+  const allSegmentIds = new Set<string>();
+  for (const v of versionRows) {
+    const tree = v.blockTreeJson as { atlasMeta?: { evidenceSegmentIds?: string[] } };
+    for (const id of tree.atlasMeta?.evidenceSegmentIds ?? []) allSegmentIds.add(id);
+  }
+  const segmentRows = allSegmentIds.size
+    ? await db
+        .select({ id: segment.id, videoId: segment.videoId, startMs: segment.startMs })
+        .from(segment)
+        .where(inArray(segment.id, [...allSegmentIds]))
+    : [];
+  const segmentLookup = new Map(segmentRows.map((s) => [s.id, s]));
+
   const projected = pageRows
     .map((p) => {
       const v = versionByPageId.get(p.id);
@@ -95,7 +111,7 @@ export async function projectPages({
           ...normalizedContent,
           citationIds: b.citations,
         };
-      });
+      }).map((s) => enrichQuoteSection(s as SectionLike, segmentLookup));
 
       // topicSlugs: topics whose evidenceSegmentIds overlap with this page's
       // evidenceSegmentIds.
