@@ -3,6 +3,7 @@ import { page, pageVersion, segment } from '@creatorcanon/db/schema';
 import type { AtlasDb } from '@creatorcanon/db';
 import type { ProjectedTopic } from './project-topics';
 import { enrichQuoteSection, type SectionLike } from './quote-enrichment';
+import { titleCase } from './title-case';
 
 interface AtlasMeta {
   evidenceQuality: 'strong' | 'moderate' | 'limited' | 'unverified';
@@ -143,7 +144,10 @@ export async function projectPages({
         slug: p.slug,
         type: p.pageType as 'lesson' | 'framework' | 'playbook',
         status: 'published' as const,
-        title: v.title,
+        // Framework/playbook titles often arrive lowercase from the agent.
+        // Title-case lessons too — composer occasionally produces sentence-case
+        // titles which look out of place next to formally-capitalized peers.
+        title: titleCase(v.title),
         summary: v.summary ?? '',
         summaryPlainText: plainText(v.summary ?? ''),
         searchKeywords: searchKeywords(v.title, v.summary ?? ''),
