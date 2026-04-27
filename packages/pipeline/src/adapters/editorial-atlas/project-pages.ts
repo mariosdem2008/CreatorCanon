@@ -24,6 +24,22 @@ function coerceEvidenceQuality(
   return 'limited'; // 'limited' OR 'unverified' both map to 'limited'
 }
 
+/**
+ * canon_v1's page composer (Phase 6.6) writes atlasMeta.distinctSourceVideos
+ * and atlasMeta.totalSelectedVideos as plain numbers. When both are present,
+ * derive coverage directly. Otherwise fall back to the legacy
+ * meta.sourceCoveragePercent (findings_v1 / pre-Phase-6.6 runs).
+ */
+function deriveSourceCoveragePercent(meta: { sourceCoveragePercent?: number } | Record<string, unknown>): number {
+  const m = meta as { distinctSourceVideos?: unknown; totalSelectedVideos?: unknown; sourceCoveragePercent?: unknown };
+  const distinct = m.distinctSourceVideos;
+  const total = m.totalSelectedVideos;
+  if (typeof distinct === 'number' && typeof total === 'number' && total > 0) {
+    return Math.min(1, distinct / total);
+  }
+  return typeof m.sourceCoveragePercent === 'number' ? m.sourceCoveragePercent : 0;
+}
+
 function plainText(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
 }
@@ -161,7 +177,11 @@ export async function projectPages({
         // citationCount mirrors what's actually rendered in the right rail
         // (one citation per evidence segment), so this matches citations.length.
         citationCount: meta.evidenceSegmentIds.length,
-        sourceCoveragePercent: meta.sourceCoveragePercent,
+        // canon_v1 composer writes distinctSourceVideos + totalSelectedVideos
+        // directly. Prefer those when present so the reported coverage matches
+        // what was actually used. Fall back to legacy meta.sourceCoveragePercent
+        // for runs whose atlasMeta predates Phase 6.6.
+        sourceCoveragePercent: deriveSourceCoveragePercent(meta),
         evidenceQuality: coerceEvidenceQuality(meta.evidenceQuality),
         hero: meta.hero as
           | { illustrationKey: 'books' | 'desk' | 'plant' | 'open-notebook' }

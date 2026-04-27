@@ -1,5 +1,5 @@
 import { and, eq } from '@creatorcanon/db';
-import { archiveFinding, page as pageTable, pageVersion } from '@creatorcanon/db/schema';
+import { archiveFinding, canonNode, page as pageTable, pageVersion } from '@creatorcanon/db/schema';
 import type { AtlasDb } from '@creatorcanon/db';
 
 function slugify(s: string): string {
@@ -79,13 +79,42 @@ export async function projectTopics({
   runId: string;
   db: AtlasDb;
 }): Promise<ProjectedTopic[]> {
-  const rows = await db
+  // canon_v1 source: canon_node WHERE type='topic'.
+  const canonRows = await db
+    .select()
+    .from(canonNode)
+    .where(and(eq(canonNode.runId, runId), eq(canonNode.type, 'topic')));
+
+  if (canonRows.length > 0) {
+    return canonRows.map((r) => {
+      const p = r.payload as {
+        title?: string;
+        description?: string;
+        iconKey?: string;
+        accentColor?: ProjectedTopic['accentColor'];
+      };
+      const title = p.title ?? 'Topic';
+      return {
+        id: r.id,
+        slug: slugify(title),
+        title,
+        description: p.description ?? '',
+        iconKey: p.iconKey ?? 'grid',
+        accentColor: p.accentColor ?? 'mint',
+        pageCount: 0, // backfilled in projectPages
+        evidenceSegmentIds: r.evidenceSegmentIds,
+      };
+    });
+  }
+
+  // findings_v1 legacy fallback: archive_finding type='topic'.
+  const legacyRows = await db
     .select()
     .from(archiveFinding)
     .where(and(eq(archiveFinding.runId, runId), eq(archiveFinding.type, 'topic')));
 
-  if (rows.length > 0) {
-    return rows.map((r) => {
+  if (legacyRows.length > 0) {
+    return legacyRows.map((r) => {
       const p = r.payload as {
         title: string;
         description: string;
@@ -99,15 +128,14 @@ export async function projectTopics({
         description: p.description,
         iconKey: p.iconKey,
         accentColor: p.accentColor,
-        pageCount: 0, // backfilled in projectPages
+        pageCount: 0,
         evidenceSegmentIds: r.evidenceSegmentIds,
       };
     });
   }
 
-  // No topic_spotter findings landed. Synthesize topics by page-type bucket
-  // so the navigation stays useful. Logged so we can spot when the agent
-  // is consistently failing on a class of archives.
-  console.warn(`[projectTopics] runId=${runId} has no topic findings; synthesizing topics from page types.`);
+  // Neither source produced topics — synthesize from page types so the
+  // navigation never goes empty.
+  console.warn(`[projectTopics] runId=${runId} has no topic rows in canon_node or archive_finding; synthesizing from page types.`);
   return synthesizeTopicsFromPages(runId, db);
 }
