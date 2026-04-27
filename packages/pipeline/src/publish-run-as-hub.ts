@@ -32,7 +32,7 @@ type ProjectConfigWithTheme = {
   presentation_preset?: unknown;
 };
 
-function normalizeHubTheme(value: unknown): HubTheme {
+export function normalizeHubTheme(value: unknown): HubTheme {
   if (value === 'midnight' || value === 'playbook') return 'midnight';
   if (value === 'field' || value === 'guided') return 'field';
   return 'paper';
@@ -70,7 +70,7 @@ async function pickSubdomain(input: {
   return `${base.slice(0, 21)}-${input.projectId.slice(0, 8)}`;
 }
 
-async function getOrCreateHub(input: {
+export async function getOrCreateHub(input: {
   workspaceId: string;
   projectId: string;
   title: string;

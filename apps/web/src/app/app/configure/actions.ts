@@ -13,7 +13,12 @@ import {
   workspaceMember,
 } from '@creatorcanon/db/schema';
 import { PIPELINE_VERSION, FLAT_PRICE_CENTS } from '@creatorcanon/core';
-import { getSourceCoverage, preflightSourceCoverage } from '@creatorcanon/pipeline';
+import {
+  getOrCreateHub,
+  getSourceCoverage,
+  normalizeHubTheme,
+  preflightSourceCoverage,
+} from '@creatorcanon/pipeline';
 
 const PRESENTATION_PRESETS = new Set(['paper', 'midnight', 'field']);
 
@@ -133,6 +138,16 @@ export async function createProject(formData: FormData): Promise<{ error: string
   });
 
   await db.update(project).set({ currentRunId: runId }).where(eq(project.id, projectId));
+
+  // The pipeline requires a hub row to exist before phase 1; publishRunAsHub
+  // also expects one to be present (it idempotently no-ops if it already is).
+  // Create it here so neither the run nor the publish step has to.
+  await getOrCreateHub({
+    workspaceId,
+    projectId,
+    title,
+    theme: normalizeHubTheme(presentationPreset),
+  });
 
   redirect(`/app/checkout?projectId=${projectId}`);
 }
