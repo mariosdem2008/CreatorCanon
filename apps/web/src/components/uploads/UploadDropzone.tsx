@@ -186,9 +186,13 @@ export function UploadDropzone({
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files || files.length === 0) return;
-      // Reset BEFORE processing so onChange fires for re-selection of same file.
+      // Snapshot the FileList BEFORE resetting the input. Setting input.value=''
+      // empties the live FileList in Chromium/Edge, which would drop every file
+      // the user just picked. Reset is still needed so re-selecting the same
+      // file fires onChange on the next pick.
+      const picked = Array.from(files);
       if (inputRef.current) inputRef.current.value = '';
-      for (const file of Array.from(files)) {
+      for (const file of picked) {
         processFile(file).catch(() => {
           // errors already handled inside processFile
         });
