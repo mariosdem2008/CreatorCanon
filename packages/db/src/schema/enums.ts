@@ -33,7 +33,7 @@ export const transcriptProviderEnum = pgEnum('transcript_provider', [
   'manual_upload',
 ]);
 
-export const mediaAssetTypeEnum = pgEnum('media_asset_type', ['audio_m4a']);
+export const mediaAssetTypeEnum = pgEnum('media_asset_type', ['audio_m4a', 'video_mp4']);
 
 // ----- Visual lane -----
 export const visualAssetModeEnum = pgEnum('visual_asset_mode', [

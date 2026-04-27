@@ -10,6 +10,8 @@ import {
   generationRun,
 } from '@creatorcanon/db/schema';
 import type { ToolDef, ToolCtx } from './types';
+import { persistVisualMoment } from '../../visual/persist-visual-moment';
+import { VISUAL_LIMITS } from '../../canon-limits';
 
 // Defense-in-depth: every propose handler asserts the run belongs to ctx.workspaceId
 // before doing any work. The harness controls ctx, but this guards against future
@@ -460,46 +462,28 @@ export const proposeVisualMomentTool: ToolDef<z.infer<typeof visualMomentInput>,
     const runCheck = await assertRunInWorkspace(ctx);
     if (!runCheck.ok) return { ok: false, error: runCheck.error };
 
-    // 1) videoId in run.
-    const own = await ctx.db
-      .select({ id: segment.id })
-      .from(segment)
-      .where(and(eq(segment.runId, ctx.runId), eq(segment.workspaceId, ctx.workspaceId), eq(segment.videoId, input.videoId)))
-      .limit(1);
-    if (!own[0]) return { ok: false, error: `videoId ${input.videoId} has no segments in run ${ctx.runId}` };
-
-    // 2) segmentId ownership (if provided — schema enforces .min(1), so empty string can never reach here).
-    if (input.segmentId) {
-      const segCheck = await validateSegmentsInRun([input.segmentId], ctx, input.videoId);
-      if (!segCheck.ok) return { ok: false, error: segCheck.error };
+    // Delegate to the shared persistence helper — single source of truth used by
+    // both this tool and the visual-context stage.
+    const result = await persistVisualMoment({
+      db: ctx.db,
+      workspaceId: ctx.workspaceId,
+      runId: ctx.runId,
+      videoId: input.videoId,
+      segmentId: input.segmentId ?? null,
+      timestampMs: input.timestampMs,
+      frameR2Key: input.frameR2Key ?? null,
+      thumbnailR2Key: input.thumbnailR2Key ?? null,
+      type: input.type,
+      description: input.description,
+      extractedText: input.extractedText ?? null,
+      hubUse: input.hubUse,
+      usefulnessScore: input.usefulnessScore,
+      payload: input.payload,
+      minUsefulnessScore: VISUAL_LIMITS.minUsefulnessScore,
+    });
+    if (!result.ok) {
+      return { ok: false, error: result.error, reason: result.reason };
     }
-
-    // 3) Hard threshold.
-    if (input.usefulnessScore < 60) {
-      return { ok: false, error: `usefulnessScore ${input.usefulnessScore} below 60 — drop instead of persisting`, reason: 'below_threshold' };
-    }
-
-    const id = makeId('vm');
-    try {
-      await ctx.db.insert(visualMoment).values({
-        id,
-        workspaceId: ctx.workspaceId,
-        runId: ctx.runId,
-        videoId: input.videoId,
-        segmentId: input.segmentId ?? null,
-        timestampMs: input.timestampMs,
-        frameR2Key: input.frameR2Key ?? null,
-        thumbnailR2Key: input.thumbnailR2Key ?? null,
-        type: input.type,
-        description: input.description,
-        extractedText: input.extractedText ?? null,
-        hubUse: input.hubUse,
-        usefulnessScore: input.usefulnessScore,
-        payload: input.payload,
-      });
-    } catch (err) {
-      return { ok: false, error: `visual_moment insert failed: ${(err as Error).message}` };
-    }
-    return { ok: true, id };
+    return { ok: true, id: result.id };
   },
 };
