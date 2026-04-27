@@ -117,7 +117,9 @@ export async function projectPages({
         estimatedReadMinutes: estimatedMinutes(tree),
         publishedAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
-        citationCount: meta.citationCount,
+        // citationCount mirrors what's actually rendered in the right rail
+        // (one citation per evidence segment), so this matches citations.length.
+        citationCount: meta.evidenceSegmentIds.length,
         sourceCoveragePercent: meta.sourceCoveragePercent,
         evidenceQuality: coerceEvidenceQuality(meta.evidenceQuality),
         hero: meta.hero as
