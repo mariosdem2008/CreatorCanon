@@ -4,6 +4,18 @@ import Image from 'next/image';
 import type { EditorialAtlasManifest } from '@/lib/hub/manifest/schema';
 import { getHighlightsRoute, getSearchRoute } from '@/lib/hub/routes';
 
+/**
+ * Manifest navigation items store hub-relative paths like "/start" so the
+ * manifest is portable across hubs. The sidebar renders absolute paths, so
+ * prefix the hubSlug here. Already-prefixed values pass through untouched
+ * (defensive — older manifests or hand-built items may include the prefix).
+ */
+function scopedHref(hubSlug: string, href: string): string {
+  if (href.startsWith(`/h/${hubSlug}`)) return href;
+  if (!href.startsWith('/')) return `/h/${hubSlug}/${href}`;
+  return `/h/${hubSlug}${href}`;
+}
+
 type Props = {
   hubSlug: string;
   title: EditorialAtlasManifest['title'];
@@ -56,11 +68,12 @@ export function HubSidebar({ hubSlug, title, creator, navigation, activePathname
         <nav aria-label="Primary" className="mt-5">
           <ul className="space-y-0.5">
             {navigation.primary.map((item) => {
-              const active = item.href === activePathname || (item.href !== `/h/${hubSlug}` && activePathname.startsWith(item.href));
+              const href = scopedHref(hubSlug, item.href);
+              const active = href === activePathname || (href !== `/h/${hubSlug}` && activePathname.startsWith(href));
               return (
                 <li key={item.label}>
                   <Link
-                    href={item.href}
+                    href={href}
                     aria-current={active ? 'page' : undefined}
                     className={
                       'flex h-8 items-center gap-2.5 rounded-[8px] px-2 text-[13px] transition-colors ' +
@@ -107,7 +120,7 @@ export function HubSidebar({ hubSlug, title, creator, navigation, activePathname
               {navigation.secondary.map((item) => (
                 <li key={item.label}>
                   <Link
-                    href={item.href}
+                    href={scopedHref(hubSlug, item.href)}
                     className="flex h-8 items-center gap-2.5 rounded-[8px] px-2 text-[13px] text-[#6B5F50] transition-colors hover:bg-white/60 hover:text-[#1A1612]"
                   >
                     <span className="truncate">{item.label}</span>
