@@ -114,10 +114,18 @@ export async function projectPages({
       }).map((s) => enrichQuoteSection(s as SectionLike, segmentLookup));
 
       // topicSlugs: topics whose evidenceSegmentIds overlap with this page's
-      // evidenceSegmentIds.
+      // evidenceSegmentIds. Falls back to a keyword match against the topic
+      // title when no segment overlap exists — small archives often have one
+      // big topic per page where the segments don't intersect even though the
+      // theme is shared.
       const pageSegSet = new Set(meta.evidenceSegmentIds);
+      const haystack = `${v.title} ${v.summary ?? ''}`.toLowerCase();
       const topicSlugs = topics
-        .filter((t) => t.evidenceSegmentIds.some((s) => pageSegSet.has(s)))
+        .filter((t) => {
+          if (t.evidenceSegmentIds.some((s) => pageSegSet.has(s))) return true;
+          const needle = t.title.toLowerCase();
+          return needle.length > 3 && haystack.includes(needle);
+        })
         .map((t) => t.slug);
 
       return {
