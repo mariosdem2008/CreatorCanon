@@ -5,41 +5,41 @@
 
 export const palette = {
   // Canvas
-  paper: '#030507',          // hero / page background
-  paperWarm: '#0B0F14',      // sidebar fill
-  surface: '#0B0F14',        // card / panel fill
-  surfaceMuted: '#111821',   // table-row hover, soft panel
+  paper: '#F8F4EC',          // hero / page background
+  paperWarm: '#F2EBDA',      // sidebar fill
+  surface: '#FFFFFF',         // card / panel fill
+  surfaceMuted: '#FAF6EE',    // table-row hover, soft panel
 
   // Ink
-  ink: '#F6F7F8',
-  ink2: '#D9DEE5',
-  ink3: '#A7ADB5',
-  ink4: '#737B86',
+  ink: '#1A1612',
+  ink2: '#3D352A',
+  ink3: '#6B5F50',
+  ink4: '#9A8E7C',
 
   // Rule
-  rule: '#2A3038',
-  ruleStrong: '#343C47',
+  rule: '#E5DECF',
+  ruleStrong: '#D6CFC0',
 
-  // Accent washes used as 8-12% backgrounds for category icons.
+  // Accent washes — used as 8–12% backgrounds for category icons.
   // Keys mirror Topic.accentColor in the manifest.
   accent: {
-    mint:  { fg: '#00E88A', wash: 'rgba(0, 232, 138, 0.12)' },
-    peach: { fg: '#FF9A3D', wash: 'rgba(255, 154, 61, 0.14)' },
-    lilac: { fg: '#7C6DFF', wash: 'rgba(124, 109, 255, 0.14)' },
-    rose:  { fg: '#FF3434', wash: 'rgba(255, 52, 52, 0.12)' },
-    blue:  { fg: '#1E6BFF', wash: 'rgba(30, 107, 255, 0.14)' },
-    amber: { fg: '#FF9A3D', wash: 'rgba(255, 154, 61, 0.14)' },
-    sage:  { fg: '#00E88A', wash: 'rgba(0, 232, 138, 0.12)' },
-    slate: { fg: '#A7ADB5', wash: 'rgba(167, 173, 181, 0.12)' },
+    mint:  { fg: '#2F7A5C', wash: '#E2F1E9' },
+    peach: { fg: '#9C5A2E', wash: '#F4E5D8' },
+    lilac: { fg: '#6F4FA0', wash: '#ECE4F4' },
+    rose:  { fg: '#A34A60', wash: '#F4E1E6' },
+    blue:  { fg: '#3A6E92', wash: '#E2EDF4' },
+    amber: { fg: '#A07424', wash: '#F4EAD2' },
+    sage:  { fg: '#5C7C56', wash: '#E6EEDF' },
+    slate: { fg: '#4F5B6B', wash: '#E5E9EE' },
   },
 
   // Trust strip background
-  trustBar: '#030507',
-  trustBarInk: '#F6F7F8',
+  trustBar: '#1A1612',
+  trustBarInk: '#F2EBDA',
 } as const;
 
 export const fonts = {
-  // Inter throughout; no serif. Editorial feel comes from layout, not type.
+  // Inter throughout — no serif. Editorial feel comes from layout, not type.
   display: 'var(--font-inter, Inter, system-ui, sans-serif)',
   body:    'var(--font-inter, Inter, system-ui, sans-serif)',
   numeric: 'var(--font-inter, Inter, system-ui, sans-serif)',  // tabular-nums via CSS feature

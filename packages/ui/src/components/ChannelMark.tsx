@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 const PALETTES: [string, string][] = [
-  ['#00E88A', '#007A50'],
-  ['#1E6BFF', '#0B3E9F'],
-  ['#7C6DFF', '#34308A'],
-  ['#FF9A3D', '#7A3D11'],
+  ['oklch(0.55 0.14 25)', 'oklch(0.4 0.1 15)'],
+  ['oklch(0.5 0.12 160)', 'oklch(0.35 0.08 150)'],
+  ['oklch(0.58 0.12 260)', 'oklch(0.4 0.09 270)'],
+  ['oklch(0.55 0.1 80)', 'oklch(0.4 0.08 70)'],
 ];
 
 interface ChannelMarkProps {
@@ -46,14 +46,14 @@ export const ChannelMark = ({ name, size = 32, palette = 0, src, className }: Ch
         height: size,
         borderRadius,
         background: `linear-gradient(135deg, ${a}, ${b})`,
-        color: '#F6F7F8',
+        color: 'white',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: 'var(--font-geist-sans, Inter, system-ui, sans-serif)',
+        fontFamily: 'var(--font-newsreader, Georgia, serif)',
         fontSize: size * 0.42,
-        fontWeight: 650,
-        letterSpacing: 0,
+        fontWeight: 500,
+        letterSpacing: '-0.02em',
         flexShrink: 0,
         userSelect: 'none',
       }}

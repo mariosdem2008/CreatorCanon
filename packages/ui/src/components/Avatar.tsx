@@ -1,6 +1,12 @@
 import * as React from 'react';
 
-const PALETTES = ['#00E88A', '#1E6BFF', '#007A50', '#7C6DFF', '#FF9A3D'];
+const PALETTES = [
+  'oklch(0.6 0.1 260)',
+  'oklch(0.55 0.09 25)',
+  'oklch(0.5 0.08 160)',
+  'oklch(0.58 0.1 320)',
+  'oklch(0.52 0.07 80)',
+];
 
 interface AvatarProps {
   name?: string;
@@ -19,7 +25,6 @@ export const Avatar = ({ name = 'A', size = 28, palette = 0, src, className }: A
     .toUpperCase();
 
   const bg = PALETTES[palette % PALETTES.length]!;
-  const ink = bg === '#00E88A' || bg === '#FF9A3D' ? '#030507' : '#F6F7F8';
 
   if (src) {
     return (
@@ -47,13 +52,13 @@ export const Avatar = ({ name = 'A', size = 28, palette = 0, src, className }: A
         height: size,
         borderRadius: '50%',
         background: bg,
-        color: ink,
+        color: 'white',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontSize: size * 0.38,
         fontWeight: 600,
-        letterSpacing: 0,
+        letterSpacing: '-0.01em',
         flexShrink: 0,
         userSelect: 'none',
       }}

@@ -29,12 +29,12 @@ const VOICE_OPTIONS: Array<[VoiceMode, string, string]> = [
   [
     'reader_second_person',
     'Direct (you-pronoun)',
-    '"If you want to win retainers, embed Phase 2 hooks in your Phase 1 proposal."',
+    '“If you want to win retainers, embed Phase 2 hooks in your Phase 1 proposal.”',
   ],
   [
     'creator_first_person',
     "Creator's voice (first-person)",
-    '"I built the proposal generator after losing too many deals to slow turnaround."',
+    '“I built the proposal generator after losing too many deals to slow turnaround.”',
   ],
 ];
 
@@ -76,7 +76,7 @@ export function ConfigureClient({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. The Creator Operating System"
-                className="h-10 w-full rounded-[8px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] px-3 text-[14px] text-[var(--cc-ink)] outline-none placeholder:text-[var(--cc-ink-4)] focus:border-[var(--cc-accent)] focus:ring-2 focus:ring-[var(--cc-accent-wash)]"
+                className="h-10 w-full rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[14px] text-[var(--cc-ink)] outline-none placeholder:text-[var(--cc-ink-4)] focus:border-[var(--cc-accent)] focus:ring-2 focus:ring-[var(--cc-accent-wash)]"
               />
             </Field>
             <Field label="Target audience" htmlFor="audience">
@@ -87,7 +87,7 @@ export function ConfigureClient({
                 value={audience}
                 onChange={(e) => setAudience(e.target.value)}
                 placeholder="e.g. Founders building a content engine"
-                className="h-10 w-full rounded-[8px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] px-3 text-[14px] text-[var(--cc-ink)] outline-none placeholder:text-[var(--cc-ink-4)] focus:border-[var(--cc-accent)] focus:ring-2 focus:ring-[var(--cc-accent-wash)]"
+                className="h-10 w-full rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[14px] text-[var(--cc-ink)] outline-none placeholder:text-[var(--cc-ink-4)] focus:border-[var(--cc-accent)] focus:ring-2 focus:ring-[var(--cc-accent-wash)]"
               />
             </Field>
           </div>
@@ -144,7 +144,7 @@ export function ConfigureClient({
                   className={`flex min-h-[140px] cursor-pointer flex-col rounded-[10px] border p-4 text-[var(--cc-ink)] transition ${
                     checked
                       ? 'border-[var(--cc-accent)] bg-[var(--cc-accent-wash)] shadow-[inset_0_0_0_1px_var(--cc-accent)]'
-                      : 'border-[var(--cc-rule)] bg-[var(--cc-surface)] hover:border-[var(--cc-ink-4)]'
+                      : 'border-[var(--cc-rule)] bg-white hover:border-[var(--cc-ink-4)]'
                   }`}
                 >
                   <input
@@ -171,7 +171,7 @@ export function ConfigureClient({
         <Panel>
           <PanelHeader title="Reader features" />
           <div className="p-5">
-            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-[10px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] px-4 py-3.5">
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-[10px] border border-[var(--cc-rule)] bg-white px-4 py-3.5">
               <span>
                 <span className="block text-[13px] font-semibold text-[var(--cc-ink)]">
                   Enable grounded chat
@@ -198,7 +198,7 @@ export function ConfigureClient({
             <SummaryRow label="Hub generation" value={priceLabel} />
             <SummaryRow label="Videos included" value={`${selectedVideoCount} videos`} />
             <SummaryRow label="Source runtime" value={fmtDuration(totalSeconds)} />
-            <SummaryRow label="Expected delivery" value="~4 minutes" />
+            <SummaryRow label="Expected delivery" value="≈ 4 minutes" />
 
             {requiresLimitedSourceConfirmation ? (
               <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-[var(--cc-warn)]/40 bg-[var(--cc-warn-wash)] px-4 py-3 text-[12px] leading-[1.55] text-[var(--cc-warn)]">
@@ -301,7 +301,7 @@ function ChoiceGroup<V extends string>({
               className={`cursor-pointer rounded-[10px] border p-3 transition ${
                 checked
                   ? 'border-[var(--cc-accent)] bg-[var(--cc-accent-wash)] shadow-[inset_0_0_0_1px_var(--cc-accent)]'
-                  : 'border-[var(--cc-rule)] bg-[var(--cc-surface)] hover:border-[var(--cc-ink-4)]'
+                  : 'border-[var(--cc-rule)] bg-white hover:border-[var(--cc-ink-4)]'
               }`}
             >
               <input
@@ -530,50 +530,50 @@ type ThemeStyles = {
 function stylesFor(template: TemplateId): ThemeStyles {
   if (template === 'midnight') {
     return {
-      shell: 'bg-[#030507] text-[#F6F7F8]',
-      sidebar: 'bg-[#0B0F14] border-r border-[#2A3038]',
-      brand: 'text-[#F6F7F8]',
-      brandMark: 'bg-[#00E88A]',
-      navActive: 'bg-[#111821] text-[#F6F7F8]',
-      navIdle: 'text-[#A7ADB5]',
-      body: 'bg-[#030507]',
-      muted: 'text-[#737B86]',
-      title: 'font-serif text-[18px] text-[#F6F7F8]',
-      lede: 'text-[#D9DEE5]',
-      pill: 'bg-[#00E88A]/15 text-[#00E88A]',
-      accent: 'text-[#00E88A]',
-      lessonBorder: 'border-[#2A3038]',
-      lessonBg: 'bg-[#0B0F14]',
-      lessonHeading: 'text-[#F6F7F8]',
-      lessonBody: 'text-[#D9DEE5]',
-      footerBg: 'bg-[#111821]',
+      shell: 'bg-[#070b10] text-[#eef5ef]',
+      sidebar: 'bg-[#0a1016] border-r border-[#263240]',
+      brand: 'text-[#eef5ef]',
+      brandMark: 'bg-[#c8ef60]',
+      navActive: 'bg-[#0f151c] text-[#eef5ef]',
+      navIdle: 'text-[#7e9188]',
+      body: 'bg-[#070b10]',
+      muted: 'text-[#7e9188]',
+      title: 'font-serif text-[18px] text-[#eef5ef]',
+      lede: 'text-[#b8c9c0]',
+      pill: 'bg-[#c8ef60]/15 text-[#c8ef60]',
+      accent: 'text-[#c8ef60]',
+      lessonBorder: 'border-[#263240]',
+      lessonBg: 'bg-[#0f151c]',
+      lessonHeading: 'text-[#eef5ef]',
+      lessonBody: 'text-[#b8c9c0]',
+      footerBg: 'bg-[#0a1016]',
     };
   }
   if (template === 'field') {
     return {
-      shell: 'bg-[#030507] text-[#F6F7F8]',
-      sidebar: 'bg-[#111821] border-r border-[#2A3038]',
-      brand: 'text-[#F6F7F8]',
-      brandMark: 'bg-[#FF9A3D]',
-      navActive: 'bg-[#0B0F14] text-[#F6F7F8]',
-      navIdle: 'text-[#A7ADB5]',
-      body: 'bg-[#0B0F14]',
-      muted: 'text-[#737B86]',
-      title: 'font-serif text-[18px] text-[#F6F7F8]',
-      lede: 'text-[#D9DEE5]',
-      pill: 'bg-[#FF9A3D]/15 text-[#FF9A3D]',
-      accent: 'text-[#FF9A3D]',
-      lessonBorder: 'border-[#2A3038]',
-      lessonBg: 'bg-[#111821]',
-      lessonHeading: 'text-[#F6F7F8]',
-      lessonBody: 'text-[#D9DEE5]',
-      footerBg: 'bg-[#0B0F14]',
+      shell: 'bg-[#f2e8cf] text-[#2f271b]',
+      sidebar: 'bg-[#f5e9cc] border-r border-[#c9b990]',
+      brand: 'text-[#2f271b]',
+      brandMark: 'bg-[#7a4e22]',
+      navActive: 'bg-[#fdf7e8] text-[#2f271b]',
+      navIdle: 'text-[#6e5f45]',
+      body: 'bg-[#fdf7e8]',
+      muted: 'text-[#6e5f45]',
+      title: 'font-serif text-[18px] text-[#2f271b]',
+      lede: 'text-[#4e4030]',
+      pill: 'bg-[#7a4e22]/15 text-[#7a4e22]',
+      accent: 'text-[#7a4e22]',
+      lessonBorder: 'border-[#c9b990]',
+      lessonBg: 'bg-[#fdf7e8]',
+      lessonHeading: 'text-[#2f271b]',
+      lessonBody: 'text-[#4e4030]',
+      footerBg: 'bg-[#f5e9cc]',
     };
   }
   // paper (default)
   return {
     shell: 'bg-[var(--cc-canvas)] text-[var(--cc-ink)]',
-    sidebar: 'bg-[var(--cc-surface)] border-r border-[var(--cc-rule)]',
+    sidebar: 'bg-white border-r border-[var(--cc-rule)]',
     brand: 'text-[var(--cc-ink)]',
     brandMark: 'bg-[var(--cc-accent)]',
     navActive: 'bg-[var(--cc-accent-wash)] text-[var(--cc-ink)]',
@@ -585,7 +585,7 @@ function stylesFor(template: TemplateId): ThemeStyles {
     pill: 'bg-[var(--cc-success-wash)] text-[var(--cc-success)]',
     accent: 'text-[var(--cc-accent)]',
     lessonBorder: 'border-[var(--cc-rule)]',
-    lessonBg: 'bg-[var(--cc-surface)]',
+    lessonBg: 'bg-white',
     lessonHeading: 'text-[var(--cc-ink)]',
     lessonBody: 'text-[var(--cc-ink-2)]',
     footerBg: 'bg-[var(--cc-surface-2)]',

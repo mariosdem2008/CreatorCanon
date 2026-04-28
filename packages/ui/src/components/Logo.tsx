@@ -5,13 +5,26 @@ interface LogoProps {
   withText?: boolean;
   mono?: boolean;
   className?: string;
+  textColor?: string;
+  markColor?: string;
+  markDepthColor?: string;
+  markHighlightColor?: string;
 }
 
-export const Logo = ({ size = 20, withText = true, mono = false, className }: LogoProps) => {
-  const color = mono ? 'currentColor' : 'var(--ink)';
-  const accent = mono ? 'currentColor' : 'var(--amber)';
-  const accentDeep = mono ? 'currentColor' : '#007A50';
-  const accentLight = mono ? 'currentColor' : '#62FFC6';
+export const Logo = ({
+  size = 20,
+  withText = true,
+  mono = false,
+  className,
+  textColor,
+  markColor,
+  markDepthColor,
+  markHighlightColor,
+}: LogoProps) => {
+  const color = mono ? 'currentColor' : textColor ?? 'var(--ink)';
+  const accent = mono ? 'currentColor' : markColor ?? 'var(--amber)';
+  const accentDeep = mono ? 'currentColor' : markDepthColor ?? 'var(--amber-ink)';
+  const accentLight = mono ? 'currentColor' : markHighlightColor ?? 'var(--amber-wash)';
   const markSize = withText ? size * 1.35 : size;
   return (
     <div className={className} style={{ display: 'inline-flex', alignItems: 'center', gap: size * 0.42 }}>

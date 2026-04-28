@@ -11,24 +11,24 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['var(--font-geist-sans)', ...fontFamily.sans],
-        serif: ['var(--font-geist-sans)', ...fontFamily.sans],
+        serif: ['var(--font-newsreader)', ...fontFamily.serif],
         mono: ['var(--font-geist-mono)', ...fontFamily.mono],
         numeric: ['var(--font-jetbrains-mono)', ...fontFamily.mono],
       },
       fontSize: {
-        'display-xl': ['72px', { lineHeight: '1.02', letterSpacing: '0' }],
-        'display-lg': ['52px', { lineHeight: '1.05', letterSpacing: '0' }],
-        'display-md': ['36px', { lineHeight: '1.12', letterSpacing: '0' }],
-        'display-sm': ['26px', { lineHeight: '1.2', letterSpacing: '0' }],
-        'heading-lg': ['22px', { lineHeight: '1.25', letterSpacing: '0' }],
-        'heading-md': ['17px', { lineHeight: '1.3', letterSpacing: '0' }],
+        'display-xl': ['72px', { lineHeight: '1.02', letterSpacing: '-0.025em' }],
+        'display-lg': ['52px', { lineHeight: '1.05', letterSpacing: '-0.02em' }],
+        'display-md': ['36px', { lineHeight: '1.12', letterSpacing: '-0.015em' }],
+        'display-sm': ['26px', { lineHeight: '1.2', letterSpacing: '-0.01em' }],
+        'heading-lg': ['22px', { lineHeight: '1.25', letterSpacing: '-0.01em' }],
+        'heading-md': ['17px', { lineHeight: '1.3', letterSpacing: '-0.005em' }],
         'heading-sm': ['14px', { lineHeight: '1.35' }],
         'body-lg': ['16px', { lineHeight: '1.55' }],
         'body-md': ['14px', { lineHeight: '1.5' }],
         'body-sm': ['13px', { lineHeight: '1.45' }],
-        caption: ['12px', { lineHeight: '1.4', letterSpacing: '0' }],
+        caption: ['12px', { lineHeight: '1.4', letterSpacing: '0.005em' }],
         eyebrow: ['11px', { lineHeight: '1', letterSpacing: '0.14em' }],
-        mono: ['12px', { lineHeight: '1', letterSpacing: '0' }],
+        mono: ['12px', { lineHeight: '1', letterSpacing: '-0.01em' }],
       },
       colors: {
         paper: {
@@ -65,18 +65,6 @@ const config: Config = {
         rose: {
           DEFAULT: 'var(--rose)',
           wash: 'var(--rose-wash)',
-        },
-        blue: {
-          DEFAULT: 'var(--blue)',
-          wash: 'var(--blue-wash)',
-        },
-        orange: {
-          DEFAULT: 'var(--orange)',
-          wash: 'var(--orange-wash)',
-        },
-        violet: {
-          DEFAULT: 'var(--violet)',
-          wash: 'var(--violet-wash)',
         },
         // shadcn/ui compatibility aliases — map to atlas tokens
         background: 'var(--paper)',

@@ -36,11 +36,11 @@ export function TopBar({ bell }: { bell?: ReactNode }) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-[50px] items-center justify-between border-b border-[var(--cc-rule)] bg-[rgba(3,5,7,0.82)] px-6 backdrop-blur"
+      className="sticky top-0 z-30 flex h-[50px] items-center justify-between border-b border-[var(--cc-rule)] bg-[rgba(255,255,255,0.7)] px-6 backdrop-blur"
       role="banner"
     >
       <p className="text-[12px] text-[var(--cc-ink-3)]">
-        {crumb} <span className="mx-1.5 text-[var(--cc-ink-4)]">/</span>
+        {crumb} <span className="mx-1.5 text-[#A3A8C7]">/</span>
         <strong className="font-semibold text-[var(--cc-ink)]">{title}</strong>
       </p>
       <div className="flex items-center gap-2">
@@ -53,7 +53,7 @@ export function TopBar({ bell }: { bell?: ReactNode }) {
 
 function AtlasPill() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--cc-ink)]">
+    <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-[var(--cc-rule)] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[var(--cc-ink)]">
       <span aria-hidden className="size-2 rotate-45 rounded-[2px] bg-[var(--cc-accent)]" />
       Atlas
     </span>

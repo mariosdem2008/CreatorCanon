@@ -10,9 +10,15 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <Link
           href="/"
           aria-label="Back to CreatorCanon homepage"
-          className="flex items-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)]"
+          className="flex items-center gap-2.5 rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)]"
         >
-          <Logo size={18} />
+          <Logo
+            size={18}
+            textColor="var(--cc-ink)"
+            markColor="var(--cc-accent)"
+            markDepthColor="var(--cc-accent-strong)"
+            markHighlightColor="#8b8aff"
+          />
         </Link>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cc-accent)]/30 bg-[var(--cc-accent-wash)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cc-accent)]">
           <span aria-hidden className="size-1.5 rounded-full bg-[var(--cc-accent)]" />
@@ -26,7 +32,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--cc-ink-4)]">
               Agentic creator operations
             </p>
-            <h1 className="mt-3 max-w-2xl text-[44px] font-semibold leading-[1.05] tracking-[0] text-[var(--cc-ink)]">
+            <h1 className="mt-3 max-w-2xl text-[44px] font-semibold leading-[1.05] tracking-[-0.02em] text-[var(--cc-ink)]">
               Turn a video archive into a source-grounded knowledge product.
             </h1>
             <p className="mt-5 max-w-xl text-[14px] leading-[1.65] text-[var(--cc-ink-3)]">

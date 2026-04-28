@@ -1,45 +1,36 @@
-/* CreatorCanon Design System - SaaS brand tokens */
+/* CreatorCanon Design System — exact port of prototype/styles.css */
 
 :root {
-  /* Canvas */
-  --paper: #030507;
-  --paper-2: #0b0f14;
-  --paper-3: #111821;
-  --paper-warm: #0b0f14;
-  --paper-studio: #030507;
-  --paper-studio-2: #111821;
+  /* Paper & ink — warm editorial palette */
+  --paper: oklch(0.985 0.005 85);
+  --paper-2: oklch(0.965 0.006 85);
+  --paper-3: oklch(0.945 0.007 85);
+  --paper-warm: oklch(0.975 0.01 75);
+  --paper-studio: oklch(0.93 0.009 85);
+  --paper-studio-2: oklch(0.9 0.01 85);
 
-  /* Text */
-  --ink: #f6f7f8;
-  --ink-2: #d9dee5;
-  --ink-3: #a7adb5;
-  --ink-4: #737b86;
-  --ink-5: #46505c;
-  --studio-ink: #f6f7f8;
-  --studio-ink-2: #d9dee5;
+  --ink: oklch(0.18 0.012 260);
+  --ink-2: oklch(0.32 0.01 260);
+  --ink-3: oklch(0.48 0.008 260);
+  --ink-4: oklch(0.64 0.006 260);
+  --ink-5: oklch(0.78 0.005 260);
+  --studio-ink: oklch(0.15 0.01 260);
+  --studio-ink-2: oklch(0.24 0.012 260);
 
-  /* Structure */
-  --rule: #2a3038;
-  --rule-strong: #343c47;
-  --rule-dark: #1a2028;
+  --rule: oklch(0.91 0.006 85);
+  --rule-strong: oklch(0.85 0.008 85);
+  --rule-dark: oklch(0.8 0.01 85);
 
-  /* Accents */
-  --amber: #00e88a;
-  --amber-ink: #00e88a;
-  --amber-wash: rgba(0, 232, 138, 0.12);
+  /* Accents — single amber + sage + rose */
+  --amber: oklch(0.62 0.12 55);
+  --amber-ink: oklch(0.35 0.09 55);
+  --amber-wash: oklch(0.96 0.025 75);
 
-  --sage: #00e88a;
-  --sage-wash: rgba(0, 232, 138, 0.12);
+  --sage: oklch(0.52 0.05 160);
+  --sage-wash: oklch(0.96 0.015 160);
 
-  --rose: #ff3434;
-  --rose-wash: rgba(255, 52, 52, 0.12);
-
-  --blue: #1e6bff;
-  --blue-wash: rgba(30, 107, 255, 0.14);
-  --orange: #ff9a3d;
-  --orange-wash: rgba(255, 154, 61, 0.14);
-  --violet: #7c6dff;
-  --violet-wash: rgba(124, 109, 255, 0.14);
+  --rose: oklch(0.58 0.12 25);
+  --rose-wash: oklch(0.965 0.02 25);
 
   /* Radii */
   --r-xs: 4px;
@@ -48,10 +39,10 @@
   --r-lg: 12px;
   --r-xl: 16px;
 
-  /* Shadow - restrained dark elevation */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(246, 247, 248, 0.02);
-  --shadow-2: 0 12px 28px rgba(0, 0, 0, 0.34), 0 1px 3px rgba(0, 0, 0, 0.28);
-  --shadow-pop: 0 22px 70px rgba(0, 0, 0, 0.46), 0 0 36px rgba(0, 232, 138, 0.08);
+  /* Shadow — very restrained */
+  --shadow-1: 0 1px 2px oklch(0.18 0.012 260 / 0.04), 0 1px 1px oklch(0.18 0.012 260 / 0.03);
+  --shadow-2: 0 4px 12px oklch(0.18 0.012 260 / 0.06), 0 1px 3px oklch(0.18 0.012 260 / 0.04);
+  --shadow-pop: 0 14px 40px oklch(0.18 0.012 260 / 0.12), 0 2px 6px oklch(0.18 0.012 260 / 0.05);
 }
 
 *,
@@ -73,6 +64,6 @@ body {
 }
 
 ::selection {
-  background: rgba(0, 232, 138, 0.25);
-  color: var(--ink);
+  background: var(--amber-wash);
+  color: var(--amber-ink);
 }

@@ -22,7 +22,7 @@ export function Hero() {
             Private alpha — for serious business creators
           </Badge>
 
-          <h1 className="font-serif text-display-xl text-ink max-w-[820px] tracking-[0]">
+          <h1 className="font-serif text-display-xl text-ink max-w-[820px] tracking-[-0.025em]">
             Your archive becomes a{' '}
             <em className="italic text-amber-ink">premium</em> knowledge product your audience can actually use.
           </h1>
@@ -75,6 +75,7 @@ function HubPreview() {
       aria-label="Preview of a published CreatorCanon hub"
       className="relative w-full max-w-[460px] justify-self-end"
     >
+      <div className="absolute -right-3 -top-3 hidden h-24 w-24 rounded-full bg-amber-wash blur-2xl lg:block" aria-hidden />
       <div className="relative overflow-hidden rounded-2xl border border-rule bg-paper shadow-pop">
         <div className="flex items-center justify-between border-b border-rule bg-paper-2 px-4 py-2.5 text-caption">
           <span className="font-mono text-ink-4 tabular-nums">creatorcanon.com/h/operator-ledger</span>
@@ -106,7 +107,7 @@ function HubPreview() {
 
           <div className="space-y-3 p-4">
             <div className="text-eyebrow uppercase text-amber-ink">Lesson 03</div>
-            <h3 className="font-serif text-[20px] leading-[1.2] tracking-[0] text-ink">
+            <h3 className="font-serif text-[20px] leading-[1.2] tracking-[-0.01em] text-ink">
               The four conversations that close a $50k contract.
             </h3>
             <p className="text-body-sm text-ink-3">

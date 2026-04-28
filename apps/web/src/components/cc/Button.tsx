@@ -11,13 +11,13 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary:
-    'bg-[var(--cc-accent)] text-[var(--cc-canvas)] shadow-[0_0_24px_rgba(0,232,138,0.16)] hover:bg-[#27F2A4]',
+    'bg-[var(--cc-accent)] text-white shadow-[0_1px_2px_rgba(88,86,246,0.18)] hover:bg-[var(--cc-accent-strong)]',
   secondary:
-    'bg-[var(--cc-surface)] text-[var(--cc-ink)] border border-[var(--cc-rule)] hover:border-[var(--cc-ink-4)] hover:bg-[var(--cc-surface-2)]',
+    'bg-white text-[var(--cc-ink)] border border-[var(--cc-rule)] hover:border-[var(--cc-ink-4)]',
   ghost:
     'bg-transparent text-[var(--cc-ink-2)] hover:bg-[var(--cc-surface-2)] hover:text-[var(--cc-ink)]',
   danger:
-    'bg-[var(--cc-danger)] text-white hover:bg-[#E62727]',
+    'bg-[var(--cc-danger)] text-white hover:bg-[#dc2626]',
 };
 
 const sizes: Record<Size, string> = {
