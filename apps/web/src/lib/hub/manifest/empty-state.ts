@@ -24,6 +24,24 @@ export function citationUrl(
   return `https://www.youtube.com/watch?v=${video.youtubeId}&t=${t}s`;
 }
 
+export function safeCitationHref(
+  citation: Pick<Citation, 'url' | 'timestampStart'>,
+  video: Pick<SourceVideo, 'youtubeId'>,
+): string | null {
+  if (citation.url && !citation.url.includes('watch?v=null')) return citation.url;
+  if (!video.youtubeId || video.youtubeId === 'null') return null;
+  const t = Math.floor(citation.timestampStart);
+  return `https://www.youtube.com/watch?v=${video.youtubeId}&t=${t}s`;
+}
+
+export function safeSourceTitle(rawTitle: string | null | undefined, ordinal: number): string {
+  const title = (rawTitle ?? '').trim();
+  if (!title || /^untitled(\s+(source|video))?$/i.test(title) || /^source(?:\s*[·-]\s*\d+\s*min)?$/i.test(title)) {
+    return `Source ${ordinal}`;
+  }
+  return title;
+}
+
 /**
  * Formats a duration in seconds as `mm:ss` or `h:mm:ss`.
  */

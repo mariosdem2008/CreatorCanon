@@ -1,11 +1,11 @@
 // apps/web/src/app/h/[hubSlug]/start/page.tsx
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
+import { ArtifactCard, PathCard, SourceMomentCard } from '@/components/hub/EditorialAtlas/blocks/WorkbenchCards';
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { loadHubManifest } from '../manifest';
-import type { Page } from '@/lib/hub/manifest/schema';
-import { getPageRoute, getStartRoute, getTopicsRoute } from '@/lib/hub/routes';
+import { getStartRoute } from '@/lib/hub/routes';
+import { deriveHubWorkbench } from '@/lib/hub/workbench';
 
 export const revalidate = 60;
 
@@ -16,57 +16,39 @@ export async function generateMetadata({ params }: { params: { hubSlug: string }
 
 export default async function StartHere({ params }: { params: { hubSlug: string } }) {
   const { manifest: m } = await loadHubManifest(params.hubSlug);
-
-  // Three "paths" curated from the published pages.
-  const beginnerPath = m.pages.filter((p) => p.type === 'lesson' && p.evidenceQuality === 'strong').slice(0, 3);
-  const builderPath  = m.pages.filter((p) => p.type === 'framework' && p.status === 'published').slice(0, 3);
-  const deepPath     = m.pages.filter((p) => p.type === 'playbook' && p.status === 'published').slice(0, 3);
+  const workbench = deriveHubWorkbench(m);
 
   return (
     <HubShell manifest={m} activePathname={getStartRoute(params.hubSlug)}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A8E7C]">Start here</p>
-      <h1 className="mt-3 text-[36px] font-semibold tracking-[-0.02em]">New to the hub?</h1>
-      <p className="mt-2 max-w-[640px] text-[14px] leading-[1.55] text-[#3D352A]">
-        Three paths into the archive — pick the one that matches how you want to use it. Each path is three pages long and source-backed end to end.
+      <h1 className="mt-3 max-w-[760px] text-[36px] font-semibold leading-[1.08] tracking-[-0.02em]">Choose the job you came here to do</h1>
+      <p className="mt-3 max-w-[680px] text-[14px] leading-[1.6] text-[#3D352A]">
+        The hub is organized around action paths. Start with the path that matches your current job, then use the source moments and artifacts as support.
       </p>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
-        <Path title="Beginner path" body="Start with the most-cited foundational lessons."   pages={beginnerPath} hubSlug={params.hubSlug} />
-        <Path title="Builder path"  body="Frameworks you can apply to your own work this week." pages={builderPath} hubSlug={params.hubSlug} />
-        <Path title="Deep dive"     body="Full systems you can adopt end to end."              pages={deepPath}    hubSlug={params.hubSlug} />
+      <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <PathCard path={workbench.startPath} hubSlug={params.hubSlug} />
+        <PathCard path={workbench.buildPath} hubSlug={params.hubSlug} />
+        <PathCard path={workbench.copyPath} hubSlug={params.hubSlug} />
       </div>
 
-      <section className="mt-12 rounded-[12px] border border-[#E5DECF] bg-white p-6">
-        <h2 className="text-[14px] font-semibold tracking-[-0.01em] text-[#1A1612]">How to know where to start</h2>
-        <p className="mt-2 text-[13px] leading-[1.55] text-[#3D352A]">
-          If you want a foundation, start with the lessons. If you have a problem this week, start with a framework.
-          If you want to overhaul a habit or workflow, start with a playbook. You can always switch — pages link to each other.
-        </p>
-        <Link href={getTopicsRoute(params.hubSlug)} className="mt-3 inline-flex text-[13px] font-semibold text-[#1A1612] hover:underline">
-          Or browse by topic →
-        </Link>
-      </section>
-    </HubShell>
-  );
-}
+      {workbench.artifacts.length > 0 ? (
+        <section className="mt-12">
+          <h2 className="text-[20px] font-semibold tracking-[-0.015em]">Artifacts to copy</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {workbench.artifacts.slice(0, 6).map((artifact) => <ArtifactCard key={artifact.id} artifact={artifact} hubSlug={params.hubSlug} />)}
+          </div>
+        </section>
+      ) : null}
 
-function Path({ title, body, pages, hubSlug }: {
-  title: string; body: string; pages: Page[]; hubSlug: string;
-}) {
-  return (
-    <section className="rounded-[12px] border border-[#E5DECF] bg-white p-5">
-      <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-[#1A1612]">{title}</h2>
-      <p className="mt-1 text-[13px] leading-[1.55] text-[#6B5F50]">{body}</p>
-      <ol className="mt-4 space-y-2">
-        {pages.map((p, i) => (
-          <li key={p.id}>
-            <Link href={getPageRoute(hubSlug, p.slug)} className="flex items-center gap-3 rounded-[8px] border border-transparent px-2 py-1.5 hover:border-[#E5DECF] hover:bg-[#FAF6EE]">
-              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-[#F2EBDA] text-[10px] font-semibold text-[#3D352A] [font-feature-settings:'tnum']">{i + 1}</span>
-              <span className="min-w-0 truncate text-[13px] font-medium text-[#1A1612]">{p.title}</span>
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </section>
+      {workbench.sourceMoments.length > 0 ? (
+        <section className="mt-12">
+          <h2 className="text-[20px] font-semibold tracking-[-0.015em]">Best source moments</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {workbench.sourceMoments.slice(0, 6).map((moment) => <SourceMomentCard key={moment.id} moment={moment} />)}
+          </div>
+        </section>
+      ) : null}
+    </HubShell>
   );
 }

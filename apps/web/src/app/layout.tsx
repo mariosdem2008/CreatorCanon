@@ -15,10 +15,11 @@ export const metadata: Metadata = {
     template: '%s | CreatorCanon',
   },
   description:
-    'Turn your YouTube archive into a hosted knowledge hub — grounded, cited, creator-owned.',
+    'Turn your YouTube archive into a hosted knowledge hub - grounded, cited, creator-owned.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
   icons: {
     icon: [
+      { url: '/brand/favicon.svg', type: 'image/svg+xml' },
       { url: '/brand/favicon-16.png', sizes: '16x16', type: 'image/png' },
       { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
       { url: '/brand/favicon-64.png', sizes: '64x64', type: 'image/png' },

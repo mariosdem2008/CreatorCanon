@@ -5,7 +5,14 @@ export type AgentName =
   | 'playbook_extractor' | 'source_ranker' | 'quote_finder' | 'aha_moment_detector'
   | 'citation_grounder' | 'page_composer'
   | 'channel_profiler' | 'video_analyst' | 'canon_architect' | 'page_brief_planner' | 'page_writer'
-  | 'visual_frame_analyst';
+  | 'visual_frame_analyst'
+  | 'page_strategist'
+  | 'prose_author'
+  | 'roadmap_author'
+  | 'example_author'
+  | 'diagram_author'
+  | 'mistakes_author'
+  | 'critic';
 
 interface ModelChoice {
   modelId: string;
@@ -36,6 +43,13 @@ const REGISTRY: Record<AgentName, AgentConfig> = {
   page_brief_planner:   { envVar: 'PIPELINE_MODEL_PAGE_BRIEF_PLANNER',   default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
   page_writer:          { envVar: 'PIPELINE_MODEL_PAGE_WRITER',          default: M('gpt-5.5','openai'),          fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
   visual_frame_analyst: { envVar: 'PIPELINE_MODEL_VISUAL_FRAME_ANALYST', default: M('gemini-2.5-flash','gemini'), fallbackChain: [M('gemini-2.5-pro','gemini')] },
+  page_strategist:    { envVar: 'PIPELINE_MODEL_PAGE_STRATEGIST',    default: M('gpt-5.5','openai'),         fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
+  prose_author:       { envVar: 'PIPELINE_MODEL_PROSE_AUTHOR',       default: M('gpt-5.5','openai'),         fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
+  roadmap_author:     { envVar: 'PIPELINE_MODEL_ROADMAP_AUTHOR',     default: M('gemini-2.5-flash','gemini'),fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
+  example_author:     { envVar: 'PIPELINE_MODEL_EXAMPLE_AUTHOR',     default: M('gpt-5.5','openai'),         fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
+  diagram_author:     { envVar: 'PIPELINE_MODEL_DIAGRAM_AUTHOR',     default: M('gpt-5.4','openai'),         fallbackChain: [M('gpt-5.5','openai'),  M('gemini-2.5-pro','gemini')] },
+  mistakes_author:    { envVar: 'PIPELINE_MODEL_MISTAKES_AUTHOR',    default: M('gemini-2.5-flash','gemini'),fallbackChain: [M('gpt-5.4','openai'), M('gpt-5.5','openai')] },
+  critic:             { envVar: 'PIPELINE_MODEL_CRITIC',             default: M('gpt-5.5','openai'),         fallbackChain: [M('gpt-5.4','openai'), M('gemini-2.5-pro','gemini')] },
 };
 
 type ModelMode = 'hybrid' | 'gemini_only' | 'openai_only';
@@ -63,6 +77,13 @@ const QUALITY_PRESETS: Record<QualityMode, Partial<Record<AgentName, ModelChoice
     canon_architect:    M('gemini-2.5-pro',   'gemini'),
     page_brief_planner: M('gemini-2.5-flash', 'gemini'),
     page_writer:        M('gemini-2.5-flash', 'gemini'),
+    page_strategist:    M('gemini-2.5-pro',   'gemini'),
+    prose_author:       M('gemini-2.5-pro',   'gemini'),
+    roadmap_author:     M('gemini-2.5-flash', 'gemini'),
+    example_author:     M('gemini-2.5-pro',   'gemini'),
+    diagram_author:     M('gemini-2.5-flash', 'gemini'),
+    mistakes_author:    M('gemini-2.5-flash', 'gemini'),
+    critic:             M('gemini-2.5-pro',   'gemini'),
   },
   // Recommended default. Right-sized: Flash for extraction/structural agents,
   // Pro for long-context reading (video_analyst), gpt-5.5 only for the
@@ -73,6 +94,13 @@ const QUALITY_PRESETS: Record<QualityMode, Partial<Record<AgentName, ModelChoice
     canon_architect:    M('gpt-5.5',          'openai'),
     page_brief_planner: M('gemini-2.5-flash', 'gemini'),
     page_writer:        M('gemini-2.5-flash', 'gemini'),
+    page_strategist:    M('gpt-5.5',          'openai'),
+    prose_author:       M('gpt-5.5',          'openai'),
+    roadmap_author:     M('gemini-2.5-flash', 'gemini'),
+    example_author:     M('gpt-5.5',          'openai'),
+    diagram_author:     M('gpt-5.4',          'openai'),
+    mistakes_author:    M('gemini-2.5-flash', 'gemini'),
+    critic:             M('gpt-5.5',          'openai'),
   },
   // Maximum quality. Every text agent on gpt-5.5.
   premium: {
@@ -81,6 +109,13 @@ const QUALITY_PRESETS: Record<QualityMode, Partial<Record<AgentName, ModelChoice
     canon_architect:    M('gpt-5.5', 'openai'),
     page_brief_planner: M('gpt-5.5', 'openai'),
     page_writer:        M('gpt-5.5', 'openai'),
+    page_strategist:    M('gpt-5.5', 'openai'),
+    prose_author:       M('gpt-5.5', 'openai'),
+    roadmap_author:     M('gpt-5.5', 'openai'),
+    example_author:     M('gpt-5.5', 'openai'),
+    diagram_author:     M('gpt-5.5', 'openai'),
+    mistakes_author:    M('gpt-5.5', 'openai'),
+    critic:             M('gpt-5.5', 'openai'),
   },
 };
 

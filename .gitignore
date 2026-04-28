@@ -68,3 +68,4 @@ playwright/.cache/
 # Claude Code + Superpowers session state
 .claude/
 .superpowers/
+.worktrees/

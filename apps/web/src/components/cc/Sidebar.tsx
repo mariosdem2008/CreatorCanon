@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { Logo } from '@creatorcanon/ui';
+
 import { NavList } from './NavList';
 
 export type SidebarUser = {
@@ -20,13 +22,13 @@ export function Sidebar({ user, signOutSlot }: { user: SidebarUser; signOutSlot?
         aria-label="CreatorCanon home"
         className="flex items-center gap-2.5 px-1.5 py-1 mb-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)] rounded-lg"
       >
-        <span
-          aria-hidden
-          className="grid place-items-center w-7 h-7 rounded-lg bg-gradient-to-br from-[var(--cc-accent)] to-[#8b8aff] text-white font-bold text-[14px]"
-        >
-          C
-        </span>
-        <span className="font-semibold text-[14px] tracking-[-0.005em]">CreatorCanon</span>
+        <Logo
+          size={18}
+          textColor="#FFFFFF"
+          markColor="var(--cc-accent)"
+          markDepthColor="var(--cc-accent-strong)"
+          markHighlightColor="#8b8aff"
+        />
       </Link>
 
       <NavList />

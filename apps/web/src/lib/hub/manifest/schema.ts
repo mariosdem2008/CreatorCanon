@@ -29,6 +29,31 @@ export const pageSectionSchema = z.discriminatedUnion('kind', [
              attribution: z.string().optional(),
              sourceVideoId: z.string().optional(),
              timestampStart: z.number().int().min(0).optional(),                                                              ...sectionCitations }),
+  z.object({
+    kind: z.literal('roadmap'),
+    title: z.string().min(1),
+    steps: z.array(z.object({
+      index: z.number().int().min(1),
+      title: z.string().min(1),
+      body: z.string().min(1),
+      durationLabel: z.string().optional(),
+    })).min(2).max(9),
+    ...sectionCitations,
+  }),
+  z.object({
+    kind: z.literal('diagram'),
+    diagramType: z.enum(['flowchart', 'sequence', 'state', 'mindmap']),
+    mermaidSrc: z.string().min(10),
+    caption: z.string().min(1),
+    ...sectionCitations,
+  }),
+  z.object({
+    kind: z.literal('hypothetical_example'),
+    setup: z.string().min(20),
+    stepsTaken: z.array(z.string().min(1)).min(2).max(7),
+    outcome: z.string().min(10),
+    ...sectionCitations,
+  }),
 ]);
 
 export type PageSection = z.infer<typeof pageSectionSchema>;

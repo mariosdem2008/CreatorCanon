@@ -14,6 +14,9 @@ import { CalloutSection } from './sections/CalloutSection';
 import { ParagraphSection } from './sections/ParagraphSection';
 import { ListSection } from './sections/ListSection';
 import { QuoteSection } from './sections/QuoteSection';
+import { RoadmapBlock } from '@/components/hub/sections/RoadmapBlock';
+import { DiagramBlock } from '@/components/hub/sections/DiagramBlock';
+import { HypotheticalExampleBlock } from '@/components/hub/sections/HypotheticalExampleBlock';
 
 type Props = {
   section: PageSection;
@@ -37,6 +40,9 @@ export function SectionRenderer({ section, citationsById, sourcesById }: Props) 
     case 'paragraph':       return <ParagraphSection       section={section} citationsById={citationsById} />;
     case 'list':            return <ListSection            section={section} citationsById={citationsById} />;
     case 'quote':           return <QuoteSection           section={section} citationsById={citationsById} sourcesById={sourcesById} />;
+    case 'roadmap':         return <RoadmapBlock           title={section.title} steps={section.steps} />;
+    case 'diagram':         return <DiagramBlock           diagramType={section.diagramType} mermaidSrc={section.mermaidSrc} caption={section.caption} />;
+    case 'hypothetical_example': return <HypotheticalExampleBlock setup={section.setup} stepsTaken={section.stepsTaken} outcome={section.outcome} />;
     default: {
       const _exhaustive: never = section;
       void _exhaustive;

@@ -186,6 +186,11 @@ const videoIntelligenceCardInput = z.object({
   payload: z.record(z.unknown()),
   evidenceSegmentIds: z.array(z.string()).max(200),
   visualMoments: z.array(visualMomentRefSchema).max(6).optional(),
+  failureModes: z.array(z.object({
+    condition: z.string().min(1),
+    impact: z.string().min(1),
+  })).max(4).optional(),
+  counterCases: z.array(z.string().min(1)).max(4).optional(),
   costCents: z.number().nonnegative().optional(),
 }).strict();
 
@@ -223,7 +228,11 @@ export const proposeVideoIntelligenceCardTool: ToolDef<z.infer<typeof videoIntel
     // 4) Sanitize: strip any payload.visualMoments the agent might smuggle (only validated input.visualMoments allowed).
     const payloadOut: Record<string, unknown> = { ...input.payload };
     delete payloadOut.visualMoments;
+    delete payloadOut.failureModes;
+    delete payloadOut.counterCases;
     if (input.visualMoments) payloadOut.visualMoments = input.visualMoments;
+    if (input.failureModes && input.failureModes.length > 0) payloadOut.failureModes = input.failureModes;
+    if (input.counterCases && input.counterCases.length > 0) payloadOut.counterCases = input.counterCases;
 
     // 5) Atomic upsert on (runId, videoId).
     const id = makeId('vic');
@@ -291,6 +300,16 @@ const canonNodeInput = z.object({
   specificityScore: z.number().int().min(0).max(100),
   creatorUniquenessScore: z.number().int().min(0).max(100),
   visualMomentIds: z.array(z.string().min(1)).max(20).optional(),
+  // Editorial fields — ALL required (set to null when source doesn't surface).
+  // The Author's Studio depends on these to produce mistakes / examples /
+  // roadmaps / diagrams without hallucination.
+  whenToUse: z.string().min(1).nullable(),
+  whenNotToUse: z.string().min(1).nullable(),
+  commonMistake: z.string().min(1).nullable(),
+  successSignal: z.string().min(1).nullable(),
+  preconditions: z.array(z.string().min(1)).optional(),
+  failureModes: z.array(z.string().min(1)).optional(),
+  sequencingRationale: z.string().min(1).nullable().optional(),
 }).strict();
 
 export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Result> = {
@@ -336,6 +355,14 @@ export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Resul
     if (input.visualMomentIds && input.visualMomentIds.length > 0) {
       payloadOut.visualMomentIds = [...new Set(input.visualMomentIds)];
     }
+    // Persist editorial fields in payload for downstream readers.
+    payloadOut.whenToUse = input.whenToUse;
+    payloadOut.whenNotToUse = input.whenNotToUse;
+    payloadOut.commonMistake = input.commonMistake;
+    payloadOut.successSignal = input.successSignal;
+    if (input.preconditions !== undefined) payloadOut.preconditions = input.preconditions;
+    if (input.failureModes !== undefined) payloadOut.failureModes = input.failureModes;
+    if (input.sequencingRationale !== undefined) payloadOut.sequencingRationale = input.sequencingRationale;
 
     // Citation metrics derive from evidence + sources.
     const citationCount = new Set(input.evidenceSegmentIds).size;

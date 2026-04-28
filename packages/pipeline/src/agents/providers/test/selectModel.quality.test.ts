@@ -100,4 +100,30 @@ describe('selectModel — PIPELINE_QUALITY_MODE', () => {
     const r = selectModel('video_analyst', { PIPELINE_MODEL_MODE: 'gemini_only' });
     assert.equal(r.modelId, 'gemini-2.5-pro');
   });
+
+  it('production_economy: prose_author + critic + page_strategist + example_author → gpt-5.5', () => {
+    const env = { PIPELINE_QUALITY_MODE: 'production_economy' };
+    assert.equal(selectModel('page_strategist', env).modelId, 'gpt-5.5');
+    assert.equal(selectModel('prose_author', env).modelId, 'gpt-5.5');
+    assert.equal(selectModel('example_author', env).modelId, 'gpt-5.5');
+    assert.equal(selectModel('critic', env).modelId, 'gpt-5.5');
+  });
+
+  it('production_economy: roadmap_author + mistakes_author → gemini-2.5-flash', () => {
+    const env = { PIPELINE_QUALITY_MODE: 'production_economy' };
+    assert.equal(selectModel('roadmap_author', env).modelId, 'gemini-2.5-flash');
+    assert.equal(selectModel('mistakes_author', env).modelId, 'gemini-2.5-flash');
+  });
+
+  it('production_economy: diagram_author → gpt-5.4 (Mermaid is constrained syntax)', () => {
+    const r = selectModel('diagram_author', { PIPELINE_QUALITY_MODE: 'production_economy' });
+    assert.equal(r.modelId, 'gpt-5.4');
+  });
+
+  it("lean: every Author's Studio agent stays Gemini", () => {
+    const env = { PIPELINE_QUALITY_MODE: 'lean' };
+    for (const a of ['page_strategist','prose_author','roadmap_author','example_author','diagram_author','mistakes_author','critic'] as const) {
+      assert.equal(selectModel(a, env).provider, 'gemini', `${a} should be Gemini in lean mode`);
+    }
+  });
 });
