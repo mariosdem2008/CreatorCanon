@@ -1,9 +1,34 @@
 import { eq, inArray } from '@creatorcanon/db';
 import { page, pageVersion, segment } from '@creatorcanon/db/schema';
 import type { AtlasDb } from '@creatorcanon/db';
+import type { Artifact, Page, WorkbenchIntent } from './manifest-types';
 import type { ProjectedTopic } from './project-topics';
 import { enrichQuoteSection, type SectionLike } from './quote-enrichment';
 import { titleCase } from './title-case';
+
+export interface AtlasWorkbenchArtifact {
+  id: string;
+  type: Artifact['type'];
+  title: string;
+  body: string;
+  citationIds: string[];
+}
+
+export interface AtlasWorkbenchMeta {
+  readerJob?: WorkbenchIntent;
+  outcome?: string;
+  useWhen?: string[];
+  artifacts?: AtlasWorkbenchArtifact[];
+  nextStepHints?: Array<{ title: string; reason: string }>;
+}
+
+export type ProjectedPageWithInternal = Page & {
+  _internal: {
+    evidenceSegmentIds: string[];
+    primaryFindingId: string;
+    workbench?: AtlasWorkbenchMeta;
+  };
+};
 
 interface AtlasMeta {
   evidenceQuality: 'strong' | 'moderate' | 'limited' | 'unverified';
@@ -14,6 +39,7 @@ interface AtlasMeta {
   evidenceSegmentIds: string[];
   primaryFindingId: string;
   supportingFindingIds: string[];
+  workbench?: AtlasWorkbenchMeta;
 }
 
 function coerceEvidenceQuality(
@@ -338,6 +364,7 @@ export async function projectPages({
       // (early-stage runs before all field-name fixes propagate) fall back
       // to the title or a stock string so the manifest parses.
       const safeSummary = (v.summary ?? '').trim() || titleCase(v.title) || 'See the source material for more.';
+      const workbenchMeta = meta.workbench;
       return {
         id: p.id,
         slug: p.slug,
@@ -349,6 +376,12 @@ export async function projectPages({
         title: titleCase(v.title),
         summary: safeSummary,
         summaryPlainText: plainText(safeSummary),
+        readerJob: workbenchMeta?.readerJob,
+        outcome: workbenchMeta?.outcome,
+        useWhen: workbenchMeta?.useWhen,
+        artifactIds: workbenchMeta?.artifacts?.map((artifact) => artifact.id) ?? [],
+        sourceMomentIds: [],
+        nextStepPageIds: [],
         searchKeywords: searchKeywords(v.title, v.summary ?? ''),
         topicSlugs,
         estimatedReadMinutes: estimatedMinutes(tree),
@@ -372,6 +405,7 @@ export async function projectPages({
         _internal: {
           evidenceSegmentIds: meta.evidenceSegmentIds,
           primaryFindingId: meta.primaryFindingId,
+          workbench: workbenchMeta,
         },
       };
     })
