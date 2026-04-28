@@ -22,7 +22,7 @@ import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import type { StageContext } from '../harness';
 import { buildFallbacks } from './fallback-chain';
 
-import type { PagePlan, ArtifactBundle, ArtifactKind, VoiceMode } from '../authors-studio/types';
+import type { PagePlan, ArtifactBundle, ArtifactKind, VoiceMode, WorkbenchArtifactDraft } from '../authors-studio/types';
 import { runStrategist } from '../authors-studio/strategist';
 import { runProseAuthor } from '../authors-studio/specialists/prose';
 import { runRoadmapAuthor } from '../authors-studio/specialists/roadmap';
@@ -36,6 +36,17 @@ import type { SpecialistContext } from '../authors-studio/specialists/_runner';
 
 function nano(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 10);
+}
+
+export function collectWorkbenchArtifactsFromBundle(
+  bundle: Pick<ArtifactBundle, 'roadmap' | 'example' | 'mistakes' | 'workbenchArtifacts'>,
+): WorkbenchArtifactDraft[] {
+  return [
+    bundle.roadmap?.workbenchArtifact,
+    bundle.example?.workbenchArtifact,
+    bundle.mistakes?.workbenchArtifact,
+    ...(bundle.workbenchArtifacts ?? []),
+  ].filter((artifact): artifact is WorkbenchArtifactDraft => Boolean(artifact));
 }
 
 export interface PageCompositionStageInput {
@@ -230,6 +241,10 @@ export async function runPageCompositionStage(
       diagram: diagramRes ?? undefined,
       mistakes: mistakesRes ?? undefined,
     };
+    const workbenchArtifacts = collectWorkbenchArtifactsFromBundle(bundle);
+    if (workbenchArtifacts.length > 0) {
+      bundle.workbenchArtifacts = workbenchArtifacts;
+    }
     totalCostCents += proseRes.costCents
       + (roadmapRes?.costCents ?? 0)
       + (exampleRes?.costCents ?? 0)
