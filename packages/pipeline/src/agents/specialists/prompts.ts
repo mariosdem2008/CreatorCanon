@@ -178,14 +178,16 @@ Payload caps (quality over quantity):
 - lessons: 2-8
 - examples: 0-6
 - stories: 0-4
-- mistakesToAvoid: 0-6
+- mistakesToAvoid: 2-6 — REQUIRED. Capture EVERY moment the creator names a mistake, anti-pattern, or "don't do X" warning. Each item: { mistake: "...", why: "...", correction: "..." }. If the creator says nothing prescriptive, surface implied warnings from the way the creator describes a problem.
+- failureModes: 0-4 — when does a procedure or principle fail? Capture the conditions under which the creator's advice DOESN'T apply or breaks down.
+- counterCases: 0-4 — situations where the principle should NOT be applied. Empty if creator doesn't address.
 - toolsMentioned: 0-12
 - termsDefined: 0-8
 - strongClaims: 0-8
 - contrarianTakes: 0-5
 - quotes: 3-8 (10-280 chars; stand-alone)
 - recommendedHubUses: 2-6
-- visualMoments: 0-6 (selected from the pre-loaded list — cite their visualMomentId, timestampMs, type, description, hubUse)
+- visualMoments: 0-6 (selected from listVisualMoments — cite their visualMomentId, timestampMs, type, description, hubUse)
 
 Quality gates:
 - Every list item MUST cite >= 1 segmentId from the pre-loaded transcript.

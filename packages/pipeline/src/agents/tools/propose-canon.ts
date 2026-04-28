@@ -186,6 +186,11 @@ const videoIntelligenceCardInput = z.object({
   payload: z.record(z.unknown()),
   evidenceSegmentIds: z.array(z.string()).max(200),
   visualMoments: z.array(visualMomentRefSchema).max(6).optional(),
+  failureModes: z.array(z.object({
+    condition: z.string().min(1),
+    impact: z.string().min(1),
+  })).max(4).optional(),
+  counterCases: z.array(z.string().min(1)).max(4).optional(),
   costCents: z.number().nonnegative().optional(),
 }).strict();
 
@@ -223,7 +228,11 @@ export const proposeVideoIntelligenceCardTool: ToolDef<z.infer<typeof videoIntel
     // 4) Sanitize: strip any payload.visualMoments the agent might smuggle (only validated input.visualMoments allowed).
     const payloadOut: Record<string, unknown> = { ...input.payload };
     delete payloadOut.visualMoments;
+    delete payloadOut.failureModes;
+    delete payloadOut.counterCases;
     if (input.visualMoments) payloadOut.visualMoments = input.visualMoments;
+    if (input.failureModes && input.failureModes.length > 0) payloadOut.failureModes = input.failureModes;
+    if (input.counterCases && input.counterCases.length > 0) payloadOut.counterCases = input.counterCases;
 
     // 5) Atomic upsert on (runId, videoId).
     const id = makeId('vic');
