@@ -32,6 +32,34 @@ const GENERIC_PHRASES = [
 
 const GENERIC_TITLES = ['untitled', 'page', 'lesson', 'framework', 'playbook'];
 
+export function evaluateWorkbenchChecks(meta: Record<string, unknown>) {
+  const wb = (
+    meta as {
+      workbench?: {
+        readerJob?: string;
+        outcome?: string;
+        useWhen?: string[];
+        artifacts?: Array<{ title?: string; body?: string; citationIds?: string[] }>;
+      };
+    }
+  ).workbench;
+  return {
+    readerJobPresent: ['learn', 'build', 'copy', 'decide', 'debug'].includes(wb?.readerJob ?? ''),
+    workbenchOutcomePresent: typeof wb?.outcome === 'string' && wb.outcome.length >= 20,
+    useWhenPresent: Array.isArray(wb?.useWhen) && wb.useWhen.length >= 2,
+    artifactPresent:
+      Array.isArray(wb?.artifacts) &&
+      wb.artifacts.some(
+        (artifact) =>
+          typeof artifact.title === 'string' &&
+          typeof artifact.body === 'string' &&
+          artifact.body.length >= 40 &&
+          Array.isArray(artifact.citationIds) &&
+          artifact.citationIds.length > 0,
+      ),
+  };
+}
+
 interface BlockShape {
   type: string;
   content: Record<string, unknown>;
@@ -142,6 +170,9 @@ export async function runPageQualityStage(input: PageQualityStageInput): Promise
     checks.promisedOutcomePresent = {
       pass: typeof meta.promisedOutcome === 'string' && meta.promisedOutcome.length > 10,
     };
+    for (const [key, pass] of Object.entries(evaluateWorkbenchChecks(tree.atlasMeta ?? {}))) {
+      checks[key] = { pass };
+    }
 
     checks.titleNotGeneric = { pass: !GENERIC_TITLES.includes(v.title.toLowerCase().trim()) };
     checks.duplicateSlug = { pass: (slugCount.get(p.slug) ?? 0) === 1 };
@@ -237,13 +268,18 @@ function isSectionEmpty(b: BlockShape): boolean {
   return true;
 }
 
-function sumBodyChars(blocks: BlockShape[]): number {
+export function sumBodyChars(blocks: BlockShape[]): number {
   let n = 0;
   for (const b of blocks) {
     const c = b.content as {
       body?: string;
       items?: Array<{ body?: string } | string>;
       schedule?: Array<{ items?: string[] }>;
+      steps?: Array<{ body?: string }>;
+      setup?: string;
+      stepsTaken?: string[];
+      outcome?: string;
+      caption?: string;
     };
     if (typeof c.body === 'string') n += c.body.length;
     if (Array.isArray(c.items)) {
@@ -255,6 +291,15 @@ function sumBodyChars(blocks: BlockShape[]): number {
     if (Array.isArray(c.schedule)) {
       for (const s of c.schedule) for (const i of s.items ?? []) n += String(i).length;
     }
+    if (Array.isArray(c.steps)) {
+      for (const step of c.steps) if (typeof step.body === 'string') n += step.body.length;
+    }
+    if (typeof c.setup === 'string') n += c.setup.length;
+    if (Array.isArray(c.stepsTaken)) {
+      for (const stepTaken of c.stepsTaken) n += String(stepTaken).length;
+    }
+    if (typeof c.outcome === 'string') n += c.outcome.length;
+    if (typeof c.caption === 'string') n += c.caption.length;
   }
   return n;
 }
