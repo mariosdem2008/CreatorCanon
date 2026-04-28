@@ -126,6 +126,7 @@ export async function createProject(formData: FormData): Promise<{ error: string
     lengthPreset,
     presentationPreset,
     chatEnabled,
+    voiceMode,
     videoIds,
   });
   const priceCents = FLAT_PRICE_CENTS;

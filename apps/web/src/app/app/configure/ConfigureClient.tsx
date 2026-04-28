@@ -25,6 +25,19 @@ const DEPTH_OPTIONS: Array<[Depth, string, string]> = [
   ['deep', 'Deep', 'Full coverage'],
 ];
 
+const VOICE_OPTIONS: Array<[VoiceMode, string, string]> = [
+  [
+    'reader_second_person',
+    'Direct (you-pronoun)',
+    '“If you want to win retainers, embed Phase 2 hooks in your Phase 1 proposal.”',
+  ],
+  [
+    'creator_first_person',
+    "Creator's voice (first-person)",
+    '“I built the proposal generator after losing too many deals to slow turnaround.”',
+  ],
+];
+
 export function ConfigureClient({
   videoIds,
   selectedVideoCount,
@@ -97,48 +110,22 @@ export function ConfigureClient({
               value={depth}
               onChange={setDepth}
             />
-            <fieldset className="mt-6">
-              <legend className="text-sm font-medium text-slate-900">Voice</legend>
-              <p className="mt-1 text-xs text-slate-500">
+            <div>
+              <p className="text-[11px] leading-[1.5] text-[var(--cc-ink-3)]">
                 Direct (you-pronoun) reads as a how-to. Creator&apos;s voice (first-person)
                 reads as the creator&apos;s own commentary. Choose direct unless this hub is
                 primarily personal essays.
               </p>
-              <div className="mt-3 space-y-2">
-                <label className="flex items-start gap-3 text-sm">
-                  <input
-                    type="radio"
-                    name="voiceMode"
-                    value="reader_second_person"
-                    checked={voiceMode === 'reader_second_person'}
-                    onChange={() => setVoiceMode('reader_second_person')}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-medium">Direct (you-pronoun)</span>
-                    <span className="block text-xs text-slate-500">
-                      &ldquo;If you want to win retainers, embed Phase 2 hooks in your Phase 1 proposal.&rdquo;
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-3 text-sm">
-                  <input
-                    type="radio"
-                    name="voiceMode"
-                    value="creator_first_person"
-                    checked={voiceMode === 'creator_first_person'}
-                    onChange={() => setVoiceMode('creator_first_person')}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-medium">Creator&apos;s voice (first-person)</span>
-                    <span className="block text-xs text-slate-500">
-                      &ldquo;I built the proposal generator after losing too many deals to slow turnaround.&rdquo;
-                    </span>
-                  </span>
-                </label>
+              <div className="mt-2">
+                <ChoiceGroup
+                  label="Voice"
+                  name="voiceMode"
+                  options={VOICE_OPTIONS}
+                  value={voiceMode}
+                  onChange={setVoiceMode}
+                />
               </div>
-            </fieldset>
+            </div>
           </div>
         </Panel>
 
