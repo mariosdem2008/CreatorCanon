@@ -340,6 +340,17 @@ The user message contains:
 
 Output a single JSON object matching this exact shape:
 
+Workbench planning requirement:
+- You are not planning a Wikipedia article. You are planning a source-backed workbench page.
+- Choose exactly one readerJob:
+  - learn: help the reader understand a source-backed concept well enough to recognize and explain it.
+  - build: help the reader assemble a concrete workflow, system, or implementation from the source evidence.
+  - copy: help the reader reuse a prompt, checklist, template, schema, or other repeatable artifact.
+  - decide: help the reader compare options, tradeoffs, or thresholds and choose a next action.
+  - debug: help the reader diagnose mistakes, failure modes, weak assumptions, or broken execution.
+- Every page must include a concrete outcome, 2-4 useWhen conditions, 1-3 concrete reusable artifactRequests, and 2-3 nextStepHints with logical next page titles and reasons.
+- Reject plans whose main output is only explanatory prose.
+
 {
   "pageId": "<the brief id>",
   "pageType": "<from brief>",

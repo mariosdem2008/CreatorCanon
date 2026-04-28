@@ -9,6 +9,34 @@ const ARTIFACT_KIND = z.enum(['cited_prose', 'roadmap', 'hypothetical_example', 
 const READER_JOB = z.enum(['learn', 'build', 'copy', 'decide', 'debug']);
 const WORKBENCH_ARTIFACT_TYPE = z.enum(['prompt', 'checklist', 'workflow', 'template', 'schema', 'mistake_map']);
 
+const workbenchArtifactRequestSchema = z.object({
+  type: WORKBENCH_ARTIFACT_TYPE,
+  title: z.string().min(4),
+  intent: z.string().min(12),
+  canonNodeIds: z.array(z.string()).min(1).max(20),
+});
+
+const workbenchNextStepHintSchema = z.object({
+  title: z.string().min(4),
+  reason: z.string().min(8),
+});
+
+const workbenchSchema = z.object({
+  readerJob: READER_JOB,
+  outcome: z.string().min(20),
+  useWhen: z.array(z.string().min(8)).min(2).max(4),
+  artifactRequests: z.array(workbenchArtifactRequestSchema).min(1).max(3),
+  nextStepHints: z.array(workbenchNextStepHintSchema).min(1).max(3),
+});
+
+const looseWorkbenchSchema = z.object({
+  readerJob: READER_JOB,
+  outcome: z.string().min(20),
+  useWhen: z.array(z.string().min(8)).min(2),
+  artifactRequests: z.array(workbenchArtifactRequestSchema).min(1),
+  nextStepHints: z.array(workbenchNextStepHintSchema).min(1),
+});
+
 const pagePlanSchema = z.object({
   pageId: z.string().min(1),
   pageType: z.string().min(1),
@@ -34,21 +62,11 @@ const pagePlanSchema = z.object({
     title: z.string().min(1),
     slug: z.string().min(1),
   })).max(20).optional().default([]),
-  workbench: z.object({
-    readerJob: READER_JOB,
-    outcome: z.string().min(10),
-    useWhen: z.array(z.string().min(10)).min(1).max(5),
-    artifactRequests: z.array(z.object({
-      type: WORKBENCH_ARTIFACT_TYPE,
-      title: z.string().min(1),
-      intent: z.string().min(10),
-      canonNodeIds: z.array(z.string()).min(1).max(20),
-    })).min(0).max(5),
-    nextStepHints: z.array(z.object({
-      title: z.string().min(1),
-      reason: z.string().min(10),
-    })).min(0).max(5),
-  }),
+  workbench: workbenchSchema,
+});
+
+const pagePlanInputSchema = pagePlanSchema.extend({
+  workbench: looseWorkbenchSchema,
 });
 
 export interface StrategistInput {
@@ -98,12 +116,25 @@ export async function runStrategist(input: StrategistInput): Promise<PagePlan> {
 
   const stripped = stripJsonFence(lastAssistant.content);
   const parsed = JSON.parse(stripped);
-  const validated = pagePlanSchema.parse(parsed);
+  const parsedPlan = pagePlanInputSchema.parse(parsed);
+  const validated = pagePlanSchema.parse(normalizePagePlan(parsedPlan));
 
   return {
     ...validated,
     siblingPagesToReference: validated.siblingPagesToReference ?? [],
     costCents: summary.costCents,
+  };
+}
+
+function normalizePagePlan(plan: z.infer<typeof pagePlanInputSchema>): z.infer<typeof pagePlanSchema> {
+  return {
+    ...plan,
+    workbench: {
+      ...plan.workbench,
+      useWhen: plan.workbench.useWhen.slice(0, 4),
+      artifactRequests: plan.workbench.artifactRequests.slice(0, 3),
+      nextStepHints: plan.workbench.nextStepHints.slice(0, 3),
+    },
   };
 }
 
