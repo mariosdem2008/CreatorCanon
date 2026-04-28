@@ -1,4 +1,4 @@
-import type { ArtifactBundle, PagePlan } from './types';
+import type { ArtifactBundle, PagePlan, WorkbenchArtifactDraft } from './types';
 
 interface AssemblerInput {
   plan: PagePlan;
@@ -125,6 +125,36 @@ export function assembleBlockTree(input: AssemblerInput): AssemblerOutput {
     }
   }
 
+  const collectedWorkbenchArtifacts: WorkbenchArtifactDraft[] = [];
+  const seenWorkbenchArtifactKeys = new Set<string>();
+  const collectWorkbenchArtifact = (artifact: WorkbenchArtifactDraft | undefined) => {
+    if (!artifact) return;
+    const key = JSON.stringify({
+      type: artifact.type,
+      title: artifact.title,
+      body: artifact.body,
+      citationIds: artifact.citationIds,
+    });
+    if (seenWorkbenchArtifactKeys.has(key)) return;
+    seenWorkbenchArtifactKeys.add(key);
+    collectedWorkbenchArtifacts.push(artifact);
+  };
+
+  input.bundle.workbenchArtifacts?.forEach(collectWorkbenchArtifact);
+  collectWorkbenchArtifact(input.bundle.roadmap?.workbenchArtifact);
+  collectWorkbenchArtifact(input.bundle.example?.workbenchArtifact);
+  collectWorkbenchArtifact(input.bundle.mistakes?.workbenchArtifact);
+
+  const workbenchArtifacts = collectedWorkbenchArtifacts
+    .map((artifact, index) => ({
+      id: `art_${input.plan.pageId}_${index}`,
+      type: artifact.type,
+      title: artifact.title,
+      body: artifact.body,
+      citationIds: filterCites(artifact.citationIds),
+    }))
+    .filter((artifact) => artifact.citationIds.length > 0);
+
   const atlasMeta = {
     evidenceQuality: input.evidenceQuality ?? 'limited',
     citationCount: input.evidenceSegmentIds?.length ?? 0,
@@ -146,6 +176,13 @@ export function assembleBlockTree(input: AssemblerInput): AssemblerOutput {
     distinctSourceVideos: input.distinctSourceVideos ?? 0,
     totalSelectedVideos: input.totalSelectedVideos ?? 0,
     voiceMode: input.plan.voiceMode,
+    workbench: {
+      readerJob: input.plan.workbench.readerJob,
+      outcome: input.plan.workbench.outcome,
+      useWhen: input.plan.workbench.useWhen,
+      artifacts: workbenchArtifacts,
+      nextStepHints: input.plan.workbench.nextStepHints,
+    },
   };
 
   return { blocks, atlasMeta };
