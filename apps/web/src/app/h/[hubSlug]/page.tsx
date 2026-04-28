@@ -37,7 +37,7 @@ export default async function HubHomePage({ params }: { params: { hubSlug: strin
           <p className="mt-4 max-w-[680px] text-[15px] leading-[1.6] text-[#3D352A]">{m.tagline}</p>
           <form action={getAskRoute(params.hubSlug)} method="get" className="mt-6 flex max-w-[760px] items-center gap-2 rounded-[12px] border border-[#D8D0C0] bg-white p-2 pl-4">
             <span aria-hidden className="text-[#9A8E7C]">✦</span>
-            <input type="text" name="q" placeholder="Ask for a template, workflow, or source moment…" className="min-w-0 flex-1 bg-transparent text-[13px] text-[#1A1612] placeholder:text-[#9A8E7C] focus:outline-none" />
+            <input type="text" name="q" aria-label="Ask this hub" placeholder="Ask for a template, workflow, or source moment…" className="min-w-0 flex-1 bg-transparent text-[13px] text-[#1A1612] placeholder:text-[#9A8E7C] focus:outline-none" />
             <button type="submit" className="inline-flex h-9 shrink-0 items-center rounded-[8px] bg-[#1A1612] px-3 text-[12px] font-semibold text-[#F8F4EC] hover:opacity-90">Ask</button>
           </form>
         </div>
