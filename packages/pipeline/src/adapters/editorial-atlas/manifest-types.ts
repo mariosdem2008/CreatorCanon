@@ -43,7 +43,7 @@ export interface Page {
   summaryPlainText: string;
   readerJob?: WorkbenchIntent;
   outcome?: string;
-  useWhen?: string;
+  useWhen?: string[];
   artifactIds?: string[];
   sourceMomentIds?: string[];
   nextStepPageIds?: string[];

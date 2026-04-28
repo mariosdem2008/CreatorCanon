@@ -476,7 +476,7 @@ export function deriveWorkbenchPageView(manifest: EditorialAtlasManifest, page: 
     const artifactById = new Map(manifest.workbench.artifacts.map((artifact) => [artifact.id, artifact]));
     const artifactIds = page.artifactIds ?? [];
     const nextStepPageIds = page.nextStepPageIds ?? [];
-    const useWhen = page.useWhen?.trim();
+    const useWhen = normalizeNativeUseWhen(page.useWhen);
     const artifacts = nativeArtifactsForPage(page, artifactById, pagesById);
     const nextPages = nextStepPageIds
       .map((pageId) => pagesById.get(pageId))
@@ -487,7 +487,7 @@ export function deriveWorkbenchPageView(manifest: EditorialAtlasManifest, page: 
       return {
         intent: nativeIntentForPage(page),
         outcome: page.outcome,
-        useWhen: [useWhen],
+        useWhen,
         primaryArtifact: artifacts[0] ?? null,
         nextPages,
       };
@@ -517,4 +517,12 @@ export function deriveWorkbenchPageView(manifest: EditorialAtlasManifest, page: 
     primaryArtifact: artifacts[0] ?? null,
     nextPages: (relatedPages.length > 0 ? relatedPages : fallbackPages).map(toCard),
   };
+}
+
+function normalizeNativeUseWhen(useWhen: Page['useWhen']): string[] | null {
+  if (!Array.isArray(useWhen) || useWhen.length === 0) return null;
+  const normalized = useWhen.map((item) => item.trim());
+  if (normalized.some((item) => item.length === 0)) return null;
+  const capped = normalized.slice(0, 4);
+  return capped.length >= 2 ? capped : null;
 }

@@ -223,7 +223,10 @@ test('deriveWorkbenchPageView prefers complete native v2 page metadata', () => {
         ...page,
         readerJob: 'decide' as const,
         outcome: 'Decide whether this learning loop is worth adopting.',
-        useWhen: 'Use this before changing your learning system.',
+        useWhen: [
+          'Use this before changing your learning system.',
+          'Use this when you need a source-backed decision point.',
+        ],
         artifactIds: ['second_artifact', 'native_artifact'],
         nextStepPageIds: [nextPage.id],
       },
@@ -277,14 +280,17 @@ test('deriveWorkbenchPageView prefers complete native v2 page metadata', () => {
 
   assert.equal(view.intent, 'learn');
   assert.equal(view.outcome, 'Decide whether this learning loop is worth adopting.');
-  assert.deepEqual(view.useWhen, ['Use this before changing your learning system.']);
+  assert.deepEqual(view.useWhen, [
+    'Use this before changing your learning system.',
+    'Use this when you need a source-backed decision point.',
+  ]);
   assert.equal(view.primaryArtifact?.id, 'second_artifact');
   assert.equal(view.primaryArtifact?.title, 'Page-first template');
   assert.equal(view.primaryArtifact?.pageSlug, page.slug);
   assert.deepEqual(view.nextPages.map((next) => next.id), [nextPage.id]);
 });
 
-test('deriveWorkbenchPageView falls back when v2 page metadata is incomplete', () => {
+test('deriveWorkbenchPageView falls back when native v2 useWhen has blank items', () => {
   const [page, relatedPage] = mockManifest.pages.filter((candidate) => candidate.status === 'published');
   assert.ok(page);
   assert.ok(relatedPage);
@@ -297,9 +303,9 @@ test('deriveWorkbenchPageView falls back when v2 page metadata is incomplete', (
         ...page,
         readerJob: 'copy' as const,
         outcome: 'Native outcome should not be used.',
-        useWhen: '   ',
-        artifactIds: ['missing_artifact'],
-        nextStepPageIds: ['missing_page'],
+        useWhen: ['Use this when native metadata looks complete.', '   '],
+        artifactIds: ['valid_artifact'],
+        nextStepPageIds: [relatedPage.id],
         relatedPageIds: [relatedPage.id],
       },
       relatedPage,
@@ -320,10 +326,10 @@ test('deriveWorkbenchPageView falls back when v2 page metadata is incomplete', (
       ],
       artifacts: [
         {
-          id: 'unlisted_artifact',
+          id: 'valid_artifact',
           type: 'prompt' as const,
-          title: 'Unlisted prompt',
-          body: 'The page did not list this artifact.',
+          title: 'Valid prompt',
+          body: 'The page listed this artifact.',
           pageId: page.id,
           citationIds: [],
         },
@@ -338,7 +344,7 @@ test('deriveWorkbenchPageView falls back when v2 page metadata is incomplete', (
   assert.notEqual(view.outcome, 'Native outcome should not be used.');
   assert.equal(view.useWhen.length, 3);
   assert.deepEqual(view.nextPages.map((next) => next.id), [relatedPage.id]);
-  assert.notEqual(view.primaryArtifact?.id, 'unlisted_artifact');
+  assert.notEqual(view.primaryArtifact?.id, 'valid_artifact');
 });
 
 test('deriveWorkbenchPageView falls back when any listed artifact id is unresolved', () => {
@@ -355,7 +361,10 @@ test('deriveWorkbenchPageView falls back when any listed artifact id is unresolv
         ...page,
         readerJob: 'copy' as const,
         outcome: 'Native outcome should not be used.',
-        useWhen: 'Use this when native metadata is complete.',
+        useWhen: [
+          'Use this when native metadata is complete.',
+          'Use this when source-backed reuse is the main job.',
+        ],
         artifactIds: ['missing_artifact', 'valid_artifact'],
         nextStepPageIds: [nextPage.id],
         relatedPageIds: [relatedPage.id],

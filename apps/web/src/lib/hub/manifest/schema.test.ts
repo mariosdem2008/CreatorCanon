@@ -93,7 +93,10 @@ test('top-level manifest: v2 native workbench fields parse', () => {
         summaryPlainText: 'A short summary.',
         readerJob: 'learn',
         outcome: 'Use one better learning loop.',
-        useWhen: 'When starting a new topic.',
+        useWhen: [
+          'When starting a new topic.',
+          'When checking whether the learning loop applies.',
+        ],
         artifactIds: ['art_1'],
         sourceMomentIds: ['mom_1'],
         nextStepPageIds: ['pg_2'],
@@ -185,4 +188,67 @@ test('top-level manifest: v2 native workbench fields parse', () => {
   assert.equal(result.data?.schemaVersion, 'editorial_atlas_v2');
   assert.equal(result.data?.pages[0]?.readerJob, 'learn');
   assert.equal(result.data?.workbench?.guidedPaths[0]?.pageIds[0], 'pg_1');
+});
+
+test('top-level manifest: v2 native page rejects string useWhen', () => {
+  const result = editorialAtlasManifestSchema.safeParse({
+    schemaVersion: 'editorial_atlas_v2',
+    hubId: 'h',
+    releaseId: 'r',
+    hubSlug: 'ali',
+    templateKey: 'editorial_atlas',
+    visibility: 'public',
+    publishedAt: null,
+    generatedAt: '2026-04-25T10:00:00Z',
+    title: 'Hub',
+    tagline: 'A source-backed hub.',
+    creator: { name: 'A', handle: '@a', avatarUrl: '', bio: '', youtubeChannelUrl: '' },
+    stats: { videoCount: 1, sourceCount: 1, transcriptPercent: 1, archiveYears: 1, totalDurationMinutes: 10, pageCount: 1 },
+    topics: [],
+    pages: [
+      {
+        id: 'pg_1',
+        slug: 'learn-fast',
+        type: 'lesson',
+        status: 'published',
+        title: 'Learn fast',
+        summary: 'A short summary.',
+        summaryPlainText: 'A short summary.',
+        readerJob: 'learn',
+        outcome: 'Use one better learning loop.',
+        useWhen: 'When starting a new topic.',
+        searchKeywords: ['learning'],
+        topicSlugs: ['learning'],
+        estimatedReadMinutes: 3,
+        publishedAt: '2026-04-25T10:00:00Z',
+        updatedAt: '2026-04-25T10:00:00Z',
+        citationCount: 1,
+        sourceCoveragePercent: 1,
+        evidenceQuality: 'strong',
+        sections: [{ kind: 'overview', body: 'Start with one clear loop.', citationIds: ['cit_1'] }],
+        citations: [
+          {
+            id: 'cit_1',
+            sourceVideoId: 'vid_1',
+            videoTitle: 'Learning loop',
+            timestampStart: 12,
+            timestampEnd: 30,
+            timestampLabel: '0:12',
+            excerpt: 'Start with one clear loop.',
+          },
+        ],
+        relatedPageIds: [],
+      },
+    ],
+    sources: [],
+    navigation: { primary: [], secondary: [] },
+    trust: {
+      methodologySummary: 'Built from cited source material.',
+      qualityPrinciples: [],
+      creationProcess: [],
+      faq: [],
+    },
+  });
+
+  assert.equal(result.success, false);
 });

@@ -140,7 +140,7 @@ export const pageSchema = z.object({
   summaryPlainText: z.string().min(1),
   readerJob: workbenchIntentSchema.optional(),
   outcome: z.string().min(1).optional(),
-  useWhen: z.string().min(1).optional(),
+  useWhen: z.array(z.string().min(1)).optional(),
   artifactIds: z.array(z.string().min(1)).optional(),
   sourceMomentIds: z.array(z.string().min(1)).optional(),
   nextStepPageIds: z.array(z.string().min(1)).optional(),
