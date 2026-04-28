@@ -73,5 +73,7 @@ test('safeSourceTitle converts weak titles to stable ordinal labels', () => {
   assert.equal(safeSourceTitle('Untitled', 3), 'Source 3');
   assert.equal(safeSourceTitle('Untitled source', 4), 'Source 4');
   assert.equal(safeSourceTitle('Untitled video', 5), 'Source 5');
+  assert.equal(safeSourceTitle('Source · 18 min', 6), 'Source 6');
+  assert.equal(safeSourceTitle('Source - 18 min', 7), 'Source 7');
   assert.equal(safeSourceTitle('Build a Proposal Generator', 1), 'Build a Proposal Generator');
 });

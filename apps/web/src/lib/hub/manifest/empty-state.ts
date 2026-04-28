@@ -36,7 +36,9 @@ export function safeCitationHref(
 
 export function safeSourceTitle(rawTitle: string | null | undefined, ordinal: number): string {
   const title = (rawTitle ?? '').trim();
-  if (!title || /^untitled(\s+(source|video))?$/i.test(title)) return `Source ${ordinal}`;
+  if (!title || /^untitled(\s+(source|video))?$/i.test(title) || /^source(?:\s*[·-]\s*\d+\s*min)?$/i.test(title)) {
+    return `Source ${ordinal}`;
+  }
   return title;
 }
 
