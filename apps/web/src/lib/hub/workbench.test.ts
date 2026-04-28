@@ -156,6 +156,51 @@ test('deriveHubWorkbench prefers native v2 guided paths and workbench data', () 
   assert.equal(workbench.sourceMoments[0]?.href, null);
 });
 
+test('deriveHubWorkbench ignores empty native paths and keeps native intent in fallback cards', () => {
+  const sourcePage = mockManifest.pages.find((candidate) => candidate.status === 'published');
+  assert.ok(sourcePage);
+
+  const page = {
+    ...sourcePage,
+    id: 'pg_native_decide_template',
+    slug: 'native-decide-template',
+    title: 'JSON template decision',
+    summary: 'Pick the right JSON template.',
+    summaryPlainText: 'Pick the right JSON template.',
+    searchKeywords: ['json', 'template'],
+    readerJob: 'decide' as const,
+    outcome: 'Decide which template to use.',
+  };
+  const manifest = {
+    ...mockManifest,
+    schemaVersion: 'editorial_atlas_v2' as const,
+    pages: [page],
+    workbench: {
+      primaryAction: { label: 'Start' },
+      guidedPaths: [
+        {
+          id: 'native-start-stale',
+          title: 'Native start path',
+          body: 'This path has stale page ids.',
+          outcome: 'A stale path should not render.',
+          timeLabel: '20 min',
+          pageIds: ['missing_page'],
+          artifactIds: [],
+          sourceMomentIds: [],
+        },
+      ],
+      artifacts: [],
+      sourceMoments: [],
+    },
+  };
+
+  const workbench = deriveHubWorkbench(manifest);
+
+  assert.equal(workbench.startPath.id, 'start');
+  assert.deepEqual(workbench.startPath.pages.map((candidate) => candidate.id), [page.id]);
+  assert.equal(workbench.startPath.pages[0]?.intent, 'learn');
+});
+
 test('deriveWorkbenchPageView creates action metadata for a page without new manifest fields', () => {
   const page = mockManifest.pages.find((candidate) => candidate.status === 'published');
   assert.ok(page);

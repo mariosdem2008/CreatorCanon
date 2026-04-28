@@ -69,6 +69,21 @@ test('safeCitationHref rejects stale citation urls containing watch?v=null', () 
   assert.equal(href, null);
 });
 
+test('safeCitationHref rejects unsafe citation url protocols', () => {
+  assert.equal(
+    safeCitationHref({ url: 'javascript:alert(1)', timestampStart: 42 }, { youtubeId: null }),
+    null,
+  );
+  assert.equal(
+    safeCitationHref({ url: 'data:text/html,<script>alert(1)</script>', timestampStart: 42 }, { youtubeId: null }),
+    null,
+  );
+  assert.equal(
+    safeCitationHref({ url: 'javascript:alert(1)', timestampStart: 42 }, { youtubeId: 'YT123' }),
+    'https://www.youtube.com/watch?v=YT123&t=42s',
+  );
+});
+
 test('safeSourceTitle converts weak titles to stable ordinal labels', () => {
   assert.equal(safeSourceTitle('Untitled', 3), 'Source 3');
   assert.equal(safeSourceTitle('Untitled source', 4), 'Source 4');

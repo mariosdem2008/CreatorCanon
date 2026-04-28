@@ -133,14 +133,19 @@ function nativeCardForPage(page: Page): WorkbenchPageCard {
   };
 }
 
-function topPages(pages: Page[], predicate: (page: Page) => boolean, count: number): WorkbenchPageCard[] {
+function topPages(
+  pages: Page[],
+  predicate: (page: Page) => boolean,
+  count: number,
+  cardForPage: (page: Page) => WorkbenchPageCard = toCard,
+): WorkbenchPageCard[] {
   const selected = pages
     .filter(predicate)
     .sort(compareRankedPages)
     .slice(0, count);
 
   if (selected.length >= count) {
-    return selected.map(toCard);
+    return selected.map(cardForPage);
   }
 
   const fill = pages
@@ -148,7 +153,7 @@ function topPages(pages: Page[], predicate: (page: Page) => boolean, count: numb
     .sort(compareRankedPages)
     .slice(0, count - selected.length);
 
-  return [...selected, ...fill].map(toCard);
+  return [...selected, ...fill].map(cardForPage);
 }
 
 function sectionText(section: PageSection): string {
@@ -339,7 +344,7 @@ function nativePathMatches(path: WorkbenchPath, branch: NativePathBranch): boole
 }
 
 function nativePathForBranch(paths: WorkbenchPath[], branch: NativePathBranch): WorkbenchPath | undefined {
-  return paths.find((path) => nativePathMatches(path, branch));
+  return paths.find((path) => path.pages.length > 0 && nativePathMatches(path, branch));
 }
 
 function nativeSourceMoment(
@@ -404,23 +409,23 @@ export function deriveHubWorkbench(manifest: EditorialAtlasManifest): HubWorkben
         title: 'Start the 20-minute path',
         body: 'Get the core ideas before diving into implementation.',
         actionLabel: 'Start path',
-        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'learn', 3),
+        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'learn', 3, nativeCardForPage),
       },
       buildPath: nativeBuildPath ?? {
         id: 'build',
         title: 'Build the working system',
         body: 'Follow the pages that describe workflows, automations, and implementation steps.',
         actionLabel: 'Build now',
-        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'build', 3),
+        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'build', 3, nativeCardForPage),
       },
       copyPath: nativeCopyPath ?? {
         id: 'copy',
         title: 'Copy templates and prompts',
         body: 'Jump to reusable formats, prompts, schemas, and checklists.',
         actionLabel: 'Open templates',
-        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'copy', 3),
+        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'copy', 3, nativeCardForPage),
       },
-      quickWins: topPages(pages, (page) => page.estimatedReadMinutes <= 5 || page.type !== 'lesson', 4),
+      quickWins: topPages(pages, (page) => page.estimatedReadMinutes <= 5 || page.type !== 'lesson', 4, nativeCardForPage),
       artifacts,
       sourceMoments,
     };

@@ -28,7 +28,16 @@ export function safeCitationHref(
   citation: Pick<Citation, 'url' | 'timestampStart'>,
   video: Pick<SourceVideo, 'youtubeId'>,
 ): string | null {
-  if (citation.url && !citation.url.includes('watch?v=null')) return citation.url;
+  if (citation.url && !citation.url.includes('watch?v=null')) {
+    try {
+      const parsed = new URL(citation.url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return citation.url;
+      }
+    } catch {
+      // Fall through to synthesize a safe YouTube URL when possible.
+    }
+  }
   if (!video.youtubeId || video.youtubeId === 'null') return null;
   const t = Math.floor(citation.timestampStart);
   return `https://www.youtube.com/watch?v=${video.youtubeId}&t=${t}s`;
