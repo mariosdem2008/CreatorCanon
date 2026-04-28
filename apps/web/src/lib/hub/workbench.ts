@@ -323,6 +323,25 @@ function nativeWorkbenchPath(
   };
 }
 
+type NativePathBranch = 'start' | 'build' | 'copy';
+
+function nativePathMatches(path: WorkbenchPath, branch: NativePathBranch): boolean {
+  const text = `${path.id} ${path.title}`.toLowerCase();
+
+  if (branch === 'start') {
+    return /\b(start|begin|intro|learn|first)\b/.test(text);
+  }
+  if (branch === 'build') {
+    return /\b(build|make|implement|system|workflow|automation)\b/.test(text);
+  }
+
+  return /\b(copy|template|prompt|reuse|asset|schema)\b/.test(text);
+}
+
+function nativePathForBranch(paths: WorkbenchPath[], branch: NativePathBranch): WorkbenchPath | undefined {
+  return paths.find((path) => nativePathMatches(path, branch));
+}
+
 function nativeSourceMoment(
   moment: SourceMoment,
   pagesById: Map<string, Page>,
@@ -375,23 +394,26 @@ export function deriveHubWorkbench(manifest: EditorialAtlasManifest): HubWorkben
       .filter((moment): moment is WorkbenchSourceMoment => moment !== null)
       .slice(0, 8);
     const nativePaths = manifest.workbench.guidedPaths.map((path) => nativeWorkbenchPath(path, pagesById));
+    const nativeStartPath = nativePathForBranch(nativePaths, 'start');
+    const nativeBuildPath = nativePathForBranch(nativePaths, 'build');
+    const nativeCopyPath = nativePathForBranch(nativePaths, 'copy');
 
     return {
-      startPath: nativePaths[0] ?? {
+      startPath: nativeStartPath ?? {
         id: 'start',
         title: 'Start the 20-minute path',
         body: 'Get the core ideas before diving into implementation.',
         actionLabel: 'Start path',
         pages: topPages(pages, (page) => nativeIntentForPage(page) === 'learn', 3),
       },
-      buildPath: nativePaths[1] ?? {
+      buildPath: nativeBuildPath ?? {
         id: 'build',
         title: 'Build the working system',
         body: 'Follow the pages that describe workflows, automations, and implementation steps.',
         actionLabel: 'Build now',
         pages: topPages(pages, (page) => nativeIntentForPage(page) === 'build', 3),
       },
-      copyPath: nativePaths[2] ?? {
+      copyPath: nativeCopyPath ?? {
         id: 'copy',
         title: 'Copy templates and prompts',
         body: 'Jump to reusable formats, prompts, schemas, and checklists.',
@@ -456,7 +478,7 @@ export function deriveWorkbenchPageView(manifest: EditorialAtlasManifest, page: 
       .filter((candidate): candidate is Page => candidate !== undefined)
       .map(nativeCardForPage);
 
-    if (useWhen && artifactIds.length > 0 && artifacts.length > 0 && nextStepPageIds.length > 0 && nextPages.length === nextStepPageIds.length) {
+    if (useWhen && artifactIds.length > 0 && artifacts.length === artifactIds.length && nextStepPageIds.length > 0 && nextPages.length === nextStepPageIds.length) {
       return {
         intent: nativeIntentForPage(page),
         outcome: page.outcome,

@@ -72,6 +72,16 @@ test('deriveHubWorkbench prefers native v2 guided paths and workbench data', () 
       primaryAction: { label: 'Start' },
       guidedPaths: [
         {
+          id: 'native-copy',
+          title: 'Native copy path',
+          body: 'Copy from native data.',
+          outcome: 'A reusable prompt.',
+          timeLabel: '10 min',
+          pageIds: [copyPage.id],
+          artifactIds: [],
+          sourceMomentIds: [],
+        },
+        {
           id: 'native-start',
           title: 'Native start path',
           body: 'Use the native workbench path.',
@@ -88,16 +98,6 @@ test('deriveHubWorkbench prefers native v2 guided paths and workbench data', () 
           outcome: 'A working system.',
           timeLabel: '30 min',
           pageIds: [buildPage.id],
-          artifactIds: [],
-          sourceMomentIds: [],
-        },
-        {
-          id: 'native-copy',
-          title: 'Native copy path',
-          body: 'Copy from native data.',
-          outcome: 'A reusable prompt.',
-          timeLabel: '10 min',
-          pageIds: [copyPage.id],
           artifactIds: [],
           sourceMomentIds: [],
         },
@@ -137,6 +137,8 @@ test('deriveHubWorkbench prefers native v2 guided paths and workbench data', () 
   const workbench = deriveHubWorkbench(manifest);
 
   assert.equal(workbench.startPath.id, 'native-start');
+  assert.equal(workbench.buildPath.id, 'native-build');
+  assert.equal(workbench.copyPath.id, 'native-copy');
   assert.equal(workbench.startPath.pages.length, 4);
   assert.deepEqual(workbench.startPath.pages.map((page) => page.id), [
     startPage.id,
@@ -292,4 +294,62 @@ test('deriveWorkbenchPageView falls back when v2 page metadata is incomplete', (
   assert.equal(view.useWhen.length, 3);
   assert.deepEqual(view.nextPages.map((next) => next.id), [relatedPage.id]);
   assert.notEqual(view.primaryArtifact?.id, 'unlisted_artifact');
+});
+
+test('deriveWorkbenchPageView falls back when any listed artifact id is unresolved', () => {
+  const [page, nextPage, relatedPage] = mockManifest.pages.filter((candidate) => candidate.status === 'published');
+  assert.ok(page);
+  assert.ok(nextPage);
+  assert.ok(relatedPage);
+
+  const manifest = {
+    ...mockManifest,
+    schemaVersion: 'editorial_atlas_v2' as const,
+    pages: [
+      {
+        ...page,
+        readerJob: 'copy' as const,
+        outcome: 'Native outcome should not be used.',
+        useWhen: 'Use this when native metadata is complete.',
+        artifactIds: ['missing_artifact', 'valid_artifact'],
+        nextStepPageIds: [nextPage.id],
+        relatedPageIds: [relatedPage.id],
+      },
+      nextPage,
+      relatedPage,
+    ],
+    workbench: {
+      primaryAction: { label: 'Start' },
+      guidedPaths: [
+        {
+          id: 'native-start',
+          title: 'Native start path',
+          body: 'Use the native workbench path.',
+          outcome: 'A clearer first session.',
+          timeLabel: '20 min',
+          pageIds: [page.id],
+          artifactIds: ['valid_artifact'],
+          sourceMomentIds: [],
+        },
+      ],
+      artifacts: [
+        {
+          id: 'valid_artifact',
+          type: 'prompt' as const,
+          title: 'Valid prompt',
+          body: 'This artifact resolves, but not every listed artifact does.',
+          pageId: page.id,
+          citationIds: [],
+        },
+      ],
+      sourceMoments: [],
+    },
+  };
+
+  const view = deriveWorkbenchPageView(manifest, manifest.pages[0]!);
+
+  assert.ok(view.outcome.includes(page.title.toLowerCase()));
+  assert.notEqual(view.outcome, 'Native outcome should not be used.');
+  assert.deepEqual(view.nextPages.map((next) => next.id), [relatedPage.id]);
+  assert.notEqual(view.primaryArtifact?.id, 'valid_artifact');
 });
