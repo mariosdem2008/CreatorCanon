@@ -1,4 +1,13 @@
-import type { Citation, EditorialAtlasManifest, Page, PageSection, SourceVideo } from './manifest/schema';
+import type {
+  Artifact,
+  Citation,
+  EditorialAtlasManifest,
+  GuidedPath,
+  Page,
+  PageSection,
+  SourceMoment,
+  SourceVideo,
+} from './manifest/schema';
 import { formatTimestampLabel, safeCitationHref, safeSourceTitle } from './manifest/empty-state';
 
 export type WorkbenchIntent = 'learn' | 'build' | 'copy' | 'debug';
@@ -105,6 +114,22 @@ function toCard(page: Page): WorkbenchPageCard {
     intent: intentForPage(page),
     timeLabel: `${page.estimatedReadMinutes} min`,
     citationLabel: `${page.citationCount} ${citationNoun}`,
+  };
+}
+
+function nativeIntentForPage(page: Page): WorkbenchIntent {
+  if (page.readerJob === 'decide') return 'learn';
+  if (page.readerJob === 'learn' || page.readerJob === 'build' || page.readerJob === 'copy' || page.readerJob === 'debug') {
+    return page.readerJob;
+  }
+
+  return intentForPage(page);
+}
+
+function nativeCardForPage(page: Page): WorkbenchPageCard {
+  return {
+    ...toCard(page),
+    intent: nativeIntentForPage(page),
   };
 }
 
@@ -255,11 +280,117 @@ function sourceMomentFromCitation(
   };
 }
 
+function nativeTypeLabel(type: Artifact['type']): WorkbenchArtifact['typeLabel'] {
+  if (type === 'prompt') return 'Prompt';
+  if (type === 'checklist') return 'Checklist';
+  if (type === 'workflow') return 'Workflow';
+  if (type === 'mistake_map') return 'Mistakes';
+
+  return 'Template';
+}
+
+function nativeWorkbenchArtifact(
+  artifact: Artifact,
+  pagesById: Map<string, Page>,
+): WorkbenchArtifact | null {
+  const page = pagesById.get(artifact.pageId);
+  if (!page) return null;
+
+  return {
+    id: artifact.id,
+    pageSlug: page.slug,
+    pageTitle: page.title,
+    title: artifact.title,
+    typeLabel: nativeTypeLabel(artifact.type),
+    body: artifact.body,
+  };
+}
+
+function nativeWorkbenchPath(
+  path: GuidedPath,
+  pagesById: Map<string, Page>,
+): WorkbenchPath {
+  return {
+    id: path.id,
+    title: path.title,
+    body: path.body,
+    actionLabel: path.outcome,
+    pages: path.pageIds
+      .map((pageId) => pagesById.get(pageId))
+      .filter((page): page is Page => page !== undefined)
+      .slice(0, 4)
+      .map(nativeCardForPage),
+  };
+}
+
+function nativeSourceMoment(
+  moment: SourceMoment,
+  pagesById: Map<string, Page>,
+  sourcesById: Map<string, SourceVideo>,
+  ordinal: number,
+): WorkbenchSourceMoment | null {
+  const firstPageId = moment.pageIds[0];
+  const page = firstPageId ? pagesById.get(firstPageId) : undefined;
+  if (!page) return null;
+
+  const source = sourcesById.get(moment.sourceVideoId);
+
+  return {
+    id: moment.id,
+    pageSlug: page.slug,
+    pageTitle: page.title,
+    sourceTitle: safeSourceTitle(moment.title || source?.title, ordinal),
+    timestampLabel: moment.timestampLabel || formatTimestampLabel(moment.timestampStart),
+    excerpt: moment.excerpt,
+    href: safeCitationHref({ timestampStart: moment.timestampStart }, source ?? { youtubeId: null }),
+  };
+}
+
 export function deriveHubWorkbench(manifest: EditorialAtlasManifest): HubWorkbench {
   const pages = publishedPages(manifest);
   const rankedPages = [...pages].sort(compareRankedPages);
   const sourcesById = new Map(manifest.sources.map((source) => [source.id, source]));
   let sourceMomentOrdinal = 0;
+
+  if (manifest.schemaVersion === 'editorial_atlas_v2' && manifest.workbench) {
+    const pagesById = new Map(pages.map((page) => [page.id, page]));
+    const artifacts = manifest.workbench.artifacts
+      .map((artifact) => nativeWorkbenchArtifact(artifact, pagesById))
+      .filter((artifact): artifact is WorkbenchArtifact => artifact !== null)
+      .slice(0, 8);
+    const sourceMoments = manifest.workbench.sourceMoments
+      .map((moment, index) => nativeSourceMoment(moment, pagesById, sourcesById, index + 1))
+      .filter((moment): moment is WorkbenchSourceMoment => moment !== null)
+      .slice(0, 8);
+    const nativePaths = manifest.workbench.guidedPaths.map((path) => nativeWorkbenchPath(path, pagesById));
+
+    return {
+      startPath: nativePaths[0] ?? {
+        id: 'start',
+        title: 'Start the 20-minute path',
+        body: 'Get the core ideas before diving into implementation.',
+        actionLabel: 'Start path',
+        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'learn', 3),
+      },
+      buildPath: nativePaths[1] ?? {
+        id: 'build',
+        title: 'Build the working system',
+        body: 'Follow the pages that describe workflows, automations, and implementation steps.',
+        actionLabel: 'Build now',
+        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'build', 3),
+      },
+      copyPath: nativePaths[2] ?? {
+        id: 'copy',
+        title: 'Copy templates and prompts',
+        body: 'Jump to reusable formats, prompts, schemas, and checklists.',
+        actionLabel: 'Open templates',
+        pages: topPages(pages, (page) => nativeIntentForPage(page) === 'copy', 3),
+      },
+      quickWins: topPages(pages, (page) => page.estimatedReadMinutes <= 5 || page.type !== 'lesson', 4),
+      artifacts,
+      sourceMoments,
+    };
+  }
 
   const artifacts = rankedPages.flatMap(deriveWorkbenchArtifacts).slice(0, 8);
   const sourceMoments = rankedPages
@@ -301,6 +432,30 @@ export function deriveHubWorkbench(manifest: EditorialAtlasManifest): HubWorkben
 
 export function deriveWorkbenchPageView(manifest: EditorialAtlasManifest, page: Page): WorkbenchPageView {
   const pages = publishedPages(manifest);
+  if (manifest.schemaVersion === 'editorial_atlas_v2' && manifest.workbench && page.readerJob && page.outcome) {
+    const pagesById = new Map(pages.map((candidate) => [candidate.id, candidate]));
+    const artifacts = manifest.workbench.artifacts
+      .filter((artifact) => artifact.pageId === page.id)
+      .map((artifact) => nativeWorkbenchArtifact(artifact, pagesById))
+      .filter((artifact): artifact is WorkbenchArtifact => artifact !== null);
+    const nextPages = (page.nextStepPageIds ?? [])
+      .map((pageId) => pagesById.get(pageId))
+      .filter((candidate): candidate is Page => candidate !== undefined)
+      .map(nativeCardForPage);
+
+    return {
+      intent: nativeIntentForPage(page),
+      outcome: page.outcome,
+      useWhen: page.useWhen ? [page.useWhen] : [
+        `You need a practical next step from ${manifest.creator.name}'s archive.`,
+        'You want the shortest path from source evidence to an applied result.',
+        'You want citations available, but not in the way while reading.',
+      ],
+      primaryArtifact: artifacts[0] ?? null,
+      nextPages,
+    };
+  }
+
   const relatedPages = pages
     .filter((candidate) => page.relatedPageIds.includes(candidate.id))
     .sort(compareRankedPages)
