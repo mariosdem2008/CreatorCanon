@@ -73,6 +73,13 @@ export interface R2Client {
   }): Promise<R2ListObjectsOutput>;
 }
 
+function toUint8Array(body: R2PutObjectInput['body']): Uint8Array {
+  if (typeof body === 'string') return new TextEncoder().encode(body);
+  const bytes = new Uint8Array(body.byteLength);
+  bytes.set(body);
+  return bytes;
+}
+
 function safeLocalPath(root: string, key: string): string {
   const normalizedRoot = path.resolve(root);
   const target = path.resolve(normalizedRoot, key);
@@ -94,9 +101,7 @@ export const createR2Client = (env: ServerEnv): R2Client => {
         const parsed = putObjectSchema.parse(input);
         const target = safeLocalPath(root, parsed.key);
         await fs.mkdir(path.dirname(target), { recursive: true });
-        const body = typeof parsed.body === 'string'
-          ? Buffer.from(parsed.body)
-          : Buffer.from(parsed.body);
+        const body = toUint8Array(parsed.body);
         await fs.writeFile(target, body);
         if (parsed.contentType || parsed.metadata || parsed.cacheControl) {
           await fs.writeFile(`${target}.meta.json`, JSON.stringify({
@@ -111,7 +116,7 @@ export const createR2Client = (env: ServerEnv): R2Client => {
       async getObject(key) {
         nonEmpty.parse(key);
         const target = safeLocalPath(root, key);
-        const [body, stats, metaRaw] = await Promise.all([
+        const [bodyRaw, stats, metaRaw] = await Promise.all([
           fs.readFile(target),
           fs.stat(target),
           fs.readFile(`${target}.meta.json`, 'utf8').catch(() => undefined),
@@ -120,6 +125,7 @@ export const createR2Client = (env: ServerEnv): R2Client => {
           contentType?: string;
           metadata?: Record<string, string>;
         } : {};
+        const body = toUint8Array(bodyRaw);
         return {
           key,
           body,
@@ -208,10 +214,11 @@ export const createR2Client = (env: ServerEnv): R2Client => {
 
     async putObject(input) {
       const parsed = putObjectSchema.parse(input);
+      const body = toUint8Array(parsed.body);
       const cmd = new PutObjectCommand({
         Bucket: bucket,
         Key: parsed.key,
-        Body: parsed.body,
+        Body: body,
         ContentType: parsed.contentType,
         Metadata: parsed.metadata,
         CacheControl: parsed.cacheControl,
