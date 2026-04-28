@@ -36,6 +36,12 @@ export interface RunAgentInput {
    * (e.g. gemini-2.5-flash -> gemini-2.5-pro -> gpt-5.4).
    */
   fallbacks?: Array<{ modelId: string; provider: AgentProvider }>;
+  /**
+   * Gemini context cache name (e.g. "cachedContents/abc123") created upstream
+   * by the stage. The harness passes it through to provider.chat on every
+   * turn. OpenAI ignores it (its caching is automatic on prefix match).
+   */
+  cachedContent?: string;
 }
 
 export interface RunAgentSummary {
@@ -200,9 +206,17 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
       input.modelId,
       input.provider,
       input.fallbacks ?? [],
-      (modelId, provider) => provider.chat({ modelId, messages, tools }),
+      (modelId, provider) => provider.chat({ modelId, messages, tools, cachedContent: input.cachedContent }),
     );
-    const callCost = tokenCostCents(input.modelId, response.usage.inputTokens, response.usage.outputTokens);
+    // Bill cached-input tokens at the provider's discounted rate (50% OpenAI,
+    // 25% Gemini). When pre-loaded context repeats across turns, the second
+    // and subsequent turns hit the cache and save substantially.
+    const callCost = tokenCostCents(
+      input.modelId,
+      response.usage.inputTokens,
+      response.usage.outputTokens,
+      response.usage.cachedInputTokens ?? 0,
+    );
     costCents += callCost;
     stop.recordCall(callCost);
 

@@ -29,7 +29,17 @@ export interface ChatResponse {
   message: ChatTurn;
   /** Mirror of `message.toolCalls`; empty when the agent is done (no more tool calls). */
   toolCalls: ToolCallRequest[];
-  usage: { inputTokens: number; outputTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    /**
+     * Subset of inputTokens that hit the provider's prompt cache.
+     * 0 (or undefined) when the call wasn't cached. Always <= inputTokens.
+     * - OpenAI: surfaced from completion.usage.prompt_tokens_details.cached_tokens
+     * - Gemini: surfaced from response.usageMetadata.cachedContentTokenCount
+     */
+    cachedInputTokens?: number;
+  };
   /** Provider-assigned response ID for transcript correlation. */
   rawId: string;
 }
@@ -40,5 +50,11 @@ export interface AgentProvider {
     modelId: string;
     messages: ChatTurn[];
     tools: ToolDef<any, any>[];
+    /**
+     * Optional Gemini context cache name (e.g. "cachedContents/abc123"). The
+     * Gemini provider attaches it to the request; OpenAI ignores it (its
+     * caching is automatic on prefix match — no explicit cache name needed).
+     */
+    cachedContent?: string;
   }): Promise<ChatResponse>;
 }

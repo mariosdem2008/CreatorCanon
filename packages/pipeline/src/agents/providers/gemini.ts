@@ -40,7 +40,7 @@ export function createGeminiProvider(apiKey: string): AgentProvider {
 
   return {
     name: 'gemini',
-    async chat({ modelId, messages, tools }) {
+    async chat({ modelId, messages, tools, cachedContent }) {
       const model = client.getGenerativeModel({ model: modelId });
 
       const functionDeclarations: FunctionDeclaration[] = tools.map((t: ToolDef<any, any>) => ({
@@ -57,6 +57,10 @@ export function createGeminiProvider(apiKey: string): AgentProvider {
         contents,
         ...(systemInstruction ? { systemInstruction: { role: 'system', parts: [{ text: systemInstruction }] } } : {}),
         ...(functionDeclarations.length > 0 ? { tools: [{ functionDeclarations }] } : {}),
+        // Attach a Gemini context cache when the caller created one upstream
+        // (e.g. video_intelligence pre-creates a cache for the channel-profile
+        // prefix and reuses it across all per-video calls).
+        ...(cachedContent ? { cachedContent } : {}),
       };
 
       const result = await model.generateContent(request);
@@ -85,6 +89,11 @@ export function createGeminiProvider(apiKey: string): AgentProvider {
         usage: {
           inputTokens: result.response.usageMetadata?.promptTokenCount ?? 0,
           outputTokens: result.response.usageMetadata?.candidatesTokenCount ?? 0,
+          // Gemini context caching: subset of promptTokenCount that came
+          // from the cache. 0 when no cache attached.
+          cachedInputTokens:
+            (result.response.usageMetadata as { cachedContentTokenCount?: number } | undefined)
+              ?.cachedContentTokenCount ?? 0,
         },
         rawId: `gemini_${Date.now()}`,
       } satisfies ChatResponse;

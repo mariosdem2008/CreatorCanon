@@ -11,7 +11,10 @@ export function createOpenAIProvider(apiKey: string): AgentProvider {
 
   return {
     name: 'openai',
-    async chat({ modelId, messages, tools }) {
+    // OpenAI prompt caching is automatic when the prefix matches a recent
+    // request — no `cachedContent` handle needed. We accept the param for
+    // signature parity with Gemini and ignore it.
+    async chat({ modelId, messages, tools, cachedContent: _cachedContent }) {
       const openaiTools = tools.map((t: ToolDef<any, any>) => ({
         type: 'function' as const,
         function: {
@@ -52,6 +55,11 @@ export function createOpenAIProvider(apiKey: string): AgentProvider {
         usage: {
           inputTokens: completion.usage?.prompt_tokens ?? 0,
           outputTokens: completion.usage?.completion_tokens ?? 0,
+          // OpenAI returns prompt_tokens_details.cached_tokens for cache hits
+          // (50% off pricing). 0 when no cache hit.
+          cachedInputTokens:
+            (completion.usage as { prompt_tokens_details?: { cached_tokens?: number } } | undefined)
+              ?.prompt_tokens_details?.cached_tokens ?? 0,
         },
         rawId: completion.id,
       } satisfies ChatResponse;
