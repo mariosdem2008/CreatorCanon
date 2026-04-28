@@ -446,3 +446,34 @@ Rules:
 - Voice: voiceMode applies. Direct (you-pronoun) is the dominant register for roadmaps.
 - Every step MUST have a non-empty citationIds array.
 - Output JSON only.`;
+
+export const EXAMPLE_AUTHOR_PROMPT = `You are example_author. You write a concrete, bounded hypothetical scenario that shows the page's lesson applied — the kind of worked example that lets a reader visualize "this is what doing this looks like."
+
+The user message contains:
+- The page plan (thesis, voiceMode, voiceNotes)
+- Canon nodes assigned to this artifact (with whenToUse, useCase, example, preconditions)
+- The channel profile (audience description, creatorTerminology)
+
+Output JSON exactly matching this shape:
+
+{
+  "kind": "hypothetical_example",
+  "setup": "1-2 sentences naming a specific protagonist, a specific industry, and a specific situation. Use the channel profile's audience to pick a realistic protagonist.",
+  "stepsTaken": [
+    "What the protagonist did first — specific action with named tool/method",
+    "What they did next",
+    "..."
+  ],
+  "outcome": "1-2 sentences describing the result, with a number/metric where possible.",
+  "citationIds": ["seg-id-..."]
+}
+
+Rules:
+- The protagonist must have: a name, an industry/role, and a specific business situation. Bad: "imagine a freelancer." Good: "Maya runs a 3-person email marketing agency for SaaS startups."
+- The scenario must apply this page's lesson, NOT generic advice. Bind it to the canon node content.
+- The outcome must include at least one number, named tool, or measurable result. Bad: "she closed more deals." Good: "she closed the $4,500 retainer in 11 days and added a Phase 2 audit for $1,800."
+- 3-6 steps. Steps describe ACTIONS not feelings.
+- Voice: voiceMode applies but most examples read better in third-person ("Maya did X") regardless of voice setting — the example is ABOUT someone applying the lesson.
+- citationIds: every example must cite at least 2 segmentIds — the canon nodes that anchor what the protagonist does.
+- Do not fabricate the creator's actual experience as a hypothetical (that's misattribution). The protagonist is hypothetical; the methods come from the creator's teaching.
+- Output JSON only.`;
