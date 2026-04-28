@@ -41,6 +41,12 @@ export interface Page {
   title: string;
   summary: string;
   summaryPlainText: string;
+  readerJob?: WorkbenchIntent;
+  outcome?: string;
+  useWhen?: string;
+  artifactIds?: string[];
+  sourceMomentIds?: string[];
+  nextStepPageIds?: string[];
   searchKeywords: string[];
   topicSlugs: string[];
   estimatedReadMinutes: number;
@@ -81,8 +87,47 @@ export interface Highlight {
   evidence: { sourceVideoId: string; timestampStart: number; timestampLabel: string };
 }
 
+export type WorkbenchIntent = 'learn'|'build'|'copy'|'decide'|'debug';
+
+export interface Artifact {
+  id: string;
+  type: 'prompt'|'checklist'|'workflow'|'template'|'schema'|'mistake_map';
+  title: string;
+  body: string;
+  pageId: string;
+  citationIds: string[];
+}
+
+export interface SourceMoment {
+  id: string;
+  title: string;
+  sourceVideoId: string;
+  timestampStart: number;
+  timestampLabel: string;
+  excerpt: string;
+  pageIds: string[];
+}
+
+export interface GuidedPath {
+  id: string;
+  title: string;
+  body: string;
+  outcome: string;
+  timeLabel: string;
+  pageIds: string[];
+  artifactIds: string[];
+  sourceMomentIds: string[];
+}
+
+export interface HubWorkbenchNative {
+  primaryAction: { label: string; pageId?: string; href?: string };
+  guidedPaths: GuidedPath[];
+  artifacts: Artifact[];
+  sourceMoments: SourceMoment[];
+}
+
 export interface EditorialAtlasManifest {
-  schemaVersion: 'editorial_atlas_v1';
+  schemaVersion: 'editorial_atlas_v1'|'editorial_atlas_v2';
   hubId: string;
   releaseId: string;
   hubSlug: string;
@@ -105,4 +150,5 @@ export interface EditorialAtlasManifest {
     faq: { question: string; answer: string }[];
   };
   highlights?: Highlight[];
+  workbench?: HubWorkbenchNative;
 }
