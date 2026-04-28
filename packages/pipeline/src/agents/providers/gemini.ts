@@ -32,6 +32,51 @@ function sanitizeForGemini(schema: unknown): unknown {
   return out;
 }
 
+/**
+ * Create a Gemini context cache containing the static prefix (system prompt
+ * + cached user message). Returns the cache name (e.g. "cachedContents/abc123")
+ * that subsequent generateContent calls can attach via the `cachedContent`
+ * field. Cache lives for ttlSeconds (default 1h, well within a single run's
+ * wall time).
+ *
+ * Use case: video_intelligence sends the same channel-profile prefix to ~20
+ * separate per-video calls. Caching the prefix once cuts input cost for the
+ * cached portion to 25% of fresh per the published Gemini pricing.
+ *
+ * Implemented via raw fetch because @google/generative-ai 0.21 doesn't
+ * expose a typed cachedContents.create — the v1beta REST endpoint is used
+ * directly. Cache create failures should be caught by the caller and treated
+ * as non-fatal: callers can fall back to non-cached calls.
+ */
+export async function createGeminiCache(input: {
+  apiKey: string;
+  modelId: string;
+  systemInstruction: string;
+  cachedUserMessage: string;
+  ttlSeconds?: number;
+}): Promise<{ cacheName: string }> {
+  if (!input.apiKey) throw new Error('createGeminiCache: apiKey required');
+  const url = `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${encodeURIComponent(input.apiKey)}`;
+  const body = {
+    model: `models/${input.modelId}`,
+    systemInstruction: { role: 'system', parts: [{ text: input.systemInstruction }] },
+    contents: [{ role: 'user', parts: [{ text: input.cachedUserMessage }] }],
+    ttl: `${input.ttlSeconds ?? 3600}s`,
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`createGeminiCache failed: ${res.status} ${text.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { name?: string };
+  if (!json.name) throw new Error('createGeminiCache returned no name');
+  return { cacheName: json.name };
+}
+
 export function createGeminiProvider(apiKey: string): AgentProvider {
   if (!apiKey) {
     throw new Error('createGeminiProvider: apiKey is required (set GEMINI_API_KEY in env).');

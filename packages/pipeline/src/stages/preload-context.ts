@@ -76,12 +76,18 @@ export async function loadVideoContext(
  * NOTE: channelProfilePayload is stringified WITHOUT pretty-print indentation
  * to keep input tokens lean (LLMs parse compact JSON identically; 2-space
  * indent inflates by ~15-25%).
+ *
+ * When `omitChannelProfile` is true (because the channel profile lives in a
+ * Gemini context cache that was attached upstream), the channel-profile
+ * section is dropped to avoid sending it twice — the cached copy is already
+ * prepended to the request automatically by Gemini.
  */
 export function buildVideoAnalystUserMessage(
   channelProfilePayload: unknown,
   videoId: string,
   segments: PreloadedSegment[],
   visualMoments: PreloadedVisualMoment[],
+  options?: { omitChannelProfile?: boolean },
 ): string {
   const transcriptLines = segments.map(formatSegmentForPrompt).join('\n');
   const visualLines =
@@ -94,8 +100,12 @@ export function buildVideoAnalystUserMessage(
           .join('\n')
       : '(none)';
 
+  const channelProfileBlock = options?.omitChannelProfile
+    ? ''
+    : `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload)}\n\n`;
+
   return (
-    `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload)}\n\n` +
+    channelProfileBlock +
     `# VIDEO ${videoId} — TRANSCRIPT (${segments.length} segments)\n` +
     transcriptLines +
     `\n\n# VISUAL MOMENTS for ${videoId} (${visualMoments.length})\n` +

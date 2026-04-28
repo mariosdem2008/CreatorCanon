@@ -4,7 +4,7 @@ import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
 import { createOpenAIProvider } from '../agents/providers/openai';
-import { createGeminiProvider } from '../agents/providers/gemini';
+import { createGeminiCache, createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import type { AgentProvider } from '../agents/providers';
 import { parseServerEnv } from '@creatorcanon/core';
@@ -105,6 +105,35 @@ export async function runVideoIntelligenceStage(
     throw new Error('video_intelligence requires channel_profile to have run first');
   }
 
+  // For Gemini providers + a long shared prefix (channel profile), pre-create
+  // a context cache so the per-video calls share one cached prefix. Each
+  // cached token bills at 25% of fresh (Gemini's published rate). Skipped
+  // for non-Gemini providers — OpenAI's caching is automatic on prefix match.
+  // Cache create failures fall back to non-cached calls with a warning.
+  let cachedContent: string | undefined;
+  if (model.provider === 'gemini') {
+    try {
+      const cachedPrefix =
+        `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload)}\n\n` +
+        `# INSTRUCTIONS PRE-CONTEXT\n` +
+        `Each user message that follows contains one video's transcript and visual moments. ` +
+        `Make exactly one proposeVideoIntelligenceCard call per video.`;
+      const { cacheName } = await createGeminiCache({
+        apiKey: env.GEMINI_API_KEY ?? '',
+        modelId: model.modelId,
+        systemInstruction: cfg.systemPrompt,
+        cachedUserMessage: cachedPrefix,
+        ttlSeconds: 3600,
+      });
+      cachedContent = cacheName;
+      // eslint-disable-next-line no-console
+      console.info(`[video-intelligence] gemini cache created: ${cacheName}`);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[video-intelligence] gemini cache create failed, falling back to non-cached calls: ${(err as Error).message}`);
+    }
+  }
+
   // Pre-populate oversized-video failures so the run-result reflects them.
   const oversizedResults: Array<{
     videoId: string;
@@ -130,11 +159,15 @@ export async function runVideoIntelligenceStage(
       return { videoId, ok: false, summary: null, error: 'no segments for video' };
     }
 
+    // When a Gemini context cache is attached (cachedContent is set), the
+    // cached prefix already contains the channel profile — omit it from the
+    // per-video user message so we don't pay for it twice.
     const userMessage = buildVideoAnalystUserMessage(
       channelProfilePayload,
       videoId,
       videoSegments,
       visualMoments,
+      { omitChannelProfile: Boolean(cachedContent) },
     );
 
     try {
@@ -145,6 +178,7 @@ export async function runVideoIntelligenceStage(
         modelId: model.modelId,
         provider,
         fallbacks,
+        cachedContent,
         r2,
         tools: cfg.allowedTools,
         systemPrompt: cfg.systemPrompt,
