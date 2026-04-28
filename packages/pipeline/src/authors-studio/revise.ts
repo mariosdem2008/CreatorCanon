@@ -32,7 +32,10 @@ export async function runRevisePass(input: ReviseInput): Promise<ArtifactBundle>
     notesByKind.get(n.artifactKind)!.push(n);
   }
 
-  const result: ArtifactBundle = { prose: input.artifacts.prose };
+  const result: ArtifactBundle = {
+    prose: input.artifacts.prose,
+    workbenchArtifacts: input.artifacts.workbenchArtifacts,
+  };
 
   if (notesByKind.has('cited_prose')) {
     const reviseInput: ProseAuthorInput = {
