@@ -41,6 +41,7 @@
     "@creatorcanon/db": "workspace:*",
     "@google/generative-ai": "0.21.0",
     "@sentry/node": "8.33.1",
+    "mermaid": "^11.14.0",
     "openai": "4.61.0",
     "zod": "3.23.8",
     "zod-to-json-schema": "3.23.5"
