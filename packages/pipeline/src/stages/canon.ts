@@ -12,6 +12,11 @@ import { getDb } from '@creatorcanon/db';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import type { StageContext } from '../harness';
 import { buildFallbacks } from './fallback-chain';
+import {
+  buildCanonArchitectUserMessage,
+  type CanonVisualMoment,
+  type CanonVicRow,
+} from './preload-context';
 
 export interface CanonStageInput {
   runId: string;
@@ -54,15 +59,22 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
     throw new Error('canon stage requires channel_profile to have run first');
   }
 
-  const vicRows = await db
-    .select()
+  // Explicit projection (not db.select()) so future schema columns on
+  // videoIntelligenceCard don't accidentally leak into the prompt.
+  const vicRows: CanonVicRow[] = await db
+    .select({
+      id: videoIntelligenceCard.id,
+      videoId: videoIntelligenceCard.videoId,
+      evidenceSegmentIds: videoIntelligenceCard.evidenceSegmentIds,
+      payload: videoIntelligenceCard.payload,
+    })
     .from(videoIntelligenceCard)
     .where(eq(videoIntelligenceCard.runId, input.runId));
   if (vicRows.length === 0) {
     throw new Error('canon stage cannot run: no video_intelligence_card rows in this run');
   }
 
-  const vmRows = await db
+  const vmRows: CanonVisualMoment[] = await db
     .select({
       visualMomentId: visualMoment.id,
       videoId: visualMoment.videoId,
@@ -80,57 +92,35 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
   const provider = makeProvider(model.provider);
   const fallbacks = buildFallbacks(model, makeProvider);
 
-  const userMessage =
-    `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload)}\n\n` +
-    `# VIDEO INTELLIGENCE CARDS (${vicRows.length})\n` +
-    vicRows
-      .map((v) => {
-        return `## VIC ${v.id} (videoId=${v.videoId})\n` +
-          `evidenceSegmentIds: ${JSON.stringify(v.evidenceSegmentIds)}\n` +
-          `payload: ${JSON.stringify(v.payload)}`;
-      })
-      .join('\n\n') +
-    `\n\n# VISUAL MOMENTS (${vmRows.length})\n` +
-    (vmRows.length > 0
-      ? vmRows
-          .map(
-            (v) =>
-              `[${v.visualMomentId}] videoId=${v.videoId} @${v.timestampMs}ms ${v.type} (score=${v.usefulnessScore}): ${v.description}`,
-          )
-          .join('\n')
-      : '(none)') +
-    `\n\nSynthesize the canon. Make a proposeCanonNode call for each curated node. End with a one-line summary.`;
+  // Shared helper: same prompt format module video_intelligence uses.
+  // Includes hubUse on visual moments (canon needs it to decide which
+  // moments to attach) and is the single source of truth for canon's
+  // user-message shape.
+  const userMessage = buildCanonArchitectUserMessage(channelProfilePayload, vicRows, vmRows);
 
-  try {
-    const summary = await runAgent({
-      runId: input.runId,
-      workspaceId: input.workspaceId,
-      agent: cfg.agent,
-      modelId: model.modelId,
-      provider,
-      fallbacks,
-      r2,
-      tools: cfg.allowedTools,
-      systemPrompt: cfg.systemPrompt,
-      userMessage,
-      caps: cfg.stopOverrides,
-    });
-    const finalNodes = await db
-      .select({ id: canonNode.id })
-      .from(canonNode)
-      .where(eq(canonNode.runId, input.runId));
-    if (finalNodes.length === 0) {
-      // Agent ran but produced zero canon_nodes — fail loudly so the cache
-      // doesn't pin this empty state.
-      throw new Error('canon stage produced 0 canon_node rows; agent likely hit a quota or schema-validation error');
-    }
-    return { ok: true, nodeCount: finalNodes.length, costCents: summary.costCents, summary };
-  } catch (err) {
-    // Re-throw so runStage records failed_terminal. The legacy `ok: false`
-    // return-shape is still useful for callers that want diagnostics, but the
-    // orchestrator path should treat a canon failure as a stage failure.
-    throw err instanceof Error ? err : new Error(String(err));
+  const summary = await runAgent({
+    runId: input.runId,
+    workspaceId: input.workspaceId,
+    agent: cfg.agent,
+    modelId: model.modelId,
+    provider,
+    fallbacks,
+    r2,
+    tools: cfg.allowedTools,
+    systemPrompt: cfg.systemPrompt,
+    userMessage,
+    caps: cfg.stopOverrides,
+  });
+  const finalNodes = await db
+    .select({ id: canonNode.id })
+    .from(canonNode)
+    .where(eq(canonNode.runId, input.runId));
+  if (finalNodes.length === 0) {
+    // Agent ran but produced zero canon_nodes — fail loudly so the cache
+    // doesn't pin this empty state.
+    throw new Error('canon stage produced 0 canon_node rows; agent likely hit a quota or schema-validation error');
   }
+  return { ok: true, nodeCount: finalNodes.length, costCents: summary.costCents, summary };
 }
 
 export async function validateCanonMaterialization(

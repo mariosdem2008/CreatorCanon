@@ -103,3 +103,86 @@ export function buildVideoAnalystUserMessage(
     `\n\nProduce one proposeVideoIntelligenceCard call for video ${videoId}. The card's evidenceSegmentIds MUST be drawn only from the segmentIds shown above.`
   );
 }
+
+/**
+ * Visual-moment fields the canon_architect agent needs in its prompt.
+ * Includes videoId (canon spans multiple videos) AND hubUse (the agent
+ * uses it to decide whether a moment is worth attaching to a canon node).
+ */
+export interface CanonVisualMoment {
+  visualMomentId: string;
+  videoId: string;
+  timestampMs: number;
+  type: string;
+  description: string;
+  hubUse: string;
+  usefulnessScore: number;
+}
+
+/**
+ * VIC fields the canon_architect agent needs. The full payload is
+ * stringified into the prompt so the agent sees frameworks, lessons,
+ * quotes, etc. without round-tripping back to read tools.
+ */
+export interface CanonVicRow {
+  id: string;
+  videoId: string;
+  evidenceSegmentIds: string[];
+  payload: unknown;
+}
+
+/**
+ * Compact one-line format for a visual moment used in the canon_architect
+ * prompt. Includes videoId (cross-video disambiguation) and hubUse (the
+ * agent's signal that this moment is worth attaching to a canon node).
+ */
+export function formatVisualMomentForCanon(v: CanonVisualMoment): string {
+  return `[${v.visualMomentId}] videoId=${v.videoId} @${v.timestampMs}ms ${v.type} (score=${v.usefulnessScore}): ${v.description} — hubUse: ${v.hubUse}`;
+}
+
+/**
+ * Format one VIC into a `## VIC ${id} (videoId=...)` markdown block with
+ * its evidenceSegmentIds and full payload. Compact JSON.stringify (no
+ * pretty-print) keeps input tokens lean.
+ */
+export function formatVicForCanon(v: CanonVicRow): string {
+  return (
+    `## VIC ${v.id} (videoId=${v.videoId})\n` +
+    `evidenceSegmentIds: ${JSON.stringify(v.evidenceSegmentIds)}\n` +
+    `payload: ${JSON.stringify(v.payload)}`
+  );
+}
+
+/**
+ * Build the structured user message for canon_architect. Channel profile,
+ * every VIC payload, and every visual moment are pre-loaded — the agent
+ * does NOT need to call read tools.
+ *
+ * NOTE on prompt size: at canon_v1's 20-video cap with ~3-5KB VIC payloads,
+ * this prompt lands at 60-100KB — comfortable for gpt-5.5 (128-200K context)
+ * but tight if the cap grows. VIC payloads themselves embed visual-moment
+ * references; this prompt also lists visual moments separately. To trim if
+ * context-window pressure hits: drop visual-moment refs from VIC payloads
+ * before stringification (single source of truth becomes the # VISUAL MOMENTS
+ * section).
+ */
+export function buildCanonArchitectUserMessage(
+  channelProfilePayload: unknown,
+  vicRows: CanonVicRow[],
+  vmRows: CanonVisualMoment[],
+): string {
+  const vicLines = vicRows.map(formatVicForCanon).join('\n\n');
+  const vmLines =
+    vmRows.length > 0
+      ? vmRows.map(formatVisualMomentForCanon).join('\n')
+      : '(none)';
+
+  return (
+    `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload)}\n\n` +
+    `# VIDEO INTELLIGENCE CARDS (${vicRows.length})\n` +
+    vicLines +
+    `\n\n# VISUAL MOMENTS (${vmRows.length})\n` +
+    vmLines +
+    `\n\nSynthesize the canon. Make a proposeCanonNode call for each curated node.`
+  );
+}
