@@ -138,7 +138,7 @@ export interface EditorialAtlasManifest {
   title: string;
   tagline: string;
   creator: { name: string; handle: string; avatarUrl: string; bio: string; youtubeChannelUrl: string };
-  stats: { videoCount: number; sourceCount: number; transcriptPercent: number; archiveYears: number; pageCount: number };
+  stats: { videoCount: number; sourceCount: number; transcriptPercent: number; archiveYears: number; totalDurationMinutes: number; pageCount: number };
   topics: Topic[];
   pages: Page[];
   sources: SourceVideo[];
