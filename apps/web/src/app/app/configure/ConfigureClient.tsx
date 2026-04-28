@@ -11,6 +11,7 @@ import { ConfigureSubmitButton } from './ConfigureButtons';
 type Tone = 'conversational' | 'professional' | 'academic';
 type Depth = 'short' | 'standard' | 'deep';
 type TemplateId = 'paper' | 'midnight' | 'field';
+type VoiceMode = 'reader_second_person' | 'creator_first_person';
 
 const TONE_OPTIONS: Array<[Tone, string, string]> = [
   ['conversational', 'Conversational', 'Clear, direct, creator-led'],
@@ -43,6 +44,7 @@ export function ConfigureClient({
   const [depth, setDepth] = useState<Depth>('standard');
   const [template, setTemplate] = useState<TemplateId>('paper');
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>('reader_second_person');
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,460px)]">
@@ -95,6 +97,48 @@ export function ConfigureClient({
               value={depth}
               onChange={setDepth}
             />
+            <fieldset className="mt-6">
+              <legend className="text-sm font-medium text-slate-900">Voice</legend>
+              <p className="mt-1 text-xs text-slate-500">
+                Direct (you-pronoun) reads as a how-to. Creator&apos;s voice (first-person)
+                reads as the creator&apos;s own commentary. Choose direct unless this hub is
+                primarily personal essays.
+              </p>
+              <div className="mt-3 space-y-2">
+                <label className="flex items-start gap-3 text-sm">
+                  <input
+                    type="radio"
+                    name="voiceMode"
+                    value="reader_second_person"
+                    checked={voiceMode === 'reader_second_person'}
+                    onChange={() => setVoiceMode('reader_second_person')}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-medium">Direct (you-pronoun)</span>
+                    <span className="block text-xs text-slate-500">
+                      &ldquo;If you want to win retainers, embed Phase 2 hooks in your Phase 1 proposal.&rdquo;
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 text-sm">
+                  <input
+                    type="radio"
+                    name="voiceMode"
+                    value="creator_first_person"
+                    checked={voiceMode === 'creator_first_person'}
+                    onChange={() => setVoiceMode('creator_first_person')}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-medium">Creator&apos;s voice (first-person)</span>
+                    <span className="block text-xs text-slate-500">
+                      &ldquo;I built the proposal generator after losing too many deals to slow turnaround.&rdquo;
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
           </div>
         </Panel>
 

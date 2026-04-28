@@ -49,6 +49,9 @@ export async function createProject(formData: FormData): Promise<{ error: string
     ? (presentationPresetRaw as 'paper' | 'midnight' | 'field')
     : 'paper';
   const chatEnabled = formData.get('chat_enabled') === 'true';
+  const voiceModeRaw = formData.get('voiceMode');
+  const voiceMode =
+    voiceModeRaw === 'creator_first_person' ? 'creator_first_person' : 'reader_second_person';
   const idsRaw = (formData.get('video_ids') as string | null) ?? '';
   const videoIds = idsRaw.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -102,6 +105,7 @@ export async function createProject(formData: FormData): Promise<{ error: string
       length_preset: lengthPreset as 'short' | 'standard' | 'deep',
       chat_enabled: chatEnabled,
       presentation_preset: presentationPreset,
+      voiceMode,
       source_coverage: {
         selectedCount: sourceCoverage.selectedCount,
         readyCount: sourceCoverage.readyCount,
