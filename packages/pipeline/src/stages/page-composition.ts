@@ -116,13 +116,22 @@ interface SourcePacketVisual {
 type CanonNodeRow = typeof canonNode.$inferSelect;
 
 interface BriefPayload {
+  // Page-type field — page_brief_planner writes `pageType`. Also accept legacy `type`.
   pageType?: 'lesson' | 'framework' | 'playbook' | string;
+  type?: string;
+  // Title — planner writes `pageTitle`. Also accept legacy `title`.
+  pageTitle?: string;
   title?: string;
   slug?: string;
+  // Reader-question — planner writes `audienceQuestion`. Also accept legacy `readerProblem`.
+  audienceQuestion?: string;
   readerProblem?: string;
   promisedOutcome?: string;
+  // Why-this-matters — planner writes `openingHook`. Also accept legacy `whyThisMatters`.
+  openingHook?: string;
   whyThisMatters?: string;
-  outline?: string[];
+  // Outline — planner writes Array<{sectionTitle, intent, canonNodeIds}>. Legacy was string[].
+  outline?: Array<string | { sectionTitle?: string; intent?: string; canonNodeIds?: string[] }>;
   primaryCanonNodeIds?: string[];   // canonical key (set by proposePageBrief)
   supportingCanonNodeIds?: string[];
   requiredEvidenceSegmentIds?: string[];
@@ -212,8 +221,17 @@ export async function runPageCompositionStage(
       p.recommendedVisualMomentIds ?? [],
     );
 
-    const pageType = mapBriefPageTypeToEnum(p.pageType);
-    const title = p.title ?? 'Untitled';
+    // Read planner field names with legacy fallback. The page_brief_planner
+    // prompt writes pageType / pageTitle / audienceQuestion / openingHook —
+    // older code paths used type / title / readerProblem / whyThisMatters.
+    const pageType = mapBriefPageTypeToEnum(p.pageType ?? p.type);
+    const title = p.pageTitle ?? p.title ?? 'Untitled';
+    const readerProblem = p.audienceQuestion ?? p.readerProblem ?? '';
+    const whyThisMatters = p.openingHook ?? p.whyThisMatters ?? '';
+    // Promised outcome doesn't have an exact planner equivalent — fall back to
+    // the audience question (which always reads as a problem-it-solves) or the
+    // opening hook so summaries are never empty downstream.
+    const promisedOutcome = p.promisedOutcome ?? p.audienceQuestion ?? p.openingHook ?? title;
     const slug = p.slug ?? `pg-${nano()}`;
 
     let writerResult: WriterOutput | null = null;
@@ -285,10 +303,14 @@ export async function runPageCompositionStage(
       sections = buildDeterministicSections(
         {
           pageType,
-          readerProblem: p.readerProblem ?? '',
-          promisedOutcome: p.promisedOutcome ?? '',
-          whyThisMatters: p.whyThisMatters ?? '',
-          outline: p.outline ?? [],
+          readerProblem,
+          promisedOutcome,
+          whyThisMatters,
+          // Outline can be string[] (legacy) or {sectionTitle,intent}[] (planner).
+          // The deterministic fallback only uses string headings, so flatten.
+          outline: (p.outline ?? []).map((entry) =>
+            typeof entry === 'string' ? entry : (entry?.sectionTitle ?? entry?.intent ?? ''),
+          ).filter((s) => s.length > 0),
           ctaOrNextStep: p.ctaOrNextStep,
         },
         primary,
@@ -345,9 +367,9 @@ export async function runPageCompositionStage(
         evidenceSegmentIds,
         primaryFindingId: primary.id,
         supportingFindingIds: p.supportingCanonNodeIds ?? [],
-        readerProblem: p.readerProblem ?? '',
-        promisedOutcome: p.promisedOutcome ?? '',
-        whyThisMatters: p.whyThisMatters ?? '',
+        readerProblem,
+        promisedOutcome,
+        whyThisMatters,
         distinctSourceVideos: distinctSourceVideos.size,
         totalSelectedVideos,
       },
@@ -361,7 +383,10 @@ export async function runPageCompositionStage(
       version: 1,
       title: resolvedTitle,
       subtitle: resolvedSubtitle || null,
-      summary: p.promisedOutcome,
+      // page_version.summary feeds project-pages -> manifest summary (min(1)).
+      // Use promisedOutcome which now falls back through audienceQuestion ->
+      // openingHook -> title, so it's never empty.
+      summary: promisedOutcome,
       blockTreeJson: blockTree,
       isCurrent: true,
     });
