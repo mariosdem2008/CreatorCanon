@@ -16,7 +16,7 @@ const SAMPLE_PLAN: PagePlan = {
   workbench: {
     readerJob: 'learn',
     outcome: 'Understand the test page.',
-    useWhen: 'Use this when verifying assembler output.',
+    useWhen: ['Use this when verifying assembler output.'],
     artifactRequests: [],
     nextStepHints: [],
   },

@@ -366,7 +366,7 @@ Output a single JSON object matching this exact shape:
   "workbench": {
     "readerJob": "learn | build | copy | decide | debug",
     "outcome": "The reader outcome this page should unlock.",
-    "useWhen": "The practical situation where this page is useful.",
+    "useWhen": ["The practical situation where this page is useful."],
     "artifactRequests": [
       { "type": "prompt | checklist | workflow | template | schema | mistake_map", "title": "...", "intent": "...", "canonNodeIds": ["cn_..."] }
     ],

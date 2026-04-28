@@ -20,7 +20,7 @@ export interface WorkbenchArtifactDraft {
 export interface PageWorkbenchPlan {
   readerJob: ReaderJob;
   outcome: string;
-  useWhen: string;
+  useWhen: string[];
   artifactRequests: Array<{
     type: WorkbenchArtifactType;
     title: string;

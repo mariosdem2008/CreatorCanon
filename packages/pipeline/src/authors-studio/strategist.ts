@@ -37,7 +37,7 @@ const pagePlanSchema = z.object({
   workbench: z.object({
     readerJob: READER_JOB,
     outcome: z.string().min(10),
-    useWhen: z.string().min(10),
+    useWhen: z.array(z.string().min(10)).min(1).max(5),
     artifactRequests: z.array(z.object({
       type: WORKBENCH_ARTIFACT_TYPE,
       title: z.string().min(1),
