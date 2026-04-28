@@ -6,6 +6,33 @@
 
 export type VoiceMode = 'creator_first_person' | 'reader_second_person';
 
+export type ReaderJob = 'learn' | 'build' | 'copy' | 'decide' | 'debug';
+
+export type WorkbenchArtifactType = 'prompt' | 'checklist' | 'workflow' | 'template' | 'schema' | 'mistake_map';
+
+export interface WorkbenchArtifactDraft {
+  type: WorkbenchArtifactType;
+  title: string;
+  body: string;
+  citationIds: string[];
+}
+
+export interface PageWorkbenchPlan {
+  readerJob: ReaderJob;
+  outcome: string;
+  useWhen: string;
+  artifactRequests: Array<{
+    type: WorkbenchArtifactType;
+    title: string;
+    intent: string;
+    canonNodeIds: string[];
+  }>;
+  nextStepHints: Array<{
+    title: string;
+    reason: string;
+  }>;
+}
+
 export type ArtifactKind = 'cited_prose' | 'roadmap' | 'hypothetical_example' | 'diagram' | 'common_mistakes';
 
 export interface PagePlan {
@@ -29,12 +56,14 @@ export interface PagePlan {
     intent: string;                   // 1 sentence: what THIS artifact contributes
   }>;
   siblingPagesToReference: Array<{ pageId: string; title: string; slug: string }>;
+  workbench: PageWorkbenchPlan;
   costCents: number;
 }
 
 export interface ProseArtifact {
   kind: 'cited_prose';
   paragraphs: Array<{ heading?: string; body: string; citationIds: string[] }>;
+  summaryBullets?: string[];
   costCents: number;
 }
 
@@ -88,6 +117,7 @@ export interface ArtifactBundle {
   example?: ExampleArtifact;
   diagram?: DiagramArtifact;
   mistakes?: MistakesArtifact;
+  workbenchArtifacts?: WorkbenchArtifactDraft[];
 }
 
 export interface RevisionNote {

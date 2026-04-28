@@ -362,7 +362,18 @@ Output a single JSON object matching this exact shape:
   ],
   "siblingPagesToReference": [
     { "pageId": "...", "title": "...", "slug": "..." }
-  ]
+  ],
+  "workbench": {
+    "readerJob": "learn | build | copy | decide | debug",
+    "outcome": "The reader outcome this page should unlock.",
+    "useWhen": "The practical situation where this page is useful.",
+    "artifactRequests": [
+      { "type": "prompt | checklist | workflow | template | schema | mistake_map", "title": "...", "intent": "...", "canonNodeIds": ["cn_..."] }
+    ],
+    "nextStepHints": [
+      { "title": "...", "reason": "..." }
+    ]
+  }
 }
 
 Default artifact selection by pageType:
@@ -378,6 +389,7 @@ Skip an artifact when source thinness would force the specialist to fabricate. B
 
 Rules:
 - Every artifact MUST cite canon node IDs that exist in this run.
+- Every workbench artifact request MUST cite canon node IDs that exist in this run.
 - Avoid repeating content from sibling pages: if a sibling page covers something, reference it by slug rather than re-explaining.
 - voiceMode determines voice across the whole page; do NOT mix.
 - Output JSON only, no surrounding prose, no markdown fencing.`;

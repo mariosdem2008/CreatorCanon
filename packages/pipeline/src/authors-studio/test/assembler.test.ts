@@ -13,6 +13,13 @@ const SAMPLE_PLAN: PagePlan = {
   voiceNotes: { tone: 'practitioner', creatorTermsToUse: ['blueprint'], avoidPhrases: [] },
   artifacts: [{ kind: 'cited_prose', canonNodeIds: ['cn_a'], intent: '...' }],
   siblingPagesToReference: [],
+  workbench: {
+    readerJob: 'learn',
+    outcome: 'Understand the test page.',
+    useWhen: 'Use this when verifying assembler output.',
+    artifactRequests: [],
+    nextStepHints: [],
+  },
   costCents: 5,
 };
 

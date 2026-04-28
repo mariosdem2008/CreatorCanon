@@ -6,6 +6,8 @@ import type { R2Client } from '@creatorcanon/adapters';
 import type { PagePlan, VoiceMode } from './types';
 
 const ARTIFACT_KIND = z.enum(['cited_prose', 'roadmap', 'hypothetical_example', 'diagram', 'common_mistakes']);
+const READER_JOB = z.enum(['learn', 'build', 'copy', 'decide', 'debug']);
+const WORKBENCH_ARTIFACT_TYPE = z.enum(['prompt', 'checklist', 'workflow', 'template', 'schema', 'mistake_map']);
 
 const pagePlanSchema = z.object({
   pageId: z.string().min(1),
@@ -32,6 +34,21 @@ const pagePlanSchema = z.object({
     title: z.string().min(1),
     slug: z.string().min(1),
   })).max(20).optional().default([]),
+  workbench: z.object({
+    readerJob: READER_JOB,
+    outcome: z.string().min(10),
+    useWhen: z.string().min(10),
+    artifactRequests: z.array(z.object({
+      type: WORKBENCH_ARTIFACT_TYPE,
+      title: z.string().min(1),
+      intent: z.string().min(10),
+      canonNodeIds: z.array(z.string()).min(1).max(20),
+    })).min(0).max(5),
+    nextStepHints: z.array(z.object({
+      title: z.string().min(1),
+      reason: z.string().min(10),
+    })).min(0).max(5),
+  }),
 });
 
 export interface StrategistInput {
