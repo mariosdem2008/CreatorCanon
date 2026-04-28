@@ -2,7 +2,14 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { citationUrl, formatTimestampLabel, resolveAccentColor, ACCENT_COLORS } from './empty-state';
+import {
+  citationUrl,
+  formatTimestampLabel,
+  resolveAccentColor,
+  ACCENT_COLORS,
+  safeCitationHref,
+  safeSourceTitle,
+} from './empty-state';
 
 test('citationUrl: uses citation.url when present', () => {
   const cit = { url: 'https://example.com/x', timestampStart: 100 };
@@ -44,4 +51,27 @@ test('resolveAccentColor: returns input when in palette', () => {
 test('resolveAccentColor: falls back to slate for unknown', () => {
   assert.equal(resolveAccentColor('neon-pink' as never), 'slate');
   assert.equal(resolveAccentColor(undefined as never),   'slate');
+});
+
+test('safeCitationHref returns null instead of watch?v=null', () => {
+  const href = safeCitationHref(
+    { url: undefined, timestampStart: 42 },
+    { youtubeId: null },
+  );
+  assert.equal(href, null);
+});
+
+test('safeCitationHref rejects stale citation urls containing watch?v=null', () => {
+  const href = safeCitationHref(
+    { url: 'https://www.youtube.com/watch?v=null&t=42s', timestampStart: 42 },
+    { youtubeId: null },
+  );
+  assert.equal(href, null);
+});
+
+test('safeSourceTitle converts weak titles to stable ordinal labels', () => {
+  assert.equal(safeSourceTitle('Untitled', 3), 'Source 3');
+  assert.equal(safeSourceTitle('Untitled source', 4), 'Source 4');
+  assert.equal(safeSourceTitle('Untitled video', 5), 'Source 5');
+  assert.equal(safeSourceTitle('Build a Proposal Generator', 1), 'Build a Proposal Generator');
 });
