@@ -7,9 +7,9 @@ export function PathCard({ path, hubSlug }: { path: WorkbenchPath; hubSlug: stri
   const first = path.pages[0];
 
   return (
-    <section className="h-full rounded-[12px] border border-[#D8D0C0] bg-white p-5 shadow-[0_1px_0_rgba(26,22,18,0.03)]">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
+    <section className="h-full min-w-0 rounded-[12px] border border-[#D8D0C0] bg-white p-5 shadow-[0_1px_0_rgba(26,22,18,0.03)]">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <h2 className="text-[18px] font-semibold leading-tight tracking-[-0.01em] text-[#1A1612]">{path.title}</h2>
           <p className="mt-2 text-[13px] leading-[1.5] text-[#6B5F50]">{path.body}</p>
         </div>
@@ -17,14 +17,14 @@ export function PathCard({ path, hubSlug }: { path: WorkbenchPath; hubSlug: stri
           Path
         </span>
       </div>
-      <ol className="mt-5 space-y-2">
+      <ol className="mt-5 min-w-0 space-y-2">
         {path.pages.slice(0, 3).map((page, index) => (
-          <li key={page.id}>
-            <Link href={getPageRoute(hubSlug, page.slug)} className="flex min-h-10 items-center gap-3 rounded-[9px] px-2 py-2 hover:bg-[#FAF6EE]">
+          <li key={page.id} className="min-w-0">
+            <Link href={getPageRoute(hubSlug, page.slug)} className="flex min-h-10 min-w-0 items-center gap-3 rounded-[9px] px-2 py-2 hover:bg-[#FAF6EE]">
               <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#1A1612] text-[11px] font-semibold text-[#F8F4EC]">
                 {index + 1}
               </span>
-              <span className="min-w-0">
+              <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-semibold text-[#1A1612]">{page.title}</span>
                 <span className="block text-[11px] text-[#9A8E7C]">
                   {page.timeLabel} &middot; {page.citationLabel}
