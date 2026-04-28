@@ -172,8 +172,8 @@ export function assembleBlockTree(input: AssemblerInput): AssemblerOutput {
     const persistedArtifact = {
       id: '',
       type: artifact.type,
-      title: artifact.title,
-      body: artifact.body,
+      title: artifact.title.trim(),
+      body: artifact.body.trim(),
       citationIds: [...new Set(filterCites(artifact.citationIds))].sort(),
     };
     if (persistedArtifact.citationIds.length === 0) continue;

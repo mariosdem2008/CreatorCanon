@@ -271,4 +271,42 @@ describe('assembleBlockTree', () => {
       citationIds: ['seg_a', 'seg_b'],
     });
   });
+
+  it('dedupes workbench artifacts that only differ by surrounding title and body whitespace', () => {
+    const result = assembleBlockTree({
+      plan: SAMPLE_PLAN,
+      bundle: {
+        ...SAMPLE_BUNDLE,
+        workbenchArtifacts: [
+          {
+            type: 'workflow',
+            title: ' Whitespace workflow ',
+            body: ' Trim this body. ',
+            citationIds: ['seg_a'],
+          },
+          {
+            type: 'workflow',
+            title: 'Whitespace workflow',
+            body: 'Trim this body.',
+            citationIds: ['seg_a'],
+          },
+        ],
+      },
+      validSegmentIds: new Set(['seg_a', 'seg_b']),
+    });
+
+    const workbench = result.atlasMeta.workbench as {
+      artifacts: Array<{ id: string; type: string; title: string; body: string; citationIds: string[] }>;
+    };
+    assert.equal(workbench.artifacts.length, 1);
+    assert.match(workbench.artifacts[0]!.id, /^art_pb_test_whitespace-workflow_[a-f0-9]{12}$/);
+    assert.deepEqual(workbench.artifacts[0], {
+      id: workbench.artifacts[0]!.id,
+      type: 'workflow',
+      title: 'Whitespace workflow',
+      body: 'Trim this body.',
+      citationIds: ['seg_a'],
+    });
+    assert.equal(new Set(workbench.artifacts.map((artifact) => artifact.id)).size, workbench.artifacts.length);
+  });
 });
