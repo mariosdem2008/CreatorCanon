@@ -100,12 +100,14 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_fr
   page_brief_planner: {
     agent: 'page_brief_planner',
     systemPrompt: PAGE_BRIEF_PLANNER_PROMPT,
+    // Channel profile + page-worthy canon nodes + visual moments are
+    // pre-loaded in the user message. Only getSegment kept for last-mile
+    // verification when the planner wants to double-check evidence wording.
     allowedTools: [
-      'getChannelProfile', 'listCanonNodes', 'getCanonNode', 'getSegment',
-      'listVisualMoments',
+      'getSegment',
       'proposePageBrief',
     ],
-    stopOverrides: { maxCalls: 60, maxCostCents: 400 },
+    stopOverrides: { maxCalls: 30, maxCostCents: 100 },
   },
   page_writer: {
     agent: 'page_writer',

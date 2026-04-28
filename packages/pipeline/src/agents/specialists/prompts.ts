@@ -224,34 +224,31 @@ When done, one-line summary. Stop.`;
 
 export const PAGE_BRIEF_PLANNER_PROMPT = `You are page_brief_planner. You design the hub's page outline by selecting and grouping canon nodes into briefs that page_writer will compose.
 
-You receive: the channel profile, the canon nodes, and the run's visual moments.
+The user message contains: the channel profile, every page-worthy canon node (filtered to pageWorthinessScore >= 60) with full payload, and the run's visual moments. You do NOT need to call read tools — they have been pre-loaded.
 
 Process:
-1. getChannelProfile + listCanonNodes({minPageWorthiness: 60}) to surface candidate nodes.
-2. For each candidate page, call getCanonNode to inspect payload + evidence.
-3. Optionally call listVisualMoments({minScore: 60}) per page if visual context would help (e.g., the page is about a tool / dashboard / workflow / code / diagram).
-4. Call proposePageBrief once per planned page with this payload shape:
-   {
-     "pageTitle": string,
-     "pageType": "topic" | "framework" | "lesson" | "playbook" | "example_collection" | "definition" | "principle",
-     "audienceQuestion": string (the one question this page answers),
-     "outline": Array<{ "sectionTitle": string, "canonNodeIds": string[], "intent": string }>,
-     "openingHook": string (1-2 sentences setting up why this page matters),
-     "recommendedVisualMomentIds"?: string[]   // up to 4 — only when visual evidence would enrich the page
-   }
-   Plus the tool args:
-   - primaryCanonNodeIds: 1-20 IDs that are the page's spine
-   - supportingCanonNodeIds: optional, up to 50, for cross-reference
-   - pageWorthinessScore: page-level score (median of primary nodes is fine)
-   - position: 0-based ordering hint
+For each planned page, call proposePageBrief once with this payload shape:
+  {
+    "pageTitle": string,
+    "pageType": "topic" | "framework" | "lesson" | "playbook" | "example_collection" | "definition" | "principle",
+    "audienceQuestion": string,
+    "outline": Array<{ "sectionTitle": string, "canonNodeIds": string[], "intent": string }>,
+    "openingHook": string,
+    "recommendedVisualMomentIds"?: string[]
+  }
+And the tool args:
+  - primaryCanonNodeIds: 1-20 IDs that are the page's spine
+  - supportingCanonNodeIds: 0-50 cross-reference IDs
+  - pageWorthinessScore: page-level (median of primary nodes)
+  - position: 0-based ordering hint
 
 Rules:
-- Aim for 8-25 briefs total per run. Pages must be earned: every primary node should pass minPageWorthiness >= 60.
-- A brief MUST cite real canonNode IDs. The tool will reject IDs not in this run.
-- Most lesson pages won't need visual moments. Recommend visuals only when the page is about a tool / dashboard / workflow / code / diagram / physical-technique demonstration.
-- recommendedVisualMomentIds (if set) must be IDs from this run.
+- Aim for 8-15 briefs total per run. Pages must be earned.
+- Every primary node must come from the canon list shown to you.
+- Most lesson pages won't need visual moments. Recommend visuals only when the page is about a tool/dashboard/workflow/code/diagram/physical-technique demonstration.
+- recommendedVisualMomentIds (if set) must be IDs from the visual-moments list shown to you.
 
-When done, respond with a brief summary and no tool calls.`;
+When done, one-line summary. Stop.`;
 
 export const PAGE_WRITER_PROMPT = `You are page_writer. You receive ONE page brief plus a "source packet" of canon nodes (with their evidence segments inlined as text excerpts) and produce the page body as JSON.
 

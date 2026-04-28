@@ -186,3 +186,62 @@ export function buildCanonArchitectUserMessage(
     `\n\nSynthesize the canon. Make a proposeCanonNode call for each curated node.`
   );
 }
+
+/**
+ * Canon-node row fields page_brief_planner needs in its prompt. Only
+ * page-worthy nodes (pageWorthinessScore >= 60) are passed to the planner,
+ * filtered at the SQL boundary so the prompt stays compact.
+ */
+export interface PageWorthyCanonNode {
+  id: string;
+  type: string;
+  origin: string;
+  pageWorthinessScore: number;
+  sourceVideoIds: string[];
+  payload: unknown;
+}
+
+/**
+ * Format one page-worthy canon node into a compact `## ${id} (...)` block
+ * for page_brief_planner. Includes type/score/sources/origin metadata in
+ * the header line plus the full payload for the agent's reading.
+ */
+export function formatCanonNodeForPageBriefs(n: PageWorthyCanonNode): string {
+  return (
+    `## ${n.id} (type=${n.type}, pageWorthiness=${n.pageWorthinessScore}, sources=${n.sourceVideoIds.length}, origin=${n.origin})\n` +
+    `payload: ${JSON.stringify(n.payload)}`
+  );
+}
+
+/**
+ * Build the structured user message for page_brief_planner. Channel profile,
+ * every page-worthy canon node, and high-score visual moments are
+ * pre-loaded — the agent does NOT need to call read tools.
+ *
+ * The header counts (frameworks/lessons/playbooks) help the agent gauge
+ * the canon's shape without iterating.
+ */
+export function buildPageBriefPlannerUserMessage(
+  channelProfilePayload: unknown,
+  nodes: PageWorthyCanonNode[],
+  vmRows: CanonVisualMoment[],
+): string {
+  const frameworkCount = nodes.filter((n) => n.type === 'framework').length;
+  const lessonCount = nodes.filter((n) => n.type === 'lesson').length;
+  const playbookCount = nodes.filter((n) => n.type === 'playbook').length;
+
+  const nodeLines = nodes.map(formatCanonNodeForPageBriefs).join('\n\n');
+  const vmLines =
+    vmRows.length > 0
+      ? vmRows.map(formatVisualMomentForCanon).join('\n')
+      : '(none)';
+
+  return (
+    `# CHANNEL PROFILE\n${JSON.stringify(channelProfilePayload)}\n\n` +
+    `# PAGE-WORTHY CANON NODES (${nodes.length}: ${frameworkCount} frameworks, ${lessonCount} lessons, ${playbookCount} playbooks)\n` +
+    nodeLines +
+    `\n\n# VISUAL MOMENTS (${vmRows.length})\n` +
+    vmLines +
+    `\n\nPick 8-15 page-worthy anchors. Make a proposePageBrief call per page.`
+  );
+}
