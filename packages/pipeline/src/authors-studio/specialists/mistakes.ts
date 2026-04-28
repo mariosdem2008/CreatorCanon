@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { runSpecialist, type SpecialistContext } from './_runner';
 import type { MistakesArtifact, PagePlan } from '../types';
 
+const mistakeMapWorkbenchArtifactSchema = z.object({
+  type: z.literal('mistake_map'),
+  title: z.string().min(4),
+  body: z.string().min(40),
+  citationIds: z.array(z.string().min(1)).min(1),
+});
+
 const mistakesSchema = z.object({
   kind: z.literal('common_mistakes'),
   items: z.array(z.object({
@@ -10,6 +17,7 @@ const mistakesSchema = z.object({
     correction: z.string().min(15),
     citationIds: z.array(z.string().min(1)).min(1),
   })).min(3).max(5),
+  workbenchArtifact: mistakeMapWorkbenchArtifactSchema.optional(),
 });
 
 export interface MistakesAuthorInput {

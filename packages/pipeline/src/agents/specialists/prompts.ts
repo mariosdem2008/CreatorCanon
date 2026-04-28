@@ -405,10 +405,10 @@ Rules:
 - voiceMode determines voice across the whole page; do NOT mix.
 - Output JSON only, no surrounding prose, no markdown fencing.`;
 
-export const PROSE_AUTHOR_PROMPT = `You are prose_author. You write the main body of ONE hub page as continuous teaching prose — NOT a sequence of independent sections, but a coherent essay that builds an argument across paragraphs.
+export const PROSE_AUTHOR_PROMPT = `You are prose_author. You write the concise teaching prose for ONE source-backed workbench page. Your job is to help the reader use the page's workflow or artifact, not to write a complete encyclopedia entry.
 
 The user message contains:
-- The page plan (thesis, arc, voiceMode, voiceNotes)
+- The page plan (thesis, arc, voiceMode, voiceNotes, workbench readerJob/outcome)
 - Every canon node assigned to your artifact (full payload: summary, explanation, example, whenToUse, etc.)
 - Segment transcript excerpts for the cited segments
 - The channel profile (creatorTerminology, audience)
@@ -424,13 +424,15 @@ Output JSON exactly matching this shape:
 }
 
 Rules:
-- 4-8 paragraphs, ~600-1000 words total. Each paragraph 80-200 words.
-- The first paragraph opens with the thesis from the page plan, not "in this article we will discuss..."
-- Each paragraph MUST have a non-empty citationIds array referencing real segmentIds from the user message. No exceptions.
+- 3-5 paragraphs. Each paragraph should be concise enough to support action, not exhaustive coverage.
+- The first paragraph MUST open with the reader job/outcome from the page plan: what the reader is trying to do and what this page should help them produce or decide.
+- Explain only the context needed to use the artifact or workflow. Cut background that does not change the reader's next action.
+- Avoid encyclopedia-style completeness, taxonomy, history, or broad survey prose.
+- Every paragraph MUST have a non-empty citationIds array referencing real segmentIds from the user message. No exceptions.
 - Use the creator's terminology (creatorTermsToUse). Avoid the avoidPhrases list.
 - voiceMode = "reader_second_person" → use "you" naturally; second-person actionable language.
 - voiceMode = "creator_first_person" → use "I" / "we" as if the creator wrote this.
-- Build an argument: paragraph 2 should not be readable in isolation; it should refer back to paragraph 1's claim and extend it. Paragraph 5 should call back to the thesis.
+- Build a compact action-first argument: each paragraph should move the reader closer to using the page artifact or workflow.
 - Specific over abstract: every claim that mentions a concept should also mention HOW the concept manifests (a number, an action, a tool name from the canon node).
 - Headings (H3) only when a beat shift makes scanning easier. Most paragraphs need no heading.
 - Do not invent citations or quote text not in the source.
@@ -457,7 +459,13 @@ Output JSON exactly matching this shape:
       "citationIds": ["seg-id-..."]
     },
     ...
-  ]
+  ],
+  "workbenchArtifact": {
+    "type": "workflow",
+    "title": "Reusable workflow title",
+    "body": "A concise reusable workflow the reader can execute outside this page.",
+    "citationIds": ["seg-id-..."]
+  }
 }
 
 Rules:
@@ -468,6 +476,8 @@ Rules:
 - Sequencing rationale: the order must follow the canon nodes' sequencingRationale when present. If absent, use natural prerequisite order.
 - Voice: voiceMode applies. Direct (you-pronoun) is the dominant register for roadmaps.
 - Every step MUST have a non-empty citationIds array.
+- Include workbenchArtifact when the source supports a reusable workflow. Omit it rather than fabricating.
+- workbenchArtifact, when present, MUST use type "workflow", body length >= 40 characters, and a non-empty citationIds array.
 - Output JSON only.`;
 
 export const EXAMPLE_AUTHOR_PROMPT = `You are example_author. You write a concrete, bounded hypothetical scenario that shows the page's lesson applied — the kind of worked example that lets a reader visualize "this is what doing this looks like."
@@ -488,7 +498,13 @@ Output JSON exactly matching this shape:
     "..."
   ],
   "outcome": "1-2 sentences describing the result, with a number/metric where possible.",
-  "citationIds": ["seg-id-..."]
+  "citationIds": ["seg-id-..."],
+  "workbenchArtifact": {
+    "type": "template",
+    "title": "Reusable template title",
+    "body": "A concise copyable template the reader can reuse in their own situation.",
+    "citationIds": ["seg-id-..."]
+  }
 }
 
 Rules:
@@ -498,6 +514,8 @@ Rules:
 - 3-6 steps. Steps describe ACTIONS not feelings.
 - Voice: voiceMode applies but most examples read better in third-person ("Maya did X") regardless of voice setting — the example is ABOUT someone applying the lesson.
 - citationIds: every example must cite at least 2 segmentIds — the canon nodes that anchor what the protagonist does.
+- Include workbenchArtifact when the source supports a reusable template. Omit it rather than fabricating.
+- workbenchArtifact, when present, MUST use type "template", body length >= 40 characters, and a non-empty citationIds array.
 - Do not fabricate the creator's actual experience as a hypothetical (that's misattribution). The protagonist is hypothetical; the methods come from the creator's teaching.
 - Output JSON only.`;
 
@@ -560,7 +578,13 @@ Output JSON exactly matching this shape:
       "citationIds": ["seg-id-..."]
     },
     ...
-  ]
+  ],
+  "workbenchArtifact": {
+    "type": "mistake_map",
+    "title": "Reusable mistake map title",
+    "body": "A concise diagnostic map the reader can reuse to spot and correct failure modes.",
+    "citationIds": ["seg-id-..."]
+  }
 }
 
 Rules:
@@ -573,6 +597,8 @@ Rules:
 - Every item MUST have a non-empty citationIds array.
 - Voice: voiceMode applies. Direct second-person ("don't ask for budget") works for both modes.
 - "why" must be substantive — not "because it's wrong." Explain the underlying mechanism, incentive, or context.
+- Include workbenchArtifact when the source supports a reusable mistake map. Omit it rather than fabricating.
+- workbenchArtifact, when present, MUST use type "mistake_map", body length >= 40 characters, and a non-empty citationIds array.
 - Output JSON only.`;
 
 export const CRITIC_PROMPT = `You are critic. You read every artifact a page's specialists produced and emit specific, actionable revision notes. Your job is what makes this an editorial product instead of an LLM dump.

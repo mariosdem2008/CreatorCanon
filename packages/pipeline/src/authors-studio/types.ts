@@ -10,8 +10,8 @@ export type ReaderJob = 'learn' | 'build' | 'copy' | 'decide' | 'debug';
 
 export type WorkbenchArtifactType = 'prompt' | 'checklist' | 'workflow' | 'template' | 'schema' | 'mistake_map';
 
-export interface WorkbenchArtifactDraft {
-  type: WorkbenchArtifactType;
+export interface WorkbenchArtifactDraft<T extends WorkbenchArtifactType = WorkbenchArtifactType> {
+  type: T;
   title: string;
   body: string;
   citationIds: string[];
@@ -77,6 +77,7 @@ export interface RoadmapArtifact {
     durationLabel?: string;
     citationIds: string[];
   }>;
+  workbenchArtifact?: WorkbenchArtifactDraft<'workflow'>;
   costCents: number;
 }
 
@@ -86,6 +87,7 @@ export interface ExampleArtifact {
   stepsTaken: string[];
   outcome: string;
   citationIds: string[];
+  workbenchArtifact?: WorkbenchArtifactDraft<'template'>;
   costCents: number;
 }
 
@@ -106,6 +108,7 @@ export interface MistakesArtifact {
     correction: string;
     citationIds: string[];
   }>;
+  workbenchArtifact?: WorkbenchArtifactDraft<'mistake_map'>;
   costCents: number;
 }
 

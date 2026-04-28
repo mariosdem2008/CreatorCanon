@@ -8,7 +8,7 @@ const proseSchema = z.object({
     heading: z.string().optional(),
     body: z.string().min(40),
     citationIds: z.array(z.string().min(1)).min(1),
-  })).min(3).max(10),
+  })).min(3).max(5),
 });
 
 export interface ProseAuthorInput {

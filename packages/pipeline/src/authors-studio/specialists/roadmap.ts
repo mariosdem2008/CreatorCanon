@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { runSpecialist, type SpecialistContext } from './_runner';
 import type { RoadmapArtifact, PagePlan } from '../types';
 
+const workflowWorkbenchArtifactSchema = z.object({
+  type: z.literal('workflow'),
+  title: z.string().min(4),
+  body: z.string().min(40),
+  citationIds: z.array(z.string().min(1)).min(1),
+});
+
 const roadmapSchema = z.object({
   kind: z.literal('roadmap'),
   title: z.string().min(5),
@@ -12,6 +19,7 @@ const roadmapSchema = z.object({
     durationLabel: z.string().optional(),
     citationIds: z.array(z.string().min(1)).min(1),
   })).min(3).max(7),
+  workbenchArtifact: workflowWorkbenchArtifactSchema.optional(),
 });
 
 export interface RoadmapAuthorInput {
