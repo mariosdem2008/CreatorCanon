@@ -11,7 +11,7 @@ import { projectNavigation } from './project-navigation';
 import { projectTrust } from './project-trust';
 import { projectHighlights } from './project-highlights';
 import { buildPageCitations } from './project-citations';
-import { projectWorkbench } from './project-workbench';
+import { projectWorkbench, projectWorkbenchPageFields } from './project-workbench';
 
 export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, releaseId }) => {
   const db = getDb();
@@ -94,7 +94,11 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
     citations: (citationsByPage.get(page.id) ?? []) as EditorialAtlasManifest['pages'][number]['citations'],
   }));
   const workbench = projectWorkbench({ pages: pagesWithCitations });
-  const pages = pagesWithCitations.map(({ _internal: _dropped, ...rest }) => ({
+  const pagesWithWorkbenchFields = projectWorkbenchPageFields({
+    pages: pagesWithCitations,
+    sourceMoments: workbench.sourceMoments,
+  });
+  const pages = pagesWithWorkbenchFields.map(({ _internal: _dropped, ...rest }) => ({
     ...rest,
   }));
 

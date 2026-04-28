@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { projectWorkbench } from '../project-workbench';
+import { projectWorkbench, projectWorkbenchPageFields } from '../project-workbench';
 import type { Citation, Page } from '../manifest-types';
 import type { ProjectedPageWithInternal } from '../project-pages';
 
@@ -58,6 +58,7 @@ describe('projectWorkbench', () => {
   it('projects reader-job paths with real artifact and source moment references', () => {
     const learn = page('learn', {
       readerJob: 'learn',
+      citations: [citation('cite_seg_learn')],
       _internal: {
         evidenceSegmentIds: [],
         primaryFindingId: 'finding_learn',
@@ -69,7 +70,7 @@ describe('projectWorkbench', () => {
               type: 'checklist',
               title: 'Learning checklist',
               body: 'Read this first.',
-              citationIds: ['cite_learn', 'missing_cite'],
+              citationIds: ['seg_learn', 'missing_seg'],
             },
           ],
         },
@@ -77,7 +78,7 @@ describe('projectWorkbench', () => {
     });
     const build = page('build', {
       readerJob: 'build',
-      citations: [citation('cite_build', { timestampStart: 130, timestampLabel: '' })],
+      citations: [citation('cite_seg_build', { timestampStart: 130, timestampLabel: '' })],
       _internal: {
         evidenceSegmentIds: [],
         primaryFindingId: 'finding_build',
@@ -89,7 +90,7 @@ describe('projectWorkbench', () => {
               type: 'workflow',
               title: 'Build workflow',
               body: 'Build this.',
-              citationIds: ['cite_build'],
+              citationIds: ['seg_build'],
             },
           ],
         },
@@ -97,6 +98,7 @@ describe('projectWorkbench', () => {
     });
     const copy = page('copy', {
       readerJob: 'copy',
+      citations: [citation('cite_seg_copy')],
       _internal: {
         evidenceSegmentIds: [],
         primaryFindingId: 'finding_copy',
@@ -108,7 +110,7 @@ describe('projectWorkbench', () => {
               type: 'prompt',
               title: 'Reusable prompt',
               body: 'Copy this prompt.',
-              citationIds: ['cite_copy'],
+              citationIds: ['cite_seg_copy'],
             },
           ],
         },
@@ -131,7 +133,11 @@ describe('projectWorkbench', () => {
     );
     assert.deepEqual(
       workbench.artifacts.find((artifact) => artifact.id === 'artifact_learn')?.citationIds,
-      ['cite_learn'],
+      ['cite_seg_learn'],
+    );
+    assert.deepEqual(
+      workbench.artifacts.find((artifact) => artifact.id === 'artifact_copy')?.citationIds,
+      ['cite_seg_copy'],
     );
     assert.equal(workbench.artifacts.find((artifact) => artifact.id === 'artifact_build')?.pageId, 'build');
 
@@ -146,7 +152,43 @@ describe('projectWorkbench', () => {
     const buildMoment = workbench.sourceMoments.find((moment) => moment.pageIds.includes('build'));
     assert.ok(buildMoment);
     assert.equal(buildMoment.timestampLabel, '2:10');
-    assert.equal(buildMoment.sourceVideoId, 'video_cite_build');
+    assert.equal(buildMoment.sourceVideoId, 'video_cite_seg_build');
+  });
+
+  it('projects page-level source moments and next steps from native workbench metadata', () => {
+    const start = page('start', {
+      title: 'Start Here',
+      citations: [citation('cite_seg_start')],
+      _internal: {
+        evidenceSegmentIds: [],
+        primaryFindingId: 'finding_start',
+        workbench: {
+          nextStepHints: [
+            { title: 'Build System', reason: 'Implementation follows the overview.' },
+            { title: 'Missing Page', reason: 'This should not resolve.' },
+            { title: 'Start Here', reason: 'Self references should be ignored.' },
+          ],
+        },
+      },
+    });
+    const build = page('build', {
+      title: 'Build System',
+      citations: [citation('cite_seg_build')],
+    });
+    const copy = page('copy', {
+      title: 'Copy Assets',
+      citations: [citation('cite_seg_copy')],
+    });
+    const workbench = projectWorkbench({ pages: [start, build, copy] });
+
+    const pages = projectWorkbenchPageFields({
+      pages: [start, build, copy],
+      sourceMoments: workbench.sourceMoments,
+    });
+
+    assert.deepEqual(pages.find((candidate) => candidate.id === 'start')?.nextStepPageIds, ['build']);
+    assert.deepEqual(pages.find((candidate) => candidate.id === 'start')?.sourceMomentIds, ['start_cite_seg_start']);
+    assert.deepEqual(pages.find((candidate) => candidate.id === 'build')?.sourceMomentIds, ['build_cite_seg_build']);
   });
 
   it('fills guided paths from fallback pages when a reader-job group is missing', () => {

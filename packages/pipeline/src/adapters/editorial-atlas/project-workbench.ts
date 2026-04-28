@@ -72,6 +72,17 @@ function sourceMomentIdsForPages(pageIds: string[], sourceMoments: SourceMoment[
     .map((moment) => moment.id);
 }
 
+function normalizeTitle(title: string): string {
+  return title.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function normalizeCitationId(ref: string, validCitationIds: Set<string>): string | null {
+  if (validCitationIds.has(ref)) return ref;
+
+  const prefixed = ref.startsWith('cite_') ? ref : `cite_${ref}`;
+  return validCitationIds.has(prefixed) ? prefixed : null;
+}
+
 function guidedPath(
   branch: PathBranch,
   pages: ProjectedPageWithInternal[],
@@ -137,7 +148,9 @@ export function projectWorkbench({
       title: artifact.title,
       body: artifact.body,
       pageId: page.id,
-      citationIds: artifact.citationIds.filter((citationId) => validCitationIds.has(citationId)),
+      citationIds: artifact.citationIds
+        .map((citationId) => normalizeCitationId(citationId, validCitationIds))
+        .filter((citationId): citationId is string => citationId !== null),
     }));
   });
 
@@ -155,4 +168,36 @@ export function projectWorkbench({
     artifacts,
     sourceMoments,
   };
+}
+
+export function projectWorkbenchPageFields({
+  pages,
+  sourceMoments,
+}: {
+  pages: ProjectedPageWithInternal[];
+  sourceMoments: SourceMoment[];
+}): ProjectedPageWithInternal[] {
+  const pagesByTitle = new Map(pages.map((page) => [normalizeTitle(page.title), page]));
+  const sourceMomentIdsByPageId = new Map<string, string[]>();
+
+  for (const moment of sourceMoments) {
+    for (const pageId of moment.pageIds) {
+      const ids = sourceMomentIdsByPageId.get(pageId) ?? [];
+      ids.push(moment.id);
+      sourceMomentIdsByPageId.set(pageId, ids);
+    }
+  }
+
+  return pages.map((page) => {
+    const nextStepPageIds = (page._internal.workbench?.nextStepHints ?? [])
+      .map((hint) => pagesByTitle.get(normalizeTitle(hint.title)))
+      .filter((nextPage): nextPage is ProjectedPageWithInternal => nextPage !== undefined && nextPage.id !== page.id)
+      .map((nextPage) => nextPage.id);
+
+    return {
+      ...page,
+      sourceMomentIds: sourceMomentIdsByPageId.get(page.id) ?? [],
+      nextStepPageIds,
+    };
+  });
 }
