@@ -66,6 +66,52 @@ describe('assembleBlockTree', () => {
     assert.equal(hasDiagram, false);
   });
 
+  it('omits diagram block when diagram citations do not resolve to valid segments', () => {
+    const result = assembleBlockTree({
+      plan: SAMPLE_PLAN,
+      bundle: {
+        ...SAMPLE_BUNDLE,
+        diagram: {
+          kind: 'diagram',
+          diagramType: 'flowchart',
+          mermaidSrc: 'graph TD; A-->B;',
+          caption: 'Unsupported diagram.',
+          citationIds: ['seg_missing'],
+          costCents: 1,
+        },
+      },
+      validSegmentIds: new Set(['seg_a', 'seg_b']),
+    });
+
+    assert.equal(result.blocks.some((b) => b.type === 'diagram'), false);
+  });
+
+  it('filters unsupported roadmap steps from a supported roadmap block', () => {
+    const result = assembleBlockTree({
+      plan: SAMPLE_PLAN,
+      bundle: {
+        ...SAMPLE_BUNDLE,
+        roadmap: {
+          kind: 'roadmap',
+          title: 'Mixed roadmap',
+          steps: [
+            { index: 1, title: 'Supported step', body: 'Keep this step.', citationIds: ['seg_a', 'seg_missing'] },
+            { index: 2, title: 'Unsupported step', body: 'Drop this step.', citationIds: ['seg_missing'] },
+          ],
+          costCents: 1,
+        },
+      },
+      validSegmentIds: new Set(['seg_a', 'seg_b']),
+    });
+
+    const roadmap = result.blocks.find((b) => b.type === 'roadmap');
+    assert.ok(roadmap);
+    assert.deepEqual(roadmap.citations, ['seg_a']);
+    assert.deepEqual(roadmap.content.steps, [
+      { index: 1, title: 'Supported step', body: 'Keep this step.', citationIds: ['seg_a'] },
+    ]);
+  });
+
   it('drops citationIds that don\'t resolve to valid segments', () => {
     const result = assembleBlockTree({
       plan: SAMPLE_PLAN,
@@ -118,13 +164,17 @@ describe('assembleBlockTree', () => {
       validSegmentIds: new Set(['seg_a', 'seg_b']),
     });
 
+    const workbench = result.atlasMeta.workbench as {
+      artifacts: Array<{ id: string; type: string; title: string; body: string; citationIds: string[] }>;
+    };
+    assert.match(workbench.artifacts[0]!.id, /^art_pb_test_supported-workflow_[a-f0-9]{12}$/);
     assert.deepEqual(result.atlasMeta.workbench, {
       readerJob: 'build',
       outcome: 'Build a repeatable validation pass for assembled pages.',
       useWhen: ['When turning cited notes into a practical page.', 'When checking unsupported claims before publishing.'],
       artifacts: [
         {
-          id: 'art_pb_test_0',
+          id: workbench.artifacts[0]!.id,
           type: 'workflow',
           title: 'Supported workflow',
           body: 'Do the supported thing.',
@@ -161,13 +211,17 @@ describe('assembleBlockTree', () => {
       validSegmentIds: new Set(['seg_a', 'seg_b']),
     });
 
+    const workbench = result.atlasMeta.workbench as {
+      artifacts: Array<{ id: string; type: string; title: string; body: string; citationIds: string[] }>;
+    };
+    assert.match(workbench.artifacts[0]!.id, /^art_pb_test_collected-workflow_[a-f0-9]{12}$/);
     assert.deepEqual(result.atlasMeta.workbench, {
       readerJob: 'build',
       outcome: 'Build a repeatable validation pass for assembled pages.',
       useWhen: ['When turning cited notes into a practical page.', 'When checking unsupported claims before publishing.'],
       artifacts: [
         {
-          id: 'art_pb_test_0',
+          id: workbench.artifacts[0]!.id,
           type: 'workflow',
           title: 'Collected workflow',
           body: 'Use the collected workflow.',
@@ -178,6 +232,43 @@ describe('assembleBlockTree', () => {
         { title: 'Validate citations', reason: 'Confirm the rendered page only uses supported segments.' },
         { title: 'Prepare follow-up artifact', reason: 'Convert the lesson into a reusable workbench item.' },
       ],
+    });
+  });
+
+  it('dedupes equivalent workbench artifacts after citation normalization', () => {
+    const result = assembleBlockTree({
+      plan: SAMPLE_PLAN,
+      bundle: {
+        ...SAMPLE_BUNDLE,
+        workbenchArtifacts: [
+          {
+            type: 'workflow',
+            title: 'Normalized workflow',
+            body: 'Use normalized citations.',
+            citationIds: ['seg_b', 'seg_a', 'seg_missing'],
+          },
+          {
+            type: 'workflow',
+            title: 'Normalized workflow',
+            body: 'Use normalized citations.',
+            citationIds: ['seg_a', 'seg_b'],
+          },
+        ],
+      },
+      validSegmentIds: new Set(['seg_a', 'seg_b']),
+    });
+
+    const workbench = result.atlasMeta.workbench as {
+      artifacts: Array<{ id: string; type: string; title: string; body: string; citationIds: string[] }>;
+    };
+    assert.equal(workbench.artifacts.length, 1);
+    assert.match(workbench.artifacts[0]!.id, /^art_pb_test_normalized-workflow_[a-f0-9]{12}$/);
+    assert.deepEqual(workbench.artifacts[0], {
+      id: workbench.artifacts[0]!.id,
+      type: 'workflow',
+      title: 'Normalized workflow',
+      body: 'Use normalized citations.',
+      citationIds: ['seg_a', 'seg_b'],
     });
   });
 });

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { ArtifactBundle, PagePlan, WorkbenchArtifactDraft } from './types';
 
 interface AssemblerInput {
@@ -19,6 +20,31 @@ export interface AssemblerOutput {
   }>;
   atlasMeta: Record<string, unknown>;
 }
+
+const safeIdPart = (value: string, fallback: string) => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || fallback;
+};
+
+const workbenchArtifactId = (
+  pageId: string,
+  artifact: Pick<WorkbenchArtifactDraft, 'type' | 'title' | 'body'> & { citationIds: string[] },
+) => {
+  const hash = createHash('sha256')
+    .update(JSON.stringify({
+      type: artifact.type,
+      title: artifact.title.trim(),
+      body: artifact.body.trim(),
+      citationIds: artifact.citationIds,
+    }))
+    .digest('hex')
+    .slice(0, 12);
+  return `art_${safeIdPart(pageId, 'page')}_${safeIdPart(artifact.title, artifact.type)}_${hash}`;
+};
 
 /**
  * Stitch the artifact bundle into the canonical blockTreeJson shape.
@@ -72,12 +98,14 @@ export function assembleBlockTree(input: AssemblerInput): AssemblerOutput {
   // Roadmap (if present)
   if (input.bundle.roadmap) {
     const allCites = new Set<string>();
-    const filteredSteps = input.bundle.roadmap.steps.map((s) => {
-      const stepCites = filterCites(s.citationIds);
-      stepCites.forEach((c) => allCites.add(c));
-      return { ...s, citationIds: stepCites };
-    });
-    if (allCites.size > 0) {
+    const filteredSteps = input.bundle.roadmap.steps
+      .map((s) => {
+        const stepCites = filterCites(s.citationIds);
+        stepCites.forEach((c) => allCites.add(c));
+        return { ...s, citationIds: stepCites };
+      })
+      .filter((s) => s.citationIds.length > 0);
+    if (filteredSteps.length > 0) {
       blocks.push({
         type: 'roadmap',
         id: `blk_${blockIndex++}`,
@@ -93,16 +121,18 @@ export function assembleBlockTree(input: AssemblerInput): AssemblerOutput {
   // Diagram (if present and parsed)
   if (input.bundle.diagram) {
     const cites = filterCites(input.bundle.diagram.citationIds);
-    blocks.push({
-      type: 'diagram',
-      id: `blk_${blockIndex++}`,
-      content: {
-        diagramType: input.bundle.diagram.diagramType,
-        mermaidSrc: input.bundle.diagram.mermaidSrc,
-        caption: input.bundle.diagram.caption,
-      },
-      citations: cites,
-    });
+    if (cites.length > 0) {
+      blocks.push({
+        type: 'diagram',
+        id: `blk_${blockIndex++}`,
+        content: {
+          diagramType: input.bundle.diagram.diagramType,
+          mermaidSrc: input.bundle.diagram.mermaidSrc,
+          caption: input.bundle.diagram.caption,
+        },
+        citations: cites,
+      });
+    }
   }
 
   // Common mistakes (if present)
@@ -126,17 +156,8 @@ export function assembleBlockTree(input: AssemblerInput): AssemblerOutput {
   }
 
   const collectedWorkbenchArtifacts: WorkbenchArtifactDraft[] = [];
-  const seenWorkbenchArtifactKeys = new Set<string>();
   const collectWorkbenchArtifact = (artifact: WorkbenchArtifactDraft | undefined) => {
     if (!artifact) return;
-    const key = JSON.stringify({
-      type: artifact.type,
-      title: artifact.title,
-      body: artifact.body,
-      citationIds: artifact.citationIds,
-    });
-    if (seenWorkbenchArtifactKeys.has(key)) return;
-    seenWorkbenchArtifactKeys.add(key);
     collectedWorkbenchArtifacts.push(artifact);
   };
 
@@ -145,15 +166,24 @@ export function assembleBlockTree(input: AssemblerInput): AssemblerOutput {
   collectWorkbenchArtifact(input.bundle.example?.workbenchArtifact);
   collectWorkbenchArtifact(input.bundle.mistakes?.workbenchArtifact);
 
-  const workbenchArtifacts = collectedWorkbenchArtifacts
-    .map((artifact, index) => ({
-      id: `art_${input.plan.pageId}_${index}`,
+  const workbenchArtifacts = [];
+  const seenWorkbenchArtifactKeys = new Set<string>();
+  for (const artifact of collectedWorkbenchArtifacts) {
+    const persistedArtifact = {
+      id: '',
       type: artifact.type,
       title: artifact.title,
       body: artifact.body,
-      citationIds: filterCites(artifact.citationIds),
-    }))
-    .filter((artifact) => artifact.citationIds.length > 0);
+      citationIds: [...new Set(filterCites(artifact.citationIds))].sort(),
+    };
+    if (persistedArtifact.citationIds.length === 0) continue;
+
+    persistedArtifact.id = workbenchArtifactId(input.plan.pageId, persistedArtifact);
+    const key = JSON.stringify(persistedArtifact);
+    if (seenWorkbenchArtifactKeys.has(key)) continue;
+    seenWorkbenchArtifactKeys.add(key);
+    workbenchArtifacts.push(persistedArtifact);
+  }
 
   const atlasMeta = {
     evidenceQuality: input.evidenceQuality ?? 'limited',
