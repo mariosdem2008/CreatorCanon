@@ -72,7 +72,8 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_fr
     agent: 'channel_profiler',
     systemPrompt: CHANNEL_PROFILER_PROMPT,
     allowedTools: ['listVideos', 'getSegmentedTranscript', 'getFullTranscript', 'proposeChannelProfile'],
-    stopOverrides: { maxCalls: 30, maxCostCents: 200 },
+    // Single sample-and-emit; agents that exhaust this cap have gone off the rails.
+    stopOverrides: { maxCalls: 12, maxCostCents: 80 },
   },
   video_analyst: {
     agent: 'video_analyst',
@@ -113,6 +114,7 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_fr
     agent: 'page_writer',
     systemPrompt: PAGE_WRITER_PROMPT,
     allowedTools: [],
-    stopOverrides: { maxCalls: 2, maxCostCents: 200 },
+    // Writer is single-shot JSON. maxCalls=2 = 1 attempt + 1 retry margin.
+    stopOverrides: { maxCalls: 2, maxCostCents: 50 },
   },
 };
