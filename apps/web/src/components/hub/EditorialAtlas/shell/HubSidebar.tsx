@@ -41,6 +41,13 @@ type Props = {
  * - Sticky search input at the very bottom
  */
 export function HubSidebar({ hubSlug, title, creator, navigation, activePathname, highlights }: Props) {
+  const primaryItems = navigation.primary.filter((item, index, items) => {
+    const href = scopedHref(hubSlug, item.href);
+    return items.findIndex((candidate) => scopedHref(hubSlug, candidate.href) === href) === index;
+  });
+  const primaryHrefs = new Set(primaryItems.map((item) => scopedHref(hubSlug, item.href)));
+  const shouldAppendHighlights = Boolean(highlights && highlights.length > 0 && !primaryHrefs.has(getHighlightsRoute(hubSlug)));
+
   return (
     <aside
       aria-label="Hub navigation"
@@ -67,7 +74,7 @@ export function HubSidebar({ hubSlug, title, creator, navigation, activePathname
         {/* Primary nav */}
         <nav aria-label="Primary" className="mt-5">
           <ul className="space-y-0.5">
-            {navigation.primary.map((item) => {
+            {primaryItems.map((item) => {
               const href = scopedHref(hubSlug, item.href);
               const active = href === activePathname || (href !== `/h/${hubSlug}` && activePathname.startsWith(href));
               return (
@@ -88,7 +95,7 @@ export function HubSidebar({ hubSlug, title, creator, navigation, activePathname
                 </li>
               );
             })}
-            {highlights && highlights.length > 0 && (() => {
+            {shouldAppendHighlights && (() => {
               const href = getHighlightsRoute(hubSlug);
               const active = activePathname === href || activePathname.startsWith(href + '/');
               return (
