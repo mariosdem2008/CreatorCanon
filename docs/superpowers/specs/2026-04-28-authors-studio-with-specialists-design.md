@@ -338,11 +338,11 @@ The new Author's Studio replaces the **inside** of `runPageCompositionStage`. Th
 
 The deterministic fallback in the current `page-composition.ts` is removed entirely — replaced by the validator's critical-failure log + `page_quality` revise/fail recommendation. We trust the multi-stage chain instead of a stub fallback.
 
-## 16. Open questions to confirm before plan
+## 16. Decisions locked in
 
-1. **Voice mode default for the existing 1 hub.** The existing project `bd8dfb10-...` has no `voiceMode` set. Default to `reader_second_person` retroactively, or ask user to choose during the next config edit?
-2. **Do we ship Set A in one cut, or split into two ships** — first Author's Studio (prose + critic) without specialists, then add specialists in a follow-up? Recommended: one cut. The strategist + critic add little value without the specialists they coordinate.
-3. **Do diagrams need a server-side Mermaid validator** in the validator stage, or can we accept the cost of a broken diagram caught only at render time? Recommended: server-side validation. Cheap, catches issues early, satisfies the loud-fail principle.
+1. **Voice mode default for the existing project.** The existing project `bd8dfb10-...` is defaulted retroactively to `reader_second_person` via a one-line backfill in the migration that adds the field. The user can change it later via the configure UI.
+2. **One cut.** Set A ships in a single milestone — Strategist + 5 Specialists + Critic + Revise + Assembler + manifest schema extension + renderer components + voice config UI + upstream upgrades — all in one plan. No half-ship.
+3. **Server-side Mermaid validation** is in scope. The Assembler runs `mermaid.parse()` against `mermaidSrc` before persisting the diagram block. One retry on parse failure (with the parse error fed back as a critic-style note); second failure drops the diagram and logs a warning. Loud-fail aligned.
 
 ## 17. Self-review
 
