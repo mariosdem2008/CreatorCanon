@@ -346,6 +346,18 @@ function nativeSourceMoment(
   };
 }
 
+function nativeArtifactsForPage(
+  page: Page,
+  artifactById: Map<string, Artifact>,
+  pagesById: Map<string, Page>,
+): WorkbenchArtifact[] {
+  return (page.artifactIds ?? [])
+    .map((artifactId) => artifactById.get(artifactId))
+    .filter((artifact): artifact is Artifact => artifact !== undefined && artifact.pageId === page.id)
+    .map((artifact) => nativeWorkbenchArtifact(artifact, pagesById))
+    .filter((artifact): artifact is WorkbenchArtifact => artifact !== null);
+}
+
 export function deriveHubWorkbench(manifest: EditorialAtlasManifest): HubWorkbench {
   const pages = publishedPages(manifest);
   const rankedPages = [...pages].sort(compareRankedPages);
@@ -434,26 +446,25 @@ export function deriveWorkbenchPageView(manifest: EditorialAtlasManifest, page: 
   const pages = publishedPages(manifest);
   if (manifest.schemaVersion === 'editorial_atlas_v2' && manifest.workbench && page.readerJob && page.outcome) {
     const pagesById = new Map(pages.map((candidate) => [candidate.id, candidate]));
-    const artifacts = manifest.workbench.artifacts
-      .filter((artifact) => artifact.pageId === page.id)
-      .map((artifact) => nativeWorkbenchArtifact(artifact, pagesById))
-      .filter((artifact): artifact is WorkbenchArtifact => artifact !== null);
-    const nextPages = (page.nextStepPageIds ?? [])
+    const artifactById = new Map(manifest.workbench.artifacts.map((artifact) => [artifact.id, artifact]));
+    const artifactIds = page.artifactIds ?? [];
+    const nextStepPageIds = page.nextStepPageIds ?? [];
+    const useWhen = page.useWhen?.trim();
+    const artifacts = nativeArtifactsForPage(page, artifactById, pagesById);
+    const nextPages = nextStepPageIds
       .map((pageId) => pagesById.get(pageId))
       .filter((candidate): candidate is Page => candidate !== undefined)
       .map(nativeCardForPage);
 
-    return {
-      intent: nativeIntentForPage(page),
-      outcome: page.outcome,
-      useWhen: page.useWhen ? [page.useWhen] : [
-        `You need a practical next step from ${manifest.creator.name}'s archive.`,
-        'You want the shortest path from source evidence to an applied result.',
-        'You want citations available, but not in the way while reading.',
-      ],
-      primaryArtifact: artifacts[0] ?? null,
-      nextPages,
-    };
+    if (useWhen && artifactIds.length > 0 && artifacts.length > 0 && nextStepPageIds.length > 0 && nextPages.length === nextStepPageIds.length) {
+      return {
+        intent: nativeIntentForPage(page),
+        outcome: page.outcome,
+        useWhen: [useWhen],
+        primaryArtifact: artifacts[0] ?? null,
+        nextPages,
+      };
+    }
   }
 
   const relatedPages = pages

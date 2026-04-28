@@ -177,7 +177,7 @@ test('deriveWorkbenchPageView prefers complete native v2 page metadata', () => {
         readerJob: 'decide' as const,
         outcome: 'Decide whether this learning loop is worth adopting.',
         useWhen: 'Use this before changing your learning system.',
-        artifactIds: ['native_artifact'],
+        artifactIds: ['second_artifact', 'native_artifact'],
         nextStepPageIds: [nextPage.id],
       },
       nextPage,
@@ -192,7 +192,7 @@ test('deriveWorkbenchPageView prefers complete native v2 page metadata', () => {
           outcome: 'A clearer first session.',
           timeLabel: '20 min',
           pageIds: [page.id],
-          artifactIds: ['native_artifact'],
+          artifactIds: ['second_artifact', 'native_artifact'],
           sourceMomentIds: [],
         },
       ],
@@ -200,8 +200,24 @@ test('deriveWorkbenchPageView prefers complete native v2 page metadata', () => {
         {
           id: 'native_artifact',
           type: 'checklist' as const,
-          title: 'Native checklist',
+          title: 'Manifest-first checklist',
           body: 'Run this checklist.',
+          pageId: page.id,
+          citationIds: [],
+        },
+        {
+          id: 'unlisted_artifact',
+          type: 'prompt' as const,
+          title: 'Unlisted prompt',
+          body: 'This page did not request it.',
+          pageId: page.id,
+          citationIds: [],
+        },
+        {
+          id: 'second_artifact',
+          type: 'template' as const,
+          title: 'Page-first template',
+          body: 'Use this first.',
           pageId: page.id,
           citationIds: [],
         },
@@ -215,7 +231,65 @@ test('deriveWorkbenchPageView prefers complete native v2 page metadata', () => {
   assert.equal(view.intent, 'learn');
   assert.equal(view.outcome, 'Decide whether this learning loop is worth adopting.');
   assert.deepEqual(view.useWhen, ['Use this before changing your learning system.']);
-  assert.equal(view.primaryArtifact?.id, 'native_artifact');
+  assert.equal(view.primaryArtifact?.id, 'second_artifact');
+  assert.equal(view.primaryArtifact?.title, 'Page-first template');
   assert.equal(view.primaryArtifact?.pageSlug, page.slug);
   assert.deepEqual(view.nextPages.map((next) => next.id), [nextPage.id]);
+});
+
+test('deriveWorkbenchPageView falls back when v2 page metadata is incomplete', () => {
+  const [page, relatedPage] = mockManifest.pages.filter((candidate) => candidate.status === 'published');
+  assert.ok(page);
+  assert.ok(relatedPage);
+
+  const manifest = {
+    ...mockManifest,
+    schemaVersion: 'editorial_atlas_v2' as const,
+    pages: [
+      {
+        ...page,
+        readerJob: 'copy' as const,
+        outcome: 'Native outcome should not be used.',
+        useWhen: '   ',
+        artifactIds: ['missing_artifact'],
+        nextStepPageIds: ['missing_page'],
+        relatedPageIds: [relatedPage.id],
+      },
+      relatedPage,
+    ],
+    workbench: {
+      primaryAction: { label: 'Start' },
+      guidedPaths: [
+        {
+          id: 'native-start',
+          title: 'Native start path',
+          body: 'Use the native workbench path.',
+          outcome: 'A clearer first session.',
+          timeLabel: '20 min',
+          pageIds: [page.id],
+          artifactIds: [],
+          sourceMomentIds: [],
+        },
+      ],
+      artifacts: [
+        {
+          id: 'unlisted_artifact',
+          type: 'prompt' as const,
+          title: 'Unlisted prompt',
+          body: 'The page did not list this artifact.',
+          pageId: page.id,
+          citationIds: [],
+        },
+      ],
+      sourceMoments: [],
+    },
+  };
+
+  const view = deriveWorkbenchPageView(manifest, manifest.pages[0]!);
+
+  assert.ok(view.outcome.includes(page.title.toLowerCase()));
+  assert.notEqual(view.outcome, 'Native outcome should not be used.');
+  assert.equal(view.useWhen.length, 3);
+  assert.deepEqual(view.nextPages.map((next) => next.id), [relatedPage.id]);
+  assert.notEqual(view.primaryArtifact?.id, 'unlisted_artifact');
 });
