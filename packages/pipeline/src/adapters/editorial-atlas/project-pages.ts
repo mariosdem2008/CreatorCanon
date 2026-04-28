@@ -148,6 +148,57 @@ function mapComposerBlockToRendererSection(
         citationIds,
       };
 
+    // Author's Studio assembler emits manifest-vocabulary block kinds
+    // directly. The next 6 cases pass them through unchanged (no translation
+    // needed) so the renderer's discriminated union receives the right shape.
+    case 'overview':
+      return {
+        kind: 'overview',
+        body: body || titleField || 'Overview',
+        ...(heading ? { heading } : {}),
+        citationIds,
+      };
+
+    case 'paragraph':
+      return {
+        kind: 'paragraph',
+        body: body || titleField || 'See the source material for more.',
+        citationIds,
+      };
+
+    case 'common_mistakes':
+      return {
+        kind: 'common_mistakes',
+        items: (content.items as Array<{ title: string; body: string }> | undefined) ?? [],
+        citationIds,
+      };
+
+    case 'roadmap':
+      return {
+        kind: 'roadmap',
+        title: (content.title as string | undefined) ?? 'Steps',
+        steps: (content.steps as Array<unknown> | undefined) ?? [],
+        citationIds,
+      };
+
+    case 'diagram':
+      return {
+        kind: 'diagram',
+        diagramType: (content.diagramType as 'flowchart' | 'sequence' | 'state' | 'mindmap') ?? 'flowchart',
+        mermaidSrc: (content.mermaidSrc as string | undefined) ?? '',
+        caption: (content.caption as string | undefined) ?? '',
+        citationIds,
+      };
+
+    case 'hypothetical_example':
+      return {
+        kind: 'hypothetical_example',
+        setup: (content.setup as string | undefined) ?? '',
+        stepsTaken: (content.stepsTaken as string[] | undefined) ?? [],
+        outcome: (content.outcome as string | undefined) ?? '',
+        citationIds,
+      };
+
     default:
       // Unknown / legacy types — best-effort downgrade to paragraph so the
       // manifest parses instead of throwing the whole hub.
