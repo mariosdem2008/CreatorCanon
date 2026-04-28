@@ -9,13 +9,13 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          'border-[var(--rule)] bg-[var(--paper-2)] text-[var(--ink-2)]',
+          'border-[var(--rule)] bg-[var(--paper-3)] text-[var(--ink-2)]',
         amber:
-          'border-[oklch(0.88_0.04_75)] bg-[var(--amber-wash)] text-[var(--amber-ink)]',
+          'border-[rgba(0,232,138,0.28)] bg-[var(--amber-wash)] text-[var(--amber-ink)]',
         sage:
-          'border-[oklch(0.88_0.03_160)] bg-[var(--sage-wash)] text-[var(--sage)]',
+          'border-[rgba(0,232,138,0.28)] bg-[var(--sage-wash)] text-[var(--sage)]',
         rose:
-          'border-[oklch(0.88_0.04_25)] bg-[var(--rose-wash)] text-[var(--rose)]',
+          'border-[rgba(255,52,52,0.28)] bg-[var(--rose-wash)] text-[var(--rose)]',
         ink: 'border-transparent bg-[var(--ink)] text-[var(--paper)]',
       },
     },

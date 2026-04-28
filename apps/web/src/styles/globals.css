@@ -5,50 +5,51 @@
 /* Inherit design tokens from @creatorcanon/ui */
 @import '@creatorcanon/ui/globals.css';
 
-/* ==================== CC redesign tokens ====================
- * Lives alongside the legacy --paper / --ink / --amber tokens during the
- * five-phase migration. Spec: docs/superpowers/specs/2026-04-25-creatorcanon-redesign-design.md
- * Marketing surface keeps the legacy tokens; /app/* and public hubs flip to cc-*.
+/* ==================== CC SaaS brand tokens ====================
+ * Near-black surfaces, cool gray structure, and controlled neon accents.
+ * Legacy --paper / --ink / --amber aliases are supplied by @creatorcanon/ui.
  */
 :root {
   /* Sidebar / structure */
-  --cc-sidebar: #0B102B;
-  --cc-sidebar-2: #131A3B;
-  --cc-sidebar-ink: #FFFFFF;
-  --cc-sidebar-ink-3: #A3A8C7;
-  --cc-sidebar-ink-4: #6E7497;
+  --cc-sidebar: #030507;
+  --cc-sidebar-2: #0b0f14;
+  --cc-sidebar-ink: #f6f7f8;
+  --cc-sidebar-ink-3: #a7adb5;
+  --cc-sidebar-ink-4: #737b86;
 
   /* Canvas / surface */
-  --cc-canvas: #FAF8F3;
-  --cc-surface: #FFFFFF;
-  --cc-surface-2: #F2EEE2;
-  --cc-rule: #EDEAE2;
+  --cc-canvas: #030507;
+  --cc-surface: #0b0f14;
+  --cc-surface-2: #111821;
+  --cc-rule: #2a3038;
 
   /* Accent */
-  --cc-accent: #5856F6;
-  --cc-accent-strong: #4F4DE0;
-  --cc-accent-wash: #EEEEFF;
+  --cc-accent: #00e88a;
+  --cc-accent-strong: #00bf72;
+  --cc-accent-wash: rgba(0, 232, 138, 0.12);
 
   /* Status */
-  --cc-success: #16A34A;
-  --cc-success-wash: #DCFCE7;
-  --cc-warn: #F59E0B;
-  --cc-warn-wash: #FEF3C7;
-  --cc-danger: #EF4444;
-  --cc-danger-wash: #FEE2E2;
-  --cc-info: #0EA5E9;
-  --cc-info-wash: #E0F2FE;
+  --cc-success: #00e88a;
+  --cc-success-wash: rgba(0, 232, 138, 0.12);
+  --cc-warn: #ff9a3d;
+  --cc-warn-wash: rgba(255, 154, 61, 0.14);
+  --cc-danger: #ff3434;
+  --cc-danger-wash: rgba(255, 52, 52, 0.12);
+  --cc-info: #1e6bff;
+  --cc-info-wash: rgba(30, 107, 255, 0.14);
+  --cc-violet: #7c6dff;
+  --cc-violet-wash: rgba(124, 109, 255, 0.14);
 
-  /* Ink (text on canvas) */
-  --cc-ink: #0B102B;
-  --cc-ink-2: #3F455D;
-  --cc-ink-3: #5C6378;
-  --cc-ink-4: #7A8095;
+  /* Ink */
+  --cc-ink: #f6f7f8;
+  --cc-ink-2: #d9dee5;
+  --cc-ink-3: #a7adb5;
+  --cc-ink-4: #737b86;
 
   /* Elevation */
-  --cc-shadow-1: 0 1px 2px rgba(11, 16, 43, 0.04);
-  --cc-shadow-2: 0 4px 12px rgba(11, 16, 43, 0.06);
-  --cc-shadow-pop: 0 12px 32px rgba(11, 16, 43, 0.10);
+  --cc-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(246, 247, 248, 0.02);
+  --cc-shadow-2: 0 12px 28px rgba(0, 0, 0, 0.34), 0 1px 3px rgba(0, 0, 0, 0.28);
+  --cc-shadow-pop: 0 22px 70px rgba(0, 0, 0, 0.46), 0 0 36px rgba(0, 232, 138, 0.08);
 }
 
 /* ==================== Tailwind base layer overrides ==================== */
@@ -84,8 +85,8 @@
   }
 
   ::selection {
-    background: var(--amber-wash);
-    color: var(--amber-ink);
+    background: rgba(0, 232, 138, 0.25);
+    color: var(--ink);
   }
 
   * {
@@ -96,7 +97,7 @@
 /* ==================== Utilities ==================== */
 @layer utilities {
   .dotgrid {
-    background-image: radial-gradient(oklch(0.85 0.008 85) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(42, 48, 56, 0.78) 1px, transparent 1px);
     background-size: 18px 18px;
   }
 
@@ -134,7 +135,6 @@
   }
 }
 
-/* Shimmer keyframe — referenced by .shimmer-bg utility and Tailwind animate-shimmer */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }

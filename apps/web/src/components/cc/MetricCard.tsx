@@ -25,7 +25,7 @@ export function MetricCard({
         {label}
       </p>
       <p
-        className={`mt-2 font-semibold leading-none tracking-[-0.01em] text-[var(--cc-ink)] tabular-nums ${
+        className={`mt-2 font-semibold leading-none tracking-[0] text-[var(--cc-ink)] tabular-nums ${
           valueIsString && value.length > 4 ? 'text-[16px]' : 'text-[26px]'
         }`}
       >

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 
+import { Logo } from '@creatorcanon/ui';
+
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen bg-[var(--cc-canvas)] text-[var(--cc-ink)]">
@@ -8,15 +10,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <Link
           href="/"
           aria-label="Back to CreatorCanon homepage"
-          className="flex items-center gap-2.5 rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)]"
+          className="flex items-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)]"
         >
-          <span
-            aria-hidden
-            className="grid place-items-center size-7 rounded-[8px] bg-gradient-to-br from-[var(--cc-accent)] to-[#8b8aff] text-white text-[14px] font-bold"
-          >
-            C
-          </span>
-          <span className="text-[14px] font-semibold tracking-[-0.005em]">CreatorCanon</span>
+          <Logo size={18} />
         </Link>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cc-accent)]/30 bg-[var(--cc-accent-wash)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cc-accent)]">
           <span aria-hidden className="size-1.5 rounded-full bg-[var(--cc-accent)]" />
@@ -30,7 +26,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--cc-ink-4)]">
               Agentic creator operations
             </p>
-            <h1 className="mt-3 max-w-2xl text-[44px] font-semibold leading-[1.05] tracking-[-0.02em] text-[var(--cc-ink)]">
+            <h1 className="mt-3 max-w-2xl text-[44px] font-semibold leading-[1.05] tracking-[0] text-[var(--cc-ink)]">
               Turn a video archive into a source-grounded knowledge product.
             </h1>
             <p className="mt-5 max-w-xl text-[14px] leading-[1.65] text-[var(--cc-ink-3)]">

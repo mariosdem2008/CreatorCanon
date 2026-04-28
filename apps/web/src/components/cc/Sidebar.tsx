@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { Logo } from '@creatorcanon/ui';
+
 import { NavList } from './NavList';
 
 export type SidebarUser = {
@@ -18,15 +20,9 @@ export function Sidebar({ user, signOutSlot }: { user: SidebarUser; signOutSlot?
       <Link
         href="/app"
         aria-label="CreatorCanon home"
-        className="flex items-center gap-2.5 px-1.5 py-1 mb-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)] rounded-lg"
+        className="flex items-center px-1.5 py-1 mb-2 text-[var(--cc-sidebar-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cc-accent)] rounded-lg"
       >
-        <span
-          aria-hidden
-          className="grid place-items-center w-7 h-7 rounded-lg bg-gradient-to-br from-[var(--cc-accent)] to-[#8b8aff] text-white font-bold text-[14px]"
-        >
-          C
-        </span>
-        <span className="font-semibold text-[14px] tracking-[-0.005em]">CreatorCanon</span>
+        <Logo size={18} />
       </Link>
 
       <NavList />
@@ -41,7 +37,7 @@ export function Sidebar({ user, signOutSlot }: { user: SidebarUser; signOutSlot?
 
 function AskAtlasFloat() {
   return (
-    <div className="flex items-center gap-2 rounded-[10px] border border-[rgba(88,86,246,0.16)] bg-[rgba(88,86,246,0.10)] px-3 py-2.5 text-[12px] text-[#c5c4ff]">
+    <div className="flex items-center gap-2 rounded-[10px] border border-[rgba(0,232,138,0.18)] bg-[var(--cc-accent-wash)] px-3 py-2.5 text-[12px] text-[var(--cc-accent)]">
       <span aria-hidden className="size-1.5 rounded-full bg-[var(--cc-accent)]" />
       Need help? Ask Atlas
     </div>
@@ -59,10 +55,11 @@ function PlanCard({
   const plan = user.plan ?? 'Creator Plan';
   const hubsLabel =
     user.hubsAllowed != null
-      ? `${plan} · ${user.hubsUsed ?? 0} of ${user.hubsAllowed} hubs`
+      ? `${plan} - ${user.hubsUsed ?? 0} of ${user.hubsAllowed} hubs`
       : plan;
+
   return (
-    <div className="flex items-center gap-2.5 rounded-[10px] bg-[rgba(255,255,255,0.04)] px-3 py-2.5">
+    <div className="flex items-center gap-2.5 rounded-[10px] border border-[var(--cc-rule)] bg-[var(--cc-sidebar-2)] px-3 py-2.5">
       {user.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -73,7 +70,7 @@ function PlanCard({
       ) : (
         <span
           aria-hidden
-          className="grid place-items-center size-7 rounded-full bg-gradient-to-br from-[#f59e0b] to-[#ef4444] text-white text-[12px] font-semibold shrink-0"
+          className="grid place-items-center size-7 rounded-full bg-[var(--cc-accent-wash)] text-[var(--cc-accent)] text-[12px] font-semibold shrink-0 ring-1 ring-[rgba(0,232,138,0.24)]"
         >
           {initial}
         </span>

@@ -10,49 +10,34 @@ interface LogoProps {
 export const Logo = ({ size = 20, withText = true, mono = false, className }: LogoProps) => {
   const color = mono ? 'currentColor' : 'var(--ink)';
   const accent = mono ? 'currentColor' : 'var(--amber)';
+  const accentDeep = mono ? 'currentColor' : '#007A50';
+  const accentLight = mono ? 'currentColor' : '#62FFC6';
   const markSize = withText ? size * 1.35 : size;
   return (
     <div className={className} style={{ display: 'inline-flex', alignItems: 'center', gap: size * 0.42 }}>
       <svg
         width={markSize}
         height={markSize}
-        viewBox="0 0 32 32"
+        viewBox="0 0 40 40"
         fill="none"
         aria-hidden="true"
         style={{ display: 'block', flexShrink: 0, overflow: 'visible' }}
       >
-        <text
-          x="0.5"
-          y="25.75"
-          fill={color}
-          fontFamily="var(--font-newsreader, Georgia, serif)"
-          fontSize="31"
-          fontWeight="500"
-          letterSpacing="-0.08em"
-        >
-          C
-        </text>
-        <path
-          d="M2.7 13.2H14.4M2.7 16H25.4M2.7 18.8H25.4"
-          stroke="var(--paper)"
-          strokeWidth="1.35"
-          strokeLinecap="square"
-        />
-        <path
-          d="M13.4 13.2H25.4M13.4 16H25.4M13.4 18.8H25.4"
-          stroke={color}
-          strokeWidth="1.15"
-          strokeLinecap="square"
-        />
-        <rect x="24.2" y="22.4" width="5.3" height="5.3" fill={accent} />
+        <path d="M8 9.5L14.5 4H35L28.5 9.5H8Z" fill={accentLight} opacity={mono ? 1 : 0.9} />
+        <path d="M8 9.5H28.5V16.5H15.5V23.5H28.5V30.5H8V9.5Z" fill={accent} />
+        <path d="M28.5 9.5L35 4V11L28.5 16.5V9.5Z" fill={accentDeep} />
+        <path d="M28.5 23.5L35 18V25L28.5 30.5V23.5Z" fill={accentDeep} />
+        <path d="M15.5 16.5L22 11H35L28.5 16.5H15.5Z" fill={accentDeep} opacity={mono ? 0.4 : 0.72} />
+        <path d="M15.5 23.5H28.5L35 18H22L15.5 23.5Z" fill={accentLight} opacity={mono ? 0.4 : 0.64} />
+        <path d="M8 30.5L14.5 36H35L28.5 30.5H8Z" fill={accentDeep} />
       </svg>
       {withText && (
         <span
           style={{
-            fontFamily: 'var(--font-newsreader, Georgia, serif)',
-            fontSize: size * 1.18,
-            fontWeight: 500,
-            letterSpacing: '-0.035em',
+            fontFamily: 'var(--font-geist-sans, Inter, system-ui, sans-serif)',
+            fontSize: size * 1.08,
+            fontWeight: 650,
+            letterSpacing: 0,
             lineHeight: 1,
             color,
           }}
