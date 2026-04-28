@@ -14,6 +14,13 @@ import {
   CANON_ARCHITECT_PROMPT,
   PAGE_BRIEF_PLANNER_PROMPT,
   PAGE_WRITER_PROMPT,
+  PAGE_STRATEGIST_PROMPT,
+  PROSE_AUTHOR_PROMPT,
+  ROADMAP_AUTHOR_PROMPT,
+  EXAMPLE_AUTHOR_PROMPT,
+  DIAGRAM_AUTHOR_PROMPT,
+  MISTAKES_AUTHOR_PROMPT,
+  CRITIC_PROMPT,
 } from './prompts';
 
 export interface SpecialistConfig {
@@ -116,5 +123,51 @@ export const SPECIALISTS: Record<Exclude<AgentName, 'page_composer' | 'visual_fr
     allowedTools: [],
     // Writer is single-shot JSON. maxCalls=2 = 1 attempt + 1 retry margin.
     stopOverrides: { maxCalls: 2, maxCostCents: 50 },
+  },
+  // ---------------------------------------------------------------------
+  // Author's Studio specialists (Stage 1 v5 — editorial-grade authoring)
+  // All are single-pass JSON producers (no tools).
+  // ---------------------------------------------------------------------
+  page_strategist: {
+    agent: 'page_strategist',
+    systemPrompt: PAGE_STRATEGIST_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 80 },
+  },
+  prose_author: {
+    agent: 'prose_author',
+    systemPrompt: PROSE_AUTHOR_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 150 },
+  },
+  roadmap_author: {
+    agent: 'roadmap_author',
+    systemPrompt: ROADMAP_AUTHOR_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 30 },
+  },
+  example_author: {
+    agent: 'example_author',
+    systemPrompt: EXAMPLE_AUTHOR_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 50 },
+  },
+  diagram_author: {
+    agent: 'diagram_author',
+    systemPrompt: DIAGRAM_AUTHOR_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 30 },
+  },
+  mistakes_author: {
+    agent: 'mistakes_author',
+    systemPrompt: MISTAKES_AUTHOR_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 30 },
+  },
+  critic: {
+    agent: 'critic',
+    systemPrompt: CRITIC_PROMPT,
+    allowedTools: [],
+    stopOverrides: { maxCalls: 2, maxCostCents: 100 },
   },
 };
