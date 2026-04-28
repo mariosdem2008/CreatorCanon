@@ -54,7 +54,7 @@ import {
 import { createR2Client, transcriptKey } from '@creatorcanon/adapters';
 import { parseServerEnv, PIPELINE_VERSION } from '@creatorcanon/core';
 
-import { publishRunAsHub } from './publish-run-as-hub';
+import { assertEditorialAtlasManifest, publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
 import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 
@@ -832,10 +832,7 @@ async function main() {
     0,
   ) ?? 0;
 
-  assert(
-    manifest.schemaVersion === 'editorial_atlas_v1',
-    `Manifest schemaVersion mismatch: ${manifest.schemaVersion}`,
-  );
+  assertEditorialAtlasManifest(manifest);
   assert(manifest.pages.length > 0, 'Manifest has no pages.');
   assert(citationCount > 0, 'Manifest has no citations.');
 

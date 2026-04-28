@@ -15,7 +15,7 @@ import {
 import { parseServerEnv } from '@creatorcanon/core';
 
 import { loadDefaultEnvFiles } from './env-files';
-import { publishRunAsHub } from './publish-run-as-hub';
+import { assertEditorialAtlasManifest, publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
 import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 
@@ -179,10 +179,7 @@ async function verifyPublishedManifest(input: {
     0,
   ) ?? 0;
 
-  assert(
-    manifest.schemaVersion === 'editorial_atlas_v1',
-    'Release manifest schemaVersion is not editorial_atlas_v1.',
-  );
+  assertEditorialAtlasManifest(manifest);
   assert(manifest.pages.length > 0, 'Release manifest has no pages.');
 
   if (citationCount === 0) {
