@@ -134,9 +134,9 @@ describe('runAdaptStage', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPE
     const stored = r2.stored.get(output.manifestR2Key);
     assert.ok(stored, 'manifest blob should be in mock R2');
 
-    // It should be valid JSON with the correct schema version and placeholder releaseId.
+    // It should be valid JSON with the current Editorial Atlas schema version and placeholder releaseId.
     const parsed = JSON.parse(new TextDecoder().decode(stored));
-    assert.equal(parsed.schemaVersion, 'editorial_atlas_v1');
+    assert.equal(parsed.schemaVersion, 'editorial_atlas_v2');
     assert.equal(parsed.releaseId, 'unpublished');
     assert.ok(parsed.pages.length >= 2, 'at least 2 pages expected');
   });
