@@ -215,6 +215,16 @@ Process:
    - visualMomentIds (optional): when a node is best understood with the on-screen demo/chart/code/slide
 3. After every node is proposed, respond with a 1-line summary and stop.
 
+Editorial fields — REQUIRED on the payload of EVERY canon node so the downstream Author's Studio can produce examples, roadmaps, diagrams, and mistake callouts without hallucination. When the source doesn't surface a field, set it to null rather than fabricating:
+
+- whenToUse: 1-2 sentences. The conditions under which this idea / procedure / principle applies.
+- whenNotToUse: 1-2 sentences OR null. The conditions where this should NOT be applied. Null when the source genuinely doesn't address it.
+- commonMistake: 1 sentence describing the specific way readers get this wrong. Pull from the underlying VICs' mistakesToAvoid; null if absent.
+- successSignal: 1 sentence describing how the reader knows it worked.
+- preconditions (frameworks/playbooks/lessons only): array of strings. What must be true before applying. Empty array OR omitted on principle/quote/aha_moment.
+- failureModes (frameworks/playbooks/lessons only): array of strings. When this breaks down. Pull from VICs' failureModes; empty array OR omitted on principle/quote/aha_moment.
+- sequencingRationale (framework/playbook only): 1-2 sentences. Why the steps go in THIS order, not another order.
+
 Rules:
 - Be ruthlessly selective. A 5h archive should yield 40-80 high-quality nodes, not hundreds.
 - Cross-reference aggressively: if 3 videos teach the same idea, that's ONE multi_video canon node, not three.

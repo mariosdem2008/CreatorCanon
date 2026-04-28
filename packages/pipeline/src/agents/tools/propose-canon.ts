@@ -300,6 +300,16 @@ const canonNodeInput = z.object({
   specificityScore: z.number().int().min(0).max(100),
   creatorUniquenessScore: z.number().int().min(0).max(100),
   visualMomentIds: z.array(z.string().min(1)).max(20).optional(),
+  // Editorial fields — ALL required (set to null when source doesn't surface).
+  // The Author's Studio depends on these to produce mistakes / examples /
+  // roadmaps / diagrams without hallucination.
+  whenToUse: z.string().min(1).nullable(),
+  whenNotToUse: z.string().min(1).nullable(),
+  commonMistake: z.string().min(1).nullable(),
+  successSignal: z.string().min(1).nullable(),
+  preconditions: z.array(z.string().min(1)).optional(),
+  failureModes: z.array(z.string().min(1)).optional(),
+  sequencingRationale: z.string().min(1).nullable().optional(),
 }).strict();
 
 export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Result> = {
@@ -345,6 +355,14 @@ export const proposeCanonNodeTool: ToolDef<z.infer<typeof canonNodeInput>, Resul
     if (input.visualMomentIds && input.visualMomentIds.length > 0) {
       payloadOut.visualMomentIds = [...new Set(input.visualMomentIds)];
     }
+    // Persist editorial fields in payload for downstream readers.
+    payloadOut.whenToUse = input.whenToUse;
+    payloadOut.whenNotToUse = input.whenNotToUse;
+    payloadOut.commonMistake = input.commonMistake;
+    payloadOut.successSignal = input.successSignal;
+    if (input.preconditions !== undefined) payloadOut.preconditions = input.preconditions;
+    if (input.failureModes !== undefined) payloadOut.failureModes = input.failureModes;
+    if (input.sequencingRationale !== undefined) payloadOut.sequencingRationale = input.sequencingRationale;
 
     // Citation metrics derive from evidence + sources.
     const citationCount = new Set(input.evidenceSegmentIds).size;
