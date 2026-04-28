@@ -275,6 +275,12 @@ export async function runPageCompositionStage(
           ctxFor('mistakes_author'),
       });
       bundle = revised;
+      const revisedWorkbenchArtifacts = collectWorkbenchArtifactsFromBundle(bundle);
+      if (revisedWorkbenchArtifacts.length > 0) {
+        bundle.workbenchArtifacts = revisedWorkbenchArtifacts;
+      } else {
+        delete bundle.workbenchArtifacts;
+      }
     }
 
     // 5. Assemble + persist
