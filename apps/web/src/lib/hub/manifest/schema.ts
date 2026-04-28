@@ -81,6 +81,54 @@ export const topicSchema = z.object({
 });
 export type Topic = z.infer<typeof topicSchema>;
 
+export const workbenchIntentSchema = z.enum(['learn', 'build', 'copy', 'decide', 'debug']);
+export type WorkbenchIntent = z.infer<typeof workbenchIntentSchema>;
+
+export const artifactSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(['prompt', 'checklist', 'workflow', 'template', 'schema', 'mistake_map']),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  pageId: z.string().min(1),
+  citationIds: z.array(z.string().min(1)),
+});
+export type Artifact = z.infer<typeof artifactSchema>;
+
+export const sourceMomentSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  sourceVideoId: z.string().min(1),
+  timestampStart: z.number().int().min(0),
+  timestampLabel: z.string().min(1),
+  excerpt: z.string().min(1),
+  pageIds: z.array(z.string().min(1)),
+});
+export type SourceMoment = z.infer<typeof sourceMomentSchema>;
+
+export const guidedPathSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  outcome: z.string().min(1),
+  timeLabel: z.string().min(1),
+  pageIds: z.array(z.string().min(1)).min(1),
+  artifactIds: z.array(z.string().min(1)),
+  sourceMomentIds: z.array(z.string().min(1)),
+});
+export type GuidedPath = z.infer<typeof guidedPathSchema>;
+
+export const hubWorkbenchSchema = z.object({
+  primaryAction: z.object({
+    label: z.string().min(1),
+    pageId: z.string().min(1).optional(),
+    href: z.string().min(1).optional(),
+  }),
+  guidedPaths: z.array(guidedPathSchema).min(1),
+  artifacts: z.array(artifactSchema),
+  sourceMoments: z.array(sourceMomentSchema),
+});
+export type HubWorkbenchNative = z.infer<typeof hubWorkbenchSchema>;
+
 export const pageSchema = z.object({
   id: z.string().min(1),
   slug: z.string().min(1),
@@ -90,6 +138,12 @@ export const pageSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   summaryPlainText: z.string().min(1),
+  readerJob: workbenchIntentSchema.optional(),
+  outcome: z.string().min(1).optional(),
+  useWhen: z.string().min(1).optional(),
+  artifactIds: z.array(z.string().min(1)).optional(),
+  sourceMomentIds: z.array(z.string().min(1)).optional(),
+  nextStepPageIds: z.array(z.string().min(1)).optional(),
   searchKeywords: z.array(z.string().min(1)),
 
   topicSlugs: z.array(z.string().min(1)),
@@ -161,7 +215,7 @@ export const highlightSchema = z.object({
 export type Highlight = z.infer<typeof highlightSchema>;
 
 export const editorialAtlasManifestSchema = z.object({
-  schemaVersion: z.literal('editorial_atlas_v1'),
+  schemaVersion: z.enum(['editorial_atlas_v1', 'editorial_atlas_v2']),
   hubId: z.string().min(1),
   releaseId: z.string().min(1),
   hubSlug: z.string().min(1),
@@ -211,5 +265,6 @@ export const editorialAtlasManifestSchema = z.object({
   }),
 
   highlights: z.array(highlightSchema).optional(),
+  workbench: hubWorkbenchSchema.optional(),
 });
 export type EditorialAtlasManifest = z.infer<typeof editorialAtlasManifestSchema>;
