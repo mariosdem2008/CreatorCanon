@@ -26,7 +26,7 @@ const workbenchSchema = z.object({
   outcome: z.string().min(20),
   useWhen: z.array(z.string().min(8)).min(2).max(4),
   artifactRequests: z.array(workbenchArtifactRequestSchema).min(1).max(3),
-  nextStepHints: z.array(workbenchNextStepHintSchema).min(1).max(3),
+  nextStepHints: z.array(workbenchNextStepHintSchema).min(2).max(3),
 });
 
 const looseWorkbenchSchema = z.object({
@@ -34,7 +34,7 @@ const looseWorkbenchSchema = z.object({
   outcome: z.string().min(20),
   useWhen: z.array(z.string().min(8)).min(2),
   artifactRequests: z.array(workbenchArtifactRequestSchema).min(1),
-  nextStepHints: z.array(workbenchNextStepHintSchema).min(1),
+  nextStepHints: z.array(workbenchNextStepHintSchema).min(2),
 });
 
 const pagePlanSchema = z.object({

@@ -49,7 +49,7 @@ const strategistPlan = {
   },
 };
 
-test('runStrategist normalizes workbench plan arrays to page limits', async () => {
+async function runStrategistWithPlan(planPayload: typeof strategistPlan) {
   process.env.DATABASE_URL ??= 'postgres://user:pass@localhost:5432/test';
 
   const objects = new Map<string, Uint8Array>();
@@ -68,7 +68,7 @@ test('runStrategist normalizes workbench plan arrays to page limits', async () =
     name: 'openai',
     async chat() {
       return {
-        message: { role: 'assistant', content: JSON.stringify(strategistPlan) },
+        message: { role: 'assistant', content: JSON.stringify(planPayload) },
         toolCalls: [],
         usage: { inputTokens: 1, outputTokens: 1 },
         rawId: 'test-response',
@@ -76,7 +76,7 @@ test('runStrategist normalizes workbench plan arrays to page limits', async () =
     },
   };
 
-  const plan = await runStrategist({
+  return runStrategist({
     runId: 'run_test',
     workspaceId: 'ws_test',
     voiceMode: 'reader_second_person',
@@ -90,6 +90,10 @@ test('runStrategist normalizes workbench plan arrays to page limits', async () =
     r2,
     modelId: 'test-model',
   });
+}
+
+test('runStrategist normalizes workbench plan arrays to page limits', async () => {
+  const plan = await runStrategistWithPlan(strategistPlan);
 
   assert.equal(plan.workbench.useWhen.length, 4);
   assert.equal(plan.workbench.artifactRequests.length, 3);
@@ -97,4 +101,39 @@ test('runStrategist normalizes workbench plan arrays to page limits', async () =
   assert.equal(plan.workbench.useWhen.at(-1), 'You want to connect this page to logical follow-up pages.');
   assert.equal(plan.workbench.artifactRequests.at(-1)?.title, 'Page template');
   assert.equal(plan.workbench.nextStepHints.at(-1)?.title, 'Third follow-up');
+});
+
+test('runStrategist rejects a workbench plan with only one next step hint', async () => {
+  const planWithOneNextStep = {
+    ...strategistPlan,
+    workbench: {
+      ...strategistPlan.workbench,
+      nextStepHints: [
+        { title: 'Only follow-up', reason: 'This should not be enough.' },
+      ],
+    },
+  };
+
+  await assert.rejects(
+    () => runStrategistWithPlan(planWithOneNextStep),
+    /nextStepHints/,
+  );
+});
+
+test('runStrategist accepts a workbench plan with two next step hints', async () => {
+  const planWithTwoNextSteps = {
+    ...strategistPlan,
+    workbench: {
+      ...strategistPlan.workbench,
+      nextStepHints: [
+        { title: 'First follow-up', reason: 'Extends the source-backed workflow.' },
+        { title: 'Second follow-up', reason: 'Covers the next implementation choice.' },
+      ],
+    },
+  };
+
+  const plan = await runStrategistWithPlan(planWithTwoNextSteps);
+
+  assert.equal(plan.workbench.nextStepHints.length, 2);
+  assert.equal(plan.workbench.nextStepHints.at(-1)?.title, 'Second follow-up');
 });
