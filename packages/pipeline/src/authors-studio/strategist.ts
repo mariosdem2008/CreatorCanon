@@ -116,7 +116,8 @@ export async function runStrategist(input: StrategistInput): Promise<PagePlan> {
 
   const stripped = stripJsonFence(lastAssistant.content);
   const parsed = JSON.parse(stripped);
-  const parsedPlan = pagePlanInputSchema.parse(parsed);
+  const filtered = dropInvalidArtifactKinds(parsed, input.brief.id);
+  const parsedPlan = pagePlanInputSchema.parse(filtered);
   const validated = pagePlanSchema.parse(normalizePagePlan(parsedPlan));
 
   return {
@@ -124,6 +125,40 @@ export async function runStrategist(input: StrategistInput): Promise<PagePlan> {
     siblingPagesToReference: validated.siblingPagesToReference ?? [],
     costCents: summary.costCents,
   };
+}
+
+/**
+ * The Strategist prompt asks for two structurally-similar but conceptually
+ * distinct artifact arrays: `artifacts[]` (page-block kinds — 5 values) and
+ * `workbench.artifactRequests[]` (reusable workbench types — 6 values).
+ * The LLM occasionally puts a workbench type (e.g. "checklist") in the
+ * page-block array, which is a fail-fast Zod violation. Rather than killing
+ * the whole 8-page run, drop the invalid entries with a warning and let the
+ * rest of the plan validate. The LLM still produces enough valid kinds to
+ * meet the schema's `min(1)` constraint in practice.
+ */
+function dropInvalidArtifactKinds(parsed: unknown, briefId: string): unknown {
+  if (!parsed || typeof parsed !== 'object') return parsed;
+  const obj = parsed as Record<string, unknown>;
+  if (!Array.isArray(obj.artifacts)) return parsed;
+  const valid = new Set(['cited_prose', 'roadmap', 'hypothetical_example', 'diagram', 'common_mistakes']);
+  const kept: unknown[] = [];
+  const dropped: string[] = [];
+  for (const item of obj.artifacts) {
+    if (item && typeof item === 'object' && 'kind' in item) {
+      const kind = (item as { kind: unknown }).kind;
+      if (typeof kind === 'string' && valid.has(kind)) {
+        kept.push(item);
+      } else {
+        dropped.push(typeof kind === 'string' ? kind : String(kind));
+      }
+    }
+  }
+  if (dropped.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(`[strategist] brief=${briefId} dropped ${dropped.length} artifact entries with invalid kind: ${JSON.stringify(dropped)}`);
+  }
+  return { ...obj, artifacts: kept };
 }
 
 function normalizePagePlan(plan: z.infer<typeof pagePlanInputSchema>): z.infer<typeof pagePlanSchema> {

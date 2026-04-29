@@ -367,6 +367,11 @@ Workbench planning requirement:
     "avoidPhrases": ["generic phrases this page should avoid"]
   },
   "artifacts": [
+    // STRICT: kind MUST be one of these 5 values exactly:
+    //   "cited_prose" | "roadmap" | "hypothetical_example" | "diagram" | "common_mistakes"
+    // These are the page's main composable blocks. Do NOT use workbench
+    // artifact types here (prompt/checklist/workflow/template/schema/mistake_map
+    // belong in workbench.artifactRequests below, NOT in this array).
     { "kind": "cited_prose", "canonNodeIds": [...], "intent": "..." },
     { "kind": "roadmap", "canonNodeIds": [...], "intent": "..." },
     ...
