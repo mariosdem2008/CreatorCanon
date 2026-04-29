@@ -121,12 +121,17 @@ async function runCodex(
   prompt: string,
   timeoutMs: number,
 ): Promise<string> {
-  // Create a unique temp file for -o; Codex writes the agent's final message
-  // to it. We read + clean it up after the subprocess exits.
+  // Create a unique temp dir holding (a) the -o output file, (b) optionally
+  // a prompt-input file. Cleaned up via the settle() finalizer.
   const tmpDir = mkdtempSync(join(tmpdir(), 'codex-cli-'));
   const tmpFile = join(tmpDir, 'out.txt');
   const args = argsTemplate.map((a) => (a === TMPFILE_PLACEHOLDER ? tmpFile : a));
-  args.push(prompt);
+  // IMPORTANT: do NOT pass the prompt as a positional arg. Windows has a
+  // ~32KB command-line limit (`The command line is too long.`) and the
+  // pipeline's Author's Studio prompts (channel profile + canon nodes +
+  // brief + sibling briefs JSON-stringified) easily exceed that. Codex CLI
+  // already supports stdin input ("Reading additional input from stdin..."
+  // log line on its first call when no positional prompt is supplied).
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
@@ -137,17 +142,29 @@ async function runCodex(
       cb();
     };
 
-    // shell:true on Windows so .cmd shims resolve. Safe here because we
-    // pass args as an array and don't interpolate the prompt into a shell
-    // string — Node still escapes args correctly with shell:true on Windows.
+    // shell:true on Windows so .cmd shims resolve.
     const proc = spawn(binary, args, {
-      stdio: ['ignore', 'ignore', 'pipe'], // stdout discarded; -o file is the source of truth
+      stdio: ['pipe', 'ignore', 'pipe'], // stdin: prompt; stdout: discarded; stderr: captured
       env: process.env,
       shell: process.platform === 'win32',
     });
 
     let stderr = '';
     proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+    // Write the prompt to stdin and close it. Codex reads stdin until EOF.
+    if (proc.stdin) {
+      proc.stdin.on('error', (err) => {
+        // EPIPE if Codex exits before reading all our input — non-fatal,
+        // the close handler decides resolve vs reject from the exit code.
+        if ((err as NodeJS.ErrnoException).code !== 'EPIPE') {
+          // eslint-disable-next-line no-console
+          console.warn(`[codex-cli] stdin write error: ${err.message}`);
+        }
+      });
+      proc.stdin.write(prompt);
+      proc.stdin.end();
+    }
 
     const timer = setTimeout(() => {
       try { proc.kill('SIGKILL'); } catch { /* ignore */ }
