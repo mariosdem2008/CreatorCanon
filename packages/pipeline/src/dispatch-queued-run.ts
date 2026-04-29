@@ -10,8 +10,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { eq, getDb } from '@creatorcanon/db';
-import { generationRun } from '@creatorcanon/db/schema';
-import { runGenerationPipeline, type RunGenerationPipelinePayload } from './run-generation-pipeline';
+import { generationRun, pageBrief } from '@creatorcanon/db/schema';
+import {
+  runAuditPipeline,
+  runGenerationPipeline,
+  runHubBuildPipeline,
+  type RunGenerationPipelinePayload,
+} from './run-generation-pipeline';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,12 +77,44 @@ if (!runId) {
     pipelineVersion: r.pipelineVersion,
   };
 
+  const engine = (process.env.PIPELINE_CONTENT_ENGINE ?? 'findings_v1').trim();
+
+  // findings_v1: legacy single-shot path, no audit checkpoint.
+  if (engine !== 'canon_v1') {
+    try {
+      const result = await runGenerationPipeline(payload);
+      console.info(`[dispatch] complete`, result);
+      process.exit(0);
+    } catch (err) {
+      console.error(`[dispatch] failed`, err);
+      process.exit(4);
+    }
+  }
+
+  // canon_v1: route by whether the audit phase has already produced output.
+  // Resumption rule: if page_brief rows exist for this run, the audit phase
+  // already completed and we're in the "user approved Generate Hub" path.
+  // Otherwise this is a fresh dispatch and the audit phase should run.
+  const briefRows = await db
+    .select({ id: pageBrief.id })
+    .from(pageBrief)
+    .where(eq(pageBrief.runId, r.id))
+    .limit(1);
+  const auditOutputExists = briefRows.length > 0;
+
   try {
-    const result = await runGenerationPipeline(payload);
-    console.info(`[dispatch] complete`, result);
+    if (!auditOutputExists) {
+      const result = await runAuditPipeline(payload);
+      console.info(`[dispatch] audit complete`, result);
+      console.info(`[dispatch] run is now audit_ready — user must click "Generate Hub" to continue`);
+      process.exit(0);
+    } else {
+      const result = await runHubBuildPipeline(payload);
+      console.info(`[dispatch] hub build complete`, result);
+      process.exit(0);
+    }
   } catch (err) {
     console.error(`[dispatch] failed`, err);
     process.exit(4);
   }
-  process.exit(0);
 })();
