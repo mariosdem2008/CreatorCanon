@@ -53,7 +53,7 @@ const REGISTRY: Record<AgentName, AgentConfig> = {
 };
 
 type ModelMode = 'hybrid' | 'gemini_only' | 'openai_only';
-type QualityMode = 'lean' | 'production_economy' | 'premium';
+type QualityMode = 'lean' | 'production_economy' | 'premium' | 'codex_dev';
 
 // Per-quality-mode model assignment for each canon_v1 agent.
 //
@@ -117,6 +117,22 @@ const QUALITY_PRESETS: Record<QualityMode, Partial<Record<AgentName, ModelChoice
     mistakes_author:    M('gpt-5.5', 'openai'),
     critic:             M('gpt-5.5', 'openai'),
   },
+  // Development-only mode. Routes the 7 tool-less Author's Studio agents to
+  // the local Codex CLI (billed against the user's ChatGPT plan, not their
+  // API key). Tool-using agents (channel_profiler, video_analyst,
+  // canon_architect, page_brief_planner) are intentionally NOT overridden —
+  // Codex CLI doesn't speak OpenAI's function-calling protocol, so they
+  // fall through to REGISTRY default (openai/gemini chain).
+  // See docs/superpowers/notes/2026-04-29-codex-dev-mode.md.
+  codex_dev: {
+    page_strategist:    M('codex', 'codex-cli'),
+    prose_author:       M('codex', 'codex-cli'),
+    roadmap_author:     M('codex', 'codex-cli'),
+    example_author:     M('codex', 'codex-cli'),
+    diagram_author:     M('codex', 'codex-cli'),
+    mistakes_author:    M('codex', 'codex-cli'),
+    critic:             M('codex', 'codex-cli'),
+  },
 };
 
 function modeRouted(agent: AgentName, mode: ModelMode): ModelChoice {
@@ -145,8 +161,8 @@ function parseMode(raw: string | undefined): ModelMode {
 
 function parseQualityMode(raw: string | undefined): QualityMode | null {
   if (!raw) return null;
-  if (raw === 'lean' || raw === 'production_economy' || raw === 'premium') return raw;
-  throw new Error(`Invalid PIPELINE_QUALITY_MODE: ${raw}. Supported: lean | production_economy | premium.`);
+  if (raw === 'lean' || raw === 'production_economy' || raw === 'premium' || raw === 'codex_dev') return raw;
+  throw new Error(`Invalid PIPELINE_QUALITY_MODE: ${raw}. Supported: lean | production_economy | premium | codex_dev.`);
 }
 
 function inferProvider(modelId: string): ProviderName {
