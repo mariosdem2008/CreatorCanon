@@ -390,7 +390,7 @@ Workbench planning requirement:
 Default artifact selection by pageType:
 - lesson: cited_prose + hypothetical_example + common_mistakes (always); roadmap + diagram only when source supports
 - framework: cited_prose + hypothetical_example + roadmap + diagram + common_mistakes (all five)
-- playbook: cited_prose + roadmap + diagram + common_mistakes (always); hypothetical_example only when canon nodes have rich examples
+- playbook: cited_prose + roadmap + diagram + common_mistakes + hypothetical_example (always — readers of build pages benefit hugely from a worked example with a named protagonist; only skip when canon nodes have zero example or scenario content)
 - topic_overview: cited_prose only (always); hypothetical_example + diagram when source supports
 - principle: cited_prose + hypothetical_example (always); common_mistakes when source supports
 - definition: cited_prose only (always); diagram when source supports
