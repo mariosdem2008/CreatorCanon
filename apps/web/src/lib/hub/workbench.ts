@@ -8,7 +8,7 @@ import type {
   SourceMoment,
   SourceVideo,
 } from './manifest/schema';
-import { formatTimestampLabel, safeCitationHref, safeSourceTitle } from './manifest/empty-state';
+import { formatTimestampLabel, safeSourceTitle } from './manifest/empty-state';
 
 export type WorkbenchIntent = 'learn' | 'build' | 'copy' | 'debug';
 
@@ -266,14 +266,42 @@ export function deriveWorkbenchArtifacts(page: Page): WorkbenchArtifact[] {
     .slice(0, 4);
 }
 
+export function resolveSourceMomentHref(input: {
+  hubSlug: string;
+  sourceVideoId: string | null;
+  timestampStart: number;
+  source: { youtubeId: string | null; url?: string | null };
+}): string | null {
+  const { hubSlug, sourceVideoId, timestampStart, source } = input;
+  // 1. Citation has an explicit URL — use it (matching safeCitationHref).
+  if (source.url && !source.url.includes('watch?v=null')) {
+    try {
+      const parsed = new URL(source.url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return source.url;
+    } catch {
+      // Fall through.
+    }
+  }
+  // 2. YouTube — synthesize the watch URL with timestamp anchor.
+  if (source.youtubeId && source.youtubeId !== 'null') {
+    const t = Math.floor(timestampStart);
+    return `https://www.youtube.com/watch?v=${source.youtubeId}&t=${t}s`;
+  }
+  // 3. Manual upload (no youtubeId) — point at the internal source route.
+  if (sourceVideoId) {
+    return `/h/${hubSlug}/sources/${sourceVideoId}?t=${Math.floor(timestampStart)}`;
+  }
+  // 4. Genuinely no destination — let the card render as a non-clickable div.
+  return null;
+}
+
 function sourceMomentFromCitation(
+  hubSlug: string,
   page: Page,
   citation: Citation,
   source: SourceVideo | undefined,
   ordinal: number,
 ): WorkbenchSourceMoment {
-  const safeSource = source ?? ({ youtubeId: null } satisfies Pick<SourceVideo, 'youtubeId'>);
-
   return {
     id: `${page.id}-${citation.id}`,
     pageSlug: page.slug,
@@ -281,7 +309,12 @@ function sourceMomentFromCitation(
     sourceTitle: safeSourceTitle(source?.title || citation.videoTitle, ordinal),
     timestampLabel: citation.timestampLabel || formatTimestampLabel(citation.timestampStart),
     excerpt: citation.excerpt,
-    href: safeCitationHref(citation, safeSource),
+    href: resolveSourceMomentHref({
+      hubSlug,
+      sourceVideoId: citation.sourceVideoId,
+      timestampStart: citation.timestampStart,
+      source: { youtubeId: source?.youtubeId ?? null, url: citation.url ?? undefined },
+    }),
   };
 }
 
@@ -348,6 +381,7 @@ function nativePathForBranch(paths: WorkbenchPath[], branch: NativePathBranch): 
 }
 
 function nativeSourceMoment(
+  hubSlug: string,
   moment: SourceMoment,
   pagesById: Map<string, Page>,
   sourcesById: Map<string, SourceVideo>,
@@ -366,7 +400,12 @@ function nativeSourceMoment(
     sourceTitle: safeSourceTitle(moment.title || source?.title, ordinal),
     timestampLabel: moment.timestampLabel || formatTimestampLabel(moment.timestampStart),
     excerpt: moment.excerpt,
-    href: safeCitationHref({ timestampStart: moment.timestampStart }, source ?? { youtubeId: null }),
+    href: resolveSourceMomentHref({
+      hubSlug,
+      sourceVideoId: moment.sourceVideoId,
+      timestampStart: moment.timestampStart,
+      source: { youtubeId: source?.youtubeId ?? null, url: undefined },
+    }),
   };
 }
 
@@ -395,7 +434,7 @@ export function deriveHubWorkbench(manifest: EditorialAtlasManifest): HubWorkben
       .filter((artifact): artifact is WorkbenchArtifact => artifact !== null)
       .slice(0, 8);
     const sourceMoments = manifest.workbench.sourceMoments
-      .map((moment, index) => nativeSourceMoment(moment, pagesById, sourcesById, index + 1))
+      .map((moment, index) => nativeSourceMoment(manifest.hubSlug, moment, pagesById, sourcesById, index + 1))
       .filter((moment): moment is WorkbenchSourceMoment => moment !== null)
       .slice(0, 8);
     const nativePaths = manifest.workbench.guidedPaths.map((path) => nativeWorkbenchPath(path, pagesById));
@@ -436,7 +475,7 @@ export function deriveHubWorkbench(manifest: EditorialAtlasManifest): HubWorkben
     .flatMap((page) =>
       page.citations.slice(0, 2).map((citation) => {
         sourceMomentOrdinal += 1;
-        return sourceMomentFromCitation(page, citation, sourcesById.get(citation.sourceVideoId), sourceMomentOrdinal);
+        return sourceMomentFromCitation(manifest.hubSlug, page, citation, sourcesById.get(citation.sourceVideoId), sourceMomentOrdinal);
       }),
     )
     .slice(0, 8);

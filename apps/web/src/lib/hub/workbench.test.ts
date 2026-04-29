@@ -153,7 +153,7 @@ test('deriveHubWorkbench prefers native v2 guided paths and workbench data', () 
   assert.equal(workbench.sourceMoments.length, 1);
   assert.equal(workbench.sourceMoments[0]?.pageSlug, startPage.slug);
   assert.equal(workbench.sourceMoments[0]?.sourceTitle, 'Source 1');
-  assert.equal(workbench.sourceMoments[0]?.href, null);
+  assert.equal(workbench.sourceMoments[0]?.href, '/h/ali-abdaal/sources/native_source?t=90');
 });
 
 test('deriveHubWorkbench ignores empty native paths and keeps native intent in fallback cards', () => {
