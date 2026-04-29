@@ -21,6 +21,7 @@ import { parseServerEnv } from '@creatorcanon/core';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import type { StageContext } from '../harness';
 import { buildFallbacks } from './fallback-chain';
+import { sanitizeTranscriptText, DEFAULT_SUBSTITUTIONS } from '../transcript/sanitize';
 
 import type { PagePlan, ArtifactBundle, ArtifactKind, VoiceMode, WorkbenchArtifactDraft } from '../authors-studio/types';
 import { runStrategist } from '../authors-studio/strategist';
@@ -208,7 +209,7 @@ export async function runPageCompositionStage(
     const allArtifactNodes = [...primary, ...supporting];
     const segmentExcerpts = segs
       .filter((s) => allArtifactNodes.some((n) => (n.evidenceSegmentIds as string[]).includes(s.id)))
-      .map((s) => ({ segmentId: s.id, videoId: s.videoId, text: s.text, startMs: s.startMs, endMs: s.endMs }));
+      .map((s) => ({ segmentId: s.id, videoId: s.videoId, text: sanitizeTranscriptText(s.text, DEFAULT_SUBSTITUTIONS), startMs: s.startMs, endMs: s.endMs }));
 
     const wantsKind = (k: ArtifactKind) => plan.artifacts.some((a) => a.kind === k);
 

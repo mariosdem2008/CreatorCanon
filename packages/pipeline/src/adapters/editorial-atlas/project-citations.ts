@@ -1,3 +1,5 @@
+import { sanitizeTranscriptText, DEFAULT_SUBSTITUTIONS } from '../../transcript/sanitize';
+
 interface PageInput {
   id: string;
   evidenceSegmentIds: string[];
@@ -62,7 +64,7 @@ export function buildPageCitations(input: {
         timestampStart: startSec,
         timestampEnd: endSec,
         timestampLabel: formatTimestampLabel(startSec),
-        excerpt: seg.text,
+        excerpt: sanitizeTranscriptText(seg.text, DEFAULT_SUBSTITUTIONS),
         url,
       });
     }

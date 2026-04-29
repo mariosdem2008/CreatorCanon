@@ -1,6 +1,7 @@
 import { and, asc, eq } from '@creatorcanon/db';
 import { segment, visualMoment } from '@creatorcanon/db/schema';
 import type { AtlasDb } from '@creatorcanon/db';
+import { sanitizeTranscriptText, DEFAULT_SUBSTITUTIONS } from '../transcript/sanitize';
 
 export interface PreloadedSegment {
   segmentId: string;
@@ -42,7 +43,7 @@ export async function loadVideoContext(
   runId: string,
   videoId: string,
 ): Promise<VideoContext> {
-  const segments = await db
+  const rawSegments = await db
     .select({
       segmentId: segment.id,
       startMs: segment.startMs,
@@ -52,6 +53,10 @@ export async function loadVideoContext(
     .from(segment)
     .where(and(eq(segment.runId, runId), eq(segment.videoId, videoId)))
     .orderBy(asc(segment.startMs));
+  const segments = rawSegments.map((s) => ({
+    ...s,
+    text: sanitizeTranscriptText(s.text, DEFAULT_SUBSTITUTIONS),
+  }));
 
   const visualMoments = await db
     .select({
