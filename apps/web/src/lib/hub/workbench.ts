@@ -483,7 +483,16 @@ export function deriveWorkbenchPageView(manifest: EditorialAtlasManifest, page: 
       .filter((candidate): candidate is Page => candidate !== undefined)
       .map(nativeCardForPage);
 
-    if (useWhen && artifactIds.length > 0 && artifacts.length === artifactIds.length && nextStepPageIds.length > 0 && nextPages.length === nextStepPageIds.length) {
+    // The native v2 path requires the page to ship a real outcome + useWhen +
+    // some forward navigation. Artifacts are optional: LEARN/definition pages
+    // legitimately ship without copyable assets, and falling back to the
+    // generic placeholder string in that case throws away the strong outcome
+    // the Strategist already authored. When artifactIds *are* declared but
+    // can't be resolved against the manifest, that's a data gap worth falling
+    // back for — but a page that simply doesn't declare artifacts is fine.
+    const artifactsResolveCleanly = artifactIds.length === 0 || artifacts.length === artifactIds.length;
+    const nextPagesResolveCleanly = nextStepPageIds.length > 0 && nextPages.length === nextStepPageIds.length;
+    if (useWhen && artifactsResolveCleanly && nextPagesResolveCleanly) {
       return {
         intent: nativeIntentForPage(page),
         outcome: page.outcome,
