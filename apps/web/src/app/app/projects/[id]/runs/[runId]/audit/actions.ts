@@ -9,6 +9,9 @@ import { revalidatePath } from 'next/cache';
 import { eq, getDb } from '@creatorcanon/db';
 import { generationRun } from '@creatorcanon/db/schema';
 
+import { buildAuditMarkdown } from '@/lib/audit/build-audit-markdown';
+import { getRunAudit } from '@/lib/audit/get-run-audit';
+
 /**
  * User clicked "Generate Hub" on the audit page. Flip status from
  * 'audit_ready' to 'queued', then dispatch the hub-build phase as a
@@ -57,6 +60,19 @@ export async function discardRun(formData: FormData) {
   await db.update(generationRun).set({ status: 'canceled' }).where(eq(generationRun.id, runId));
   revalidatePath(`/app/projects/${projectId}`);
   redirect(`/app/projects/${projectId}`);
+}
+
+/**
+ * Build a complete markdown export of the audit so the client can copy it
+ * to the clipboard. We compose this on the server because (a) the data is
+ * already DB-resident and (b) we don't want to ship raw payloads to the
+ * client just so the markdown can be assembled.
+ */
+export async function getAuditMarkdown(runId: string): Promise<string> {
+  if (!runId) throw new Error('Missing runId');
+  const view = await getRunAudit(runId);
+  if (!view) throw new Error('Run not found');
+  return buildAuditMarkdown(view);
 }
 
 function spawnHubBuildDispatch(runId: string): void {

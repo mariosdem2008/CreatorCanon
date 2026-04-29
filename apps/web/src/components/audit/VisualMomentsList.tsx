@@ -31,18 +31,39 @@ export function VisualMomentsList({ moments }: { moments: VisualMomentView[] }) 
             key={m.id}
             className="rounded-[10px] border border-[var(--cc-rule)] bg-[var(--cc-surface-2)]/40 p-3"
           >
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--cc-ink-3)]">
                 {m.type}
               </span>
               <span className="text-[11px] tabular-nums text-[var(--cc-ink-4)]">
                 {formatTs(m.timestampMs)}
               </span>
+              {m.usefulnessScore != null ? (
+                <span className="rounded-[4px] bg-[var(--cc-accent)]/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--cc-accent)]">
+                  usefulness {m.usefulnessScore}
+                </span>
+              ) : null}
               <span className="ml-auto truncate text-[11px] text-[var(--cc-ink-4)]">
                 {m.videoTitle}
               </span>
             </div>
-            <p className="mt-1 text-[13px] leading-[1.55] text-[var(--cc-ink-2)]">{m.description}</p>
+            <p className="mt-1.5 text-[13px] leading-[1.55] text-[var(--cc-ink-2)]">{m.description}</p>
+            {m.hubUse ? (
+              <p className="mt-1 rounded-[6px] border border-[var(--cc-rule)]/60 bg-[var(--cc-surface)] px-2 py-1 text-[11px] italic text-[var(--cc-ink-3)]">
+                <span className="not-italic font-semibold text-[var(--cc-ink-4)]">Hub use:</span>{' '}
+                {m.hubUse}
+              </p>
+            ) : null}
+            {m.extractedText ? (
+              <details className="mt-1.5 text-[11px] text-[var(--cc-ink-3)]">
+                <summary className="cursor-pointer text-[var(--cc-ink-4)]">
+                  Extracted on-screen text
+                </summary>
+                <pre className="mt-1 whitespace-pre-wrap rounded-[6px] bg-[var(--cc-surface-2)]/60 p-2 text-[11px] leading-[1.5] text-[var(--cc-ink-2)]">
+                  {m.extractedText}
+                </pre>
+              </details>
+            ) : null}
           </li>
         ))}
       </ul>

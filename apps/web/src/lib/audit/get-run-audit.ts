@@ -5,6 +5,7 @@ import {
   generationRun,
   generationStageRun,
   pageBrief,
+  project,
   video,
   videoIntelligenceCard,
   videoSetItem,
@@ -20,9 +21,10 @@ import type {
 } from './types';
 
 /**
- * Server-side loader for the run audit view. Aggregates channel_profile,
- * visual_moment, video_intelligence_card, canon_node, and page_brief rows
- * into a single shape ready for the audit page to render.
+ * Server-side loader for the run audit view. Aggregates EVERY pipeline
+ * artifact tied to the run (channel_profile, visual_moment,
+ * video_intelligence_card, canon_node, page_brief, plus per-stage cost) into
+ * a single object the audit page renders in full.
  *
  * Returns null when the run does not exist.
  */
@@ -41,6 +43,13 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
   const run = runRows[0];
   if (!run) return null;
 
+  const projectRows = await db
+    .select({ title: project.title })
+    .from(project)
+    .where(eq(project.id, run.projectId))
+    .limit(1);
+  const projectTitle = projectRows[0]?.title ?? null;
+
   const cpRows = await db
     .select({ payload: channelProfile.payload })
     .from(channelProfile)
@@ -51,7 +60,7 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
   );
 
   // Pull only the videos in this run's video_set so we can title-resolve
-  // visual moments and VICs.
+  // visual moments, VICs, canon node sourceVideoIds, and page brief refs.
   const videoRows = run.videoSetId
     ? await db
         .select({ id: video.id, title: video.title })
@@ -68,6 +77,9 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
       timestampMs: visualMoment.timestampMs,
       type: visualMoment.type,
       description: visualMoment.description,
+      hubUse: visualMoment.hubUse,
+      usefulnessScore: visualMoment.usefulnessScore,
+      extractedText: visualMoment.extractedText,
     })
     .from(visualMoment)
     .where(eq(visualMoment.runId, runId));
@@ -78,44 +90,69 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
     timestampMs: m.timestampMs,
     type: m.type,
     description: m.description,
+    hubUse: m.hubUse ?? null,
+    usefulnessScore: m.usefulnessScore ?? null,
+    extractedText: m.extractedText ?? null,
   }));
 
   const vicRows = await db
     .select({
       videoId: videoIntelligenceCard.videoId,
       payload: videoIntelligenceCard.payload,
+      evidenceSegmentIds: videoIntelligenceCard.evidenceSegmentIds,
     })
     .from(videoIntelligenceCard)
     .where(eq(videoIntelligenceCard.runId, runId));
-  const vicView: VideoIntelligenceCardView[] = vicRows.map((row) => {
-    const p = (row.payload as Record<string, unknown>) ?? {};
-    const arr = (k: string) => (Array.isArray(p[k]) ? (p[k] as unknown[]).length : 0);
-    return {
-      videoId: row.videoId,
-      videoTitle: titleByVideoId.get(row.videoId) ?? '(Untitled)',
-      mainIdeaCount: arr('mainIdeas'),
-      frameworkCount: arr('frameworks'),
-      lessonCount: arr('lessons'),
-      exampleCount: arr('examples'),
-      mistakeCount: arr('mistakesToAvoid'),
-      quoteCount: arr('quotes'),
-    };
-  });
+  const vicView: VideoIntelligenceCardView[] = vicRows.map((row) => ({
+    videoId: row.videoId,
+    videoTitle: titleByVideoId.get(row.videoId) ?? '(Untitled)',
+    evidenceSegmentCount: Array.isArray(row.evidenceSegmentIds) ? row.evidenceSegmentIds.length : 0,
+    payload: (row.payload as Record<string, unknown>) ?? {},
+  }));
 
   const cnRows = await db
-    .select({ id: canonNode.id, type: canonNode.type, payload: canonNode.payload })
+    .select({
+      id: canonNode.id,
+      type: canonNode.type,
+      payload: canonNode.payload,
+      sourceVideoIds: canonNode.sourceVideoIds,
+      evidenceQuality: canonNode.evidenceQuality,
+      origin: canonNode.origin,
+      confidenceScore: canonNode.confidenceScore,
+      pageWorthinessScore: canonNode.pageWorthinessScore,
+      specificityScore: canonNode.specificityScore,
+      creatorUniquenessScore: canonNode.creatorUniquenessScore,
+      citationCount: canonNode.citationCount,
+      sourceCoverage: canonNode.sourceCoverage,
+    })
     .from(canonNode)
     .where(eq(canonNode.runId, runId));
-  const canonNodesView: CanonNodeView[] = cnRows.map((row) =>
-    shapeCanonNode({
+  const canonNodesView: CanonNodeView[] = cnRows.map((row) => {
+    const ids = Array.isArray(row.sourceVideoIds) ? row.sourceVideoIds : [];
+    return shapeCanonNode({
       id: row.id,
       type: row.type,
       payload: (row.payload as Record<string, unknown>) ?? {},
-    }),
-  );
+      sourceVideoIds: ids,
+      sourceVideoTitles: ids.map((id) => titleByVideoId.get(id) ?? '(unknown)'),
+      evidenceQuality: row.evidenceQuality ?? null,
+      origin: row.origin ?? null,
+      confidenceScore: row.confidenceScore,
+      pageWorthinessScore: row.pageWorthinessScore,
+      specificityScore: row.specificityScore,
+      creatorUniquenessScore: row.creatorUniquenessScore,
+      citationCount: row.citationCount,
+      sourceCoverage: row.sourceCoverage,
+    });
+  });
 
   const pbRows = await db
-    .select({ id: pageBrief.id, position: pageBrief.position, payload: pageBrief.payload })
+    .select({
+      id: pageBrief.id,
+      position: pageBrief.position,
+      payload: pageBrief.payload,
+      pageWorthinessScore: pageBrief.pageWorthinessScore,
+    })
     .from(pageBrief)
     .where(eq(pageBrief.runId, runId))
     .orderBy(pageBrief.position);
@@ -124,21 +161,32 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
       id: row.id,
       position: row.position,
       payload: (row.payload as Record<string, unknown>) ?? {},
+      pageWorthinessScore: row.pageWorthinessScore,
     }),
   );
 
-  // Sum stage costs for display.
-  const costRows = await db
+  // Sum stage costs for display, plus per-stage breakdown.
+  const stageCostRows = await db
     .select({
-      total: drizzleSql<number>`COALESCE(SUM(${generationStageRun.costCents}), 0)::int`,
+      stage: generationStageRun.stageName,
+      total: drizzleSql<string>`COALESCE(SUM(${generationStageRun.costCents}), 0)::text`,
     })
     .from(generationStageRun)
-    .where(eq(generationStageRun.runId, runId));
-  const costCents = Number(costRows[0]?.total ?? 0);
+    .where(eq(generationStageRun.runId, runId))
+    .groupBy(generationStageRun.stageName);
+  const costByStage = stageCostRows
+    .map((r) => ({ stage: r.stage as string, costCents: Number(r.total ?? 0) }))
+    .filter((r) => r.costCents > 0)
+    .sort((a, b) => b.costCents - a.costCents);
+  const costCents = costByStage.reduce((sum, r) => sum + r.costCents, 0);
+
+  const videoTitleById: Record<string, string> = {};
+  for (const [k, v] of titleByVideoId.entries()) videoTitleById[k] = v;
 
   return {
     runId: run.id,
     projectId: run.projectId,
+    projectTitle,
     status: run.status as RunAuditView['status'],
     channelProfile: channelProfileView,
     visualMoments: visualMomentsView,
@@ -146,51 +194,91 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
     canonNodes: canonNodesView,
     pageBriefs: pageBriefsView,
     costCents,
+    costByStage,
+    videoTitleById,
   };
+}
+
+function asString(v: unknown): string | null {
+  return typeof v === 'string' && v.trim().length > 0 ? v : null;
+}
+
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 }
 
 export function shapeChannelProfile(payload: Record<string, unknown> | null): ChannelProfileView | null {
   if (!payload) return null;
-  const get = (k: string) => (typeof payload[k] === 'string' ? (payload[k] as string) : null);
-  const terminology = Array.isArray(payload.creatorTerminology)
-    ? (payload.creatorTerminology as unknown[]).filter((x): x is string => typeof x === 'string')
-    : [];
   return {
-    creatorName: get('creatorName'),
-    niche: get('niche'),
-    audience: get('audience'),
-    dominantTone: get('dominantTone'),
-    recurringPromise: get('recurringPromise'),
-    positioningSummary: get('positioningSummary'),
-    creatorTerminology: terminology,
+    payload,
+    creatorName: asString(payload.creatorName),
+    niche: asString(payload.niche),
+    audience: asString(payload.audience),
+    dominantTone: asString(payload.dominantTone),
+    recurringPromise: asString(payload.recurringPromise),
+    whyPeopleFollow: asString(payload.whyPeopleFollow),
+    expertiseCategory: asString(payload.expertiseCategory),
+    monetizationAngle: asString(payload.monetizationAngle),
+    positioningSummary: asString(payload.positioningSummary),
+    contentFormats: asStringArray(payload.contentFormats),
+    recurringThemes: asStringArray(payload.recurringThemes),
+    creatorTerminology: asStringArray(payload.creatorTerminology),
   };
 }
 
-export function shapeCanonNode(row: { id: string; type: string; payload: Record<string, unknown> }): CanonNodeView {
+export function shapeCanonNode(row: {
+  id: string;
+  type: string;
+  payload: Record<string, unknown>;
+  sourceVideoIds: string[];
+  sourceVideoTitles: string[];
+  evidenceQuality: string | null;
+  origin: string | null;
+  confidenceScore: number | null;
+  pageWorthinessScore: number | null;
+  specificityScore: number | null;
+  creatorUniquenessScore: number | null;
+  citationCount: number | null;
+  sourceCoverage: number | null;
+}): CanonNodeView {
   const p = row.payload ?? {};
-  const get = (k: string) => (typeof p[k] === 'string' ? (p[k] as string) : null);
-  const score = typeof p.pageWorthinessScore === 'number' ? (p.pageWorthinessScore as number) : null;
+  const title = asString(p.title) ?? asString(p.name) ?? asString(p.term);
   return {
     id: row.id,
     type: row.type,
-    title: get('title'),
-    whenToUse: get('whenToUse'),
-    pageWorthinessScore: score,
+    title,
+    payload: p,
+    sourceVideoIds: row.sourceVideoIds,
+    sourceVideoTitles: row.sourceVideoTitles,
+    evidenceQuality: row.evidenceQuality,
+    origin: row.origin,
+    confidenceScore: row.confidenceScore,
+    pageWorthinessScore: row.pageWorthinessScore,
+    specificityScore: row.specificityScore,
+    creatorUniquenessScore: row.creatorUniquenessScore,
+    citationCount: row.citationCount,
+    sourceCoverage: row.sourceCoverage,
   };
 }
 
-export function shapePageBrief(row: { id: string; position: number; payload: Record<string, unknown> }): PageBriefView {
+export function shapePageBrief(row: {
+  id: string;
+  position: number;
+  payload: Record<string, unknown>;
+  pageWorthinessScore: number | null;
+}): PageBriefView {
   const p = row.payload ?? {};
-  const get = (k: string) => (typeof p[k] === 'string' ? (p[k] as string) : null);
-  const ids = Array.isArray(p.primaryCanonNodeIds)
-    ? (p.primaryCanonNodeIds as unknown[]).filter((x): x is string => typeof x === 'string')
-    : [];
   return {
     id: row.id,
-    pageType: get('pageType') ?? 'lesson',
-    pageTitle: get('pageTitle') ?? '(Untitled)',
-    audienceQuestion: get('audienceQuestion'),
-    primaryCanonNodeIds: ids,
     position: row.position,
+    pageType: asString(p.pageType) ?? 'lesson',
+    pageTitle: asString(p.pageTitle) ?? '(Untitled)',
+    slug: asString(p.slug),
+    audienceQuestion: asString(p.audienceQuestion),
+    openingHook: asString(p.openingHook),
+    pageWorthinessScore: row.pageWorthinessScore,
+    primaryCanonNodeIds: asStringArray(p.primaryCanonNodeIds),
+    supportingCanonNodeIds: asStringArray(p.supportingCanonNodeIds),
+    payload: p,
   };
 }

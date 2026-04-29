@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
-import { approveAuditAndStartHubBuild, discardRun } from './actions';
+import { approveAuditAndStartHubBuild, discardRun, getAuditMarkdown } from './actions';
 
 export function AuditActions({
   runId,
@@ -15,6 +15,21 @@ export function AuditActions({
 }) {
   const [isPending, startTransition] = useTransition();
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle');
+
+  async function handleCopy() {
+    setCopyState('copying');
+    try {
+      const md = await getAuditMarkdown(runId);
+      await navigator.clipboard.writeText(md);
+      setCopyState('copied');
+      setTimeout(() => setCopyState('idle'), 2000);
+    } catch (err) {
+      console.error('copy audit failed', err);
+      setCopyState('error');
+      setTimeout(() => setCopyState('idle'), 3000);
+    }
+  }
 
   return (
     <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-[12px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] p-4 shadow-[var(--cc-shadow-2)] sm:flex-row sm:items-center sm:justify-between">
@@ -24,6 +39,20 @@ export function AuditActions({
           : 'Audit is still running…'}
       </p>
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          disabled={copyState === 'copying'}
+          className="inline-flex h-9 items-center rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-ink-4)] disabled:opacity-50"
+        >
+          {copyState === 'copying'
+            ? 'Copying…'
+            : copyState === 'copied'
+              ? 'Copied!'
+              : copyState === 'error'
+                ? 'Copy failed'
+                : 'Copy audit'}
+        </button>
         {!confirmDiscard ? (
           <button
             type="button"
