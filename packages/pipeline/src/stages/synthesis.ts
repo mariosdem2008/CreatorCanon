@@ -6,7 +6,7 @@ import { selectModel, type AgentName } from '../agents/providers/selectModel';
 import { createOpenAIProvider } from '../agents/providers/openai';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
-import type { AgentProvider } from '../agents/providers';
+import type { AgentProvider, ProviderName } from '../agents/providers';
 import { parseServerEnv } from '@creatorcanon/core';
 import { getDb } from '@creatorcanon/db';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
@@ -25,7 +25,7 @@ export interface SynthesisStageInput {
   runId: string;
   workspaceId: string;
   /** Test override: build a provider for the given provider name. */
-  providerOverride?: (provider: 'openai' | 'gemini') => AgentProvider;
+  providerOverride?: (provider: ProviderName) => AgentProvider;
   /** Test override: an R2 client to use instead of the env-driven default. */
   r2Override?: R2Client;
 }
@@ -44,10 +44,14 @@ export async function runSynthesisStage(input: SynthesisStageInput): Promise<Syn
   const r2 = input.r2Override ?? createR2Client(env);
   const db = getDb();
 
-  function makeProvider(name: 'openai' | 'gemini'): AgentProvider {
+  function makeProvider(name: ProviderName): AgentProvider {
     if (input.providerOverride) return input.providerOverride(name);
     if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
-    return createGeminiProvider(env.GEMINI_API_KEY ?? '');
+    if (name === 'gemini') return createGeminiProvider(env.GEMINI_API_KEY ?? '');
+    throw new Error(
+      `synthesis stage does not support provider '${name}'. ` +
+      `Tool-using agents must use openai or gemini; codex-cli is only valid for the Author's Studio specialists.`,
+    );
   }
 
   // Bootstrap: count existing findings by type from Phase 1 (discovery).

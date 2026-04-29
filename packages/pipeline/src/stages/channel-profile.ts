@@ -7,7 +7,7 @@ import { createOpenAIProvider } from '../agents/providers/openai';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import { listVideosTool } from '../agents/tools/universal';
-import type { AgentProvider } from '../agents/providers';
+import type { AgentProvider, ProviderName } from '../agents/providers';
 import type { ToolCtx } from '../agents/tools/types';
 import { parseServerEnv } from '@creatorcanon/core';
 import { getDb } from '@creatorcanon/db';
@@ -19,7 +19,7 @@ export interface ChannelProfileStageInput {
   runId: string;
   workspaceId: string;
   /** Test override: build a provider for the given provider name. */
-  providerOverride?: (provider: 'openai' | 'gemini') => AgentProvider;
+  providerOverride?: (provider: ProviderName) => AgentProvider;
   /** Test override: an R2 client to use instead of the env-driven default. */
   r2Override?: R2Client;
 }
@@ -39,10 +39,14 @@ export async function runChannelProfileStage(
   const r2 = input.r2Override ?? createR2Client(env);
   const db = getDb();
 
-  const makeProvider = (name: 'openai' | 'gemini'): AgentProvider => {
+  const makeProvider = (name: ProviderName): AgentProvider => {
     if (input.providerOverride) return input.providerOverride(name);
     if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
-    return createGeminiProvider(env.GEMINI_API_KEY ?? '');
+    if (name === 'gemini') return createGeminiProvider(env.GEMINI_API_KEY ?? '');
+    throw new Error(
+      `channel_profile stage does not support provider '${name}'. ` +
+      `Tool-using agents must use openai or gemini; codex-cli is only valid for the Author's Studio specialists.`,
+    );
   };
 
   // Bootstrap: list every video in the run so the agent has the archive shape.

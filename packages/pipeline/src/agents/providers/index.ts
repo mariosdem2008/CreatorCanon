@@ -1,6 +1,6 @@
 import type { ToolDef } from '../tools/types';
 
-export type ProviderName = 'openai' | 'gemini';
+export type ProviderName = 'openai' | 'gemini' | 'codex-cli';
 
 /**
  * One turn in the agent's conversation. Mirrors OpenAI's chat-completion message
