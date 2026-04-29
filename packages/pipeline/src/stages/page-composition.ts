@@ -14,9 +14,10 @@ import { getDb } from '@creatorcanon/db';
 import { selectModel } from '../agents/providers/selectModel';
 import { createOpenAIProvider } from '../agents/providers/openai';
 import { createGeminiProvider } from '../agents/providers/gemini';
+import { createCodexCliProvider } from '../agents/providers/codex-cli';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import { SPECIALISTS } from '../agents/specialists';
-import type { AgentProvider } from '../agents/providers';
+import type { AgentProvider, ProviderName } from '../agents/providers';
 import { parseServerEnv } from '@creatorcanon/core';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 import type { StageContext } from '../harness';
@@ -155,10 +156,14 @@ export async function runPageCompositionStage(
     };
   });
 
-  // Provider factory.
-  const makeProvider = (name: 'openai' | 'gemini'): AgentProvider => {
+  // Provider factory. The Author's Studio specialists are tool-less and emit
+  // JSON-only, so this is the one stage that can route to codex-cli (used by
+  // the codex_dev quality preset to bypass metered API quotas during dev).
+  const makeProvider = (name: ProviderName): AgentProvider => {
     if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
-    return createGeminiProvider(env.GEMINI_API_KEY ?? '');
+    if (name === 'gemini') return createGeminiProvider(env.GEMINI_API_KEY ?? '');
+    if (name === 'codex-cli') return createCodexCliProvider();
+    throw new Error(`page_composition stage: unsupported provider '${name}'`);
   };
   const ctxFor = (agent: 'page_strategist' | 'prose_author' | 'roadmap_author' | 'example_author' | 'diagram_author' | 'mistakes_author' | 'critic'): SpecialistContext => {
     const cfg = SPECIALISTS[agent];
