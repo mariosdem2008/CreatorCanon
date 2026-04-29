@@ -63,6 +63,7 @@ export const runStatusEnum = pgEnum('run_status', [
   'awaiting_payment',
   'queued',
   'running',
+  'audit_ready',
   'awaiting_review',
   'published',
   'failed',

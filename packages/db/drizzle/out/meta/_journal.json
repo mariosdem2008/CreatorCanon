@@ -78,6 +78,13 @@
       "when": 1777680000000,
       "tag": "0010_voice_mode_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777766400000,
+      "tag": "0011_run_status_audit_ready",
+      "breakpoints": true
     }
   ]
 }
