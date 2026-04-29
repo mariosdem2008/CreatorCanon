@@ -61,6 +61,7 @@ const runStatusLabel: Record<string, string> = {
   awaiting_payment: 'Awaiting payment',
   queued: 'Queued',
   running: 'Processing',
+  audit_ready: 'Audit ready',
   awaiting_review: 'Draft ready',
   published: 'Published',
   failed: 'Failed',
@@ -533,13 +534,15 @@ function RunBadge({ status }: { status: string }) {
   const tone =
     status === 'published'
       ? 'success'
-      : status === 'awaiting_review'
+      : status === 'audit_ready'
         ? 'warn'
-        : status === 'failed'
-          ? 'danger'
-          : status === 'running' || status === 'queued' || status === 'awaiting_payment'
-            ? 'info'
-            : 'neutral';
+        : status === 'awaiting_review'
+          ? 'warn'
+          : status === 'failed'
+            ? 'danger'
+            : status === 'running' || status === 'queued' || status === 'awaiting_payment'
+              ? 'info'
+              : 'neutral';
   return (
     <StatusPill tone={tone as 'success' | 'warn' | 'danger' | 'info' | 'neutral'}>
       {status.replaceAll('_', ' ')}

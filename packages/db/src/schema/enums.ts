@@ -262,6 +262,7 @@ export const inboxItemStatusEnum = pgEnum('inbox_item_status', [
 export const inboxItemKindEnum = pgEnum('inbox_item_kind', [
   'run_completed',
   'run_failed',
+  'run_audit_ready',
   'run_awaiting_review',
   'release_published',
   'invite_pending',

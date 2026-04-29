@@ -274,6 +274,7 @@ function inferInboxHref(kind: string, targetRef: string | null): string | null {
   switch (kind) {
     case 'run_completed':
     case 'run_failed':
+    case 'run_audit_ready':
     case 'run_awaiting_review':
     case 'release_published':
       return targetRef ? `/app/projects/${targetRef}` : '/app/projects';
