@@ -748,6 +748,14 @@ interface PageBriefOut {
   supportingCanonNodeIds: string[];
   pageWorthinessScore: number;
   position: number;
+  editorialStrategy?: {
+    persona: { name: string; context: string; objection: string; proofThatHits: string };
+    seo: { primaryKeyword: string; intent: 'informational' | 'transactional' | 'navigational' | 'commercial'; titleTemplate: string; metaDescription: string };
+    cta: { primary: string; secondary: string };
+    clusterRole: { tier: 'pillar' | 'spoke'; parentTopic: string | null; siblingSlugs: string[] };
+    journeyPhase: 1 | 2 | 3 | 4 | 5;
+    voiceFingerprint: { profanityAllowed: boolean; tonePreset: string; preserveTerms: string[] };
+  };
 }
 
 interface SynthesisNodeOut {
@@ -933,8 +941,14 @@ function buildBriefPrompt(
     '# Instructions',
     `Produce up to ${remaining} more DISTINCT page briefs. Pick from the must-cover hints FIRST; only invent new pages once those are exhausted. Every primary node must come from the canon list above.`,
     '',
+    '',
+    'Each brief MUST include the full editorialStrategy block — persona + seo + cta + clusterRole + journeyPhase + voiceFingerprint. Do NOT omit it.',
+    '',
     '# OUTPUT FORMAT — CRITICAL',
     `Respond with a single JSON ARRAY of AT LEAST ${Math.min(remaining, 6)} brief objects. First char \`[\`, last char \`]\`. NEVER a single object — wrap as \`[{...}]\`. No preamble, no markdown fences.`,
+    '',
+    '// NOTE: siblingSlugs come from Codex\'s best guess given the canon graph;',
+    '// a future Phase 2 pass could reconcile after all briefs are written.',
     '',
     'Skeleton:',
     '[',
@@ -947,7 +961,15 @@ function buildBriefPrompt(
     '    "primaryCanonNodeIds": ["cn_..."],',
     '    "supportingCanonNodeIds": ["cn_..."],',
     '    "pageWorthinessScore": 0-100,',
-    '    "position": 0 },',
+    '    "position": 0,',
+    '    "editorialStrategy": {',
+    '      "persona": { "name": "...", "context": "1 sentence about the reader", "objection": "1 sentence — biggest pushback", "proofThatHits": "1 sentence — which specific Hormozi credential/number/story will land" },',
+    '      "seo": { "primaryKeyword": "what someone types in Google", "intent": "informational|transactional|navigational|commercial", "titleTemplate": "60-70 char SEO title", "metaDescription": "150-160 char meta description" },',
+    '      "cta": { "primary": "main next-action", "secondary": "fallback next-action" },',
+    '      "clusterRole": { "tier": "pillar"|"spoke", "parentTopic": "kebab-slug or null if pillar", "siblingSlugs": ["..."] },',
+    '      "journeyPhase": 1-5,  // 1=Survival, 2=Cashflow, 3=Scale, 4=Leverage, 5=Investing',
+    '      "voiceFingerprint": { "profanityAllowed": true|false, "tonePreset": "blunt-tactical"|"warm-coaching"|"analytical-detached", "preserveTerms": ["1-1-1 rule", "..."] }',
+    '    } },',
     '  { ... }',
     ']',
   ].join('\n');
