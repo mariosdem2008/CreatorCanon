@@ -35,7 +35,23 @@ async function runCodex(prompt: string): Promise<string> {
     if (proc.stdin) { proc.stdin.on('error', () => { /* EPIPE non-fatal */ }); proc.stdin.write(prompt); proc.stdin.end(); }
     const timer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* */ } settle(() => reject(new Error(`codex timed out after ${CODEX_TIMEOUT_MS}ms`))); }, CODEX_TIMEOUT_MS);
     proc.on('error', (err) => { clearTimeout(timer); settle(() => reject(new Error(`codex spawn failed: ${err.message}`))); });
-    proc.on('close', (code) => { clearTimeout(timer); if (code !== 0) { settle(() => reject(new Error(`codex exit ${code}; stderr: ${stderr.slice(-400)}`))); return; } try { settle(() => resolve(fs.readFileSync(tmpFile, 'utf8'))); } catch (e) { settle(() => reject(new Error(`output not readable: ${(e as Error).message}`))); } });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        settle(() => reject(new Error(`codex exit ${code}; stderr: ${stderr.slice(-400)}`)));
+        return;
+      }
+      // Read BEFORE settle. Settle deletes tmpDir, so reading inside the
+      // settle callback throws ENOENT and orphans the promise.
+      let content: string;
+      try {
+        content = fs.readFileSync(tmpFile, 'utf8');
+      } catch (e) {
+        settle(() => reject(new Error(`output not readable: ${(e as Error).message}`)));
+        return;
+      }
+      settle(() => resolve(content));
+    });
   });
 }
 
