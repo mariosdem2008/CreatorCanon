@@ -93,8 +93,9 @@ Every hub page brief carries an `editorialStrategy` block that tells downstream 
   - Skip phases that have no nodes
 - **Voice fingerprint**:
   - `profanityAllowed` — boolean (operator-coach typically `true`, science-explainer typically `false`)
-  - `tonePreset` — `blunt-tactical | warm-coaching | analytical-detached | reflective-thoughtful`
+  - `tonePreset` — `blunt-tactical | warm-coaching | analytical-detached | reflective-thoughtful`. Use ONLY one of these four canonical values verbatim — do not invent variants like "blunt-tactical-operator" or comma-separated descriptors.
   - `preserveTerms[]` — creator's verbatim phrases that prose generation must NOT rephrase
+- **Voice fidelity (preserveTerms hit rate)**: each brief's actual prose (`openingHook` + `audienceQuestion` + each outline section's `intent`) must collectively use AT LEAST 60% of the brief's declared `preserveTerms[]` verbatim. If you can't naturally use 60% of a candidate term list, REVISE the list down — only declare terms that genuinely appear in the prose. The downstream `check-voice-fingerprint.ts` validator measures this rate; briefs scoring below 60% are flagged for editor rework.
 - **Pillar pages** anchor a topic cluster; spokes point to a parent pillar via `parentTopic`. Sibling spokes share a parent. Pillars do not have a `parentTopic`.
 
 ## EXAMPLES_GOOD
@@ -140,6 +141,8 @@ Every hub page brief carries an `editorialStrategy` block that tells downstream 
 - **CTA mismatch**: a survival-phase brief whose `cta.primary` is "Buy the $1K course". Match CTA to journey phase — early-phase = read-more, late-phase = buy.
 - **SEO-first hooks**: openingHook that reads like a meta description. The hook is for HUMANS arriving on the page; the meta description is for SERPs.
 - **Over-specific preserveTerms**: listing 30 generic words. Preserve only the creator's distinctive named terms (e.g. "BYOA", "1-1-1 rule"), not common words.
+- **Aspirational preserveTerms**: declaring 8 terms but only naturally using 1 in the prose. Either weave more terms into hook/audienceQuestion/intent strings, or trim the list. The 60% hit-rate floor is enforced by check-voice-fingerprint.ts.
+- **Non-canonical tonePreset**: writing `"blunt, tactical, urgent, operator-first, contrarian"` instead of the literal `"blunt-tactical"`. The validator normalizes these but downstream consumers treat them as opaque strings — pick one of the four canonical values.
 
 ## OUTPUT_FORMAT
 
