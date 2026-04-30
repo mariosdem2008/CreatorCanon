@@ -706,53 +706,107 @@ async function generateReaderJourney(
   return codexJson<ReaderJourneyOut>(prompt, 'reader_journey', 'object', DEFAULT_TIMEOUT_MS);
 }
 
-async function generatePageBriefs(
+function buildBriefPrompt(
   profile: ChannelProfilePayload,
-  canonNodesWithIds: Array<{ id: string; type: string; payload: Record<string, unknown>; pageWorthinessScore: number }>,
-): Promise<PageBriefOut[]> {
-  const pageworthy = canonNodesWithIds.filter((n) => n.pageWorthinessScore >= 60);
+  pageworthy: Array<{ id: string; type: string; payload: Record<string, unknown>; pageWorthinessScore: number }>,
+  alreadyHave: string[],
+  remaining: number,
+  mustCover: string[],
+): string {
   const block = pageworthy
     .map((n) => `### [${n.id}] ${n.type} · pageWorthiness=${n.pageWorthinessScore}\n${JSON.stringify(n.payload, null, 2)}`)
     .join('\n\n');
+  const alreadyBlock = alreadyHave.length > 0
+    ? `\n\n# Already-generated briefs (DO NOT repeat — produce DIFFERENT ones)\n${alreadyHave.map((t) => `- ${t}`).join('\n')}`
+    : '';
+  const remainingHints = mustCover.filter((t) => !alreadyHave.some((h) => h.toLowerCase().includes(t.toLowerCase().slice(0, 18))));
+  const hintBlock = remainingHints.length > 0
+    ? `\n\n# MUST-COVER PAGE TITLES (priority order)\n${remainingHints.slice(0, 24).map((t) => `- ${t}`).join('\n')}`
+    : '';
 
-  const prompt = [
-    'You are page_brief_planner. Design the hub\'s page outline by selecting and grouping canon nodes into briefs.',
+  return [
+    'You are page_brief_planner. Design hub pages by selecting and grouping canon nodes into briefs.',
     '',
     '# Channel profile',
     JSON.stringify(profile, null, 2),
     '',
-    `# Page-worthy canon nodes (pageWorthinessScore >= 60, ${pageworthy.length} total)`,
+    `# Page-worthy canon nodes (${pageworthy.length} total)`,
     block,
+    alreadyBlock,
+    hintBlock,
     '',
     '# Instructions',
-    'You MUST produce a LIST of 8-15 page briefs (not just one). Pages must be earned. Every primary node must come from the canon list above.',
+    `Produce up to ${remaining} more DISTINCT page briefs. Pick from the must-cover hints FIRST; only invent new pages once those are exhausted. Every primary node must come from the canon list above.`,
     '',
     '# OUTPUT FORMAT — CRITICAL',
-    'Respond with a single JSON ARRAY containing MANY page brief objects. The first character of your response MUST be `[` and the last character MUST be `]`. NEVER return a single object — even one brief must still be wrapped: `[ { ... } ]`. Do NOT include any preamble, markdown fences, or commentary.',
+    `Respond with a single JSON ARRAY of AT LEAST ${Math.min(remaining, 6)} brief objects. First char \`[\`, last char \`]\`. NEVER a single object — wrap as \`[{...}]\`. No preamble, no markdown fences.`,
     '',
-    'Skeleton (replace the ellipses with 8-15 real briefs):',
+    'Skeleton:',
     '[',
-    '  {',
-    '    "pageTitle": "...",',
+    '  { "pageTitle": "...",',
     '    "pageType": "topic"|"framework"|"lesson"|"playbook"|"example_collection"|"definition"|"principle",',
-    '    "audienceQuestion": "...",',
-    '    "openingHook": "...",',
+    '    "audienceQuestion": "1 sentence — the reader\'s actual question",',
+    '    "openingHook": "1 sentence — sticky opening line",',
     '    "slug": "kebab-case-slug",',
     '    "outline": [{ "sectionTitle": "...", "canonNodeIds": ["cn_..."], "intent": "..." }],',
-    '    "primaryCanonNodeIds": ["cn_..."],   // 1-20, must come from the canon list above',
-    '    "supportingCanonNodeIds": ["cn_..."],// 0-50, must come from the canon list above',
+    '    "primaryCanonNodeIds": ["cn_..."],',
+    '    "supportingCanonNodeIds": ["cn_..."],',
     '    "pageWorthinessScore": 0-100,',
-    '    "position": 0',
-    '  },',
-    '  { ... another distinct brief ... },',
-    '  ...',
+    '    "position": 0 },',
+    '  { ... }',
     ']',
-    '',
-    'Begin your response with the character `[` and produce 8-15 entries.',
   ].join('\n');
+}
 
-  console.info('[codex-audit] Generating page briefs…');
-  return codexJson<PageBriefOut[]>(prompt, 'page_briefs', 'array');
+async function generatePageBriefs(
+  profile: ChannelProfilePayload,
+  canonNodesWithIds: Array<{ id: string; type: string; payload: Record<string, unknown>; pageWorthinessScore: number }>,
+): Promise<PageBriefOut[]> {
+  const TARGET = 18;
+  const MIN_ACCEPTABLE = 8;
+  const MAX_ITERATIONS = 12;
+  const pageworthy = canonNodesWithIds.filter((n) => n.pageWorthinessScore >= 60);
+  // Auto-derive must-cover page titles from canon node titles (one-page-per-major-framework heuristic).
+  const mustCover = pageworthy
+    .filter((n) => ['framework', 'playbook', 'lesson', 'principle', 'tactic', 'topic'].includes(n.type))
+    .map((n) => (n.payload as { title?: string }).title ?? '')
+    .filter((t) => t.length > 0)
+    .slice(0, 28);
+
+  const accumulated: PageBriefOut[] = [];
+  const seenTitles = new Set<string>();
+
+  for (let i = 0; i < MAX_ITERATIONS; i += 1) {
+    const remaining = TARGET - accumulated.length;
+    if (remaining <= 0) break;
+    const prompt = buildBriefPrompt(profile, pageworthy, [...seenTitles], remaining, mustCover);
+    console.info(`[codex-audit] briefs iteration ${i + 1}/${MAX_ITERATIONS} (have ${accumulated.length}, asking for up to ${remaining} more)…`);
+    let batch: PageBriefOut[];
+    try {
+      batch = await codexJson<PageBriefOut[]>(prompt, `page_briefs_iter_${i + 1}`, 'array', DEFAULT_TIMEOUT_MS);
+    } catch (err) {
+      console.warn(`[codex-audit] briefs iteration ${i + 1} failed: ${(err as Error).message}`);
+      if (accumulated.length >= MIN_ACCEPTABLE) break;
+      continue;
+    }
+    let added = 0;
+    for (const b of batch) {
+      const title = b.pageTitle?.trim();
+      if (!title) continue;
+      if (seenTitles.has(title.toLowerCase())) continue;
+      seenTitles.add(title.toLowerCase());
+      accumulated.push(b);
+      added += 1;
+    }
+    console.info(`[codex-audit] briefs iteration ${i + 1}: +${added} new (total ${accumulated.length})`);
+    if (added === 0) break;
+  }
+
+  if (accumulated.length < MIN_ACCEPTABLE) {
+    throw new Error(`page_briefs: only got ${accumulated.length} after ${MAX_ITERATIONS} iterations (min ${MIN_ACCEPTABLE})`);
+  }
+  console.info(`[codex-audit] page brief synthesis complete: ${accumulated.length} briefs`);
+  return accumulated;
 }
 
 // ── Main orchestration ─────────────────────────────────────────────────────
@@ -995,31 +1049,26 @@ async function main() {
   }
 
   // ── 4. Page briefs ──────────────────────────────────────────────────
-  // Skip generation if briefs already exist for this run.
-  const existingBriefs = await db
-    .select({ id: pageBrief.id })
-    .from(pageBrief)
-    .where(eq(pageBrief.runId, runId))
-    .limit(1);
-  if (existingBriefs.length > 0) {
-    console.info(`[codex-audit] page_brief rows already exist; skipping generation`);
+  const existingBriefsRows = await db.select({ id: pageBrief.id }).from(pageBrief).where(eq(pageBrief.runId, runId));
+  if (existingBriefsRows.length > 0 && !regenBriefs) {
+    console.info(`[codex-audit] ${existingBriefsRows.length} page_brief rows already exist; skipping generation (use --regen-briefs to redo)`);
   } else {
+    if (regenBriefs && existingBriefsRows.length > 0) {
+      console.info(`[codex-audit] --regen-briefs: deleting ${existingBriefsRows.length} existing page_brief rows`);
+      await db.delete(pageBrief).where(eq(pageBrief.runId, runId));
+    }
     const briefsOut = await generatePageBriefs(profilePayload, persistedCanonNodes);
     console.info(`[codex-audit] Codex returned ${briefsOut.length} page briefs`);
     const validIds = new Set(persistedCanonNodes.map((n) => n.id));
     for (let i = 0; i < briefsOut.length; i += 1) {
       const b = briefsOut[i]!;
       const primary = b.primaryCanonNodeIds.filter((id) => validIds.has(id));
-      const supporting = b.supportingCanonNodeIds.filter((id) => validIds.has(id));
+      const supporting = (b.supportingCanonNodeIds ?? []).filter((id) => validIds.has(id));
       if (primary.length === 0) {
         console.warn(`[codex-audit] brief ${i} dropped: no valid primary canon node IDs`);
         continue;
       }
-      const payload = {
-        ...b,
-        primaryCanonNodeIds: primary,
-        supportingCanonNodeIds: supporting,
-      };
+      const payload = { ...b, primaryCanonNodeIds: primary, supportingCanonNodeIds: supporting };
       await db.insert(pageBrief).values({
         id: `pb_${crypto.randomUUID().slice(0, 12)}`,
         workspaceId: run.workspaceId,
