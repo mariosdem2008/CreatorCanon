@@ -764,47 +764,82 @@ async function generateSynthesisNodes(
   canonNodesWithIds: Array<{ id: string; type: string; payload: Record<string, unknown> }>,
   vics: Array<{ videoId: string; title: string; payload: VicPayload }>,
 ): Promise<SynthesisNodeOut[]> {
+  const TARGET = 5;
+  const MAX_ITERATIONS = 6;
+  const accumulated: SynthesisNodeOut[] = [];
+  const seenTitles = new Set<string>();
+
   const canonBlock = canonNodesWithIds
     .map((n) => `### [${n.id}] ${n.type} · ${(n.payload as { title?: string }).title ?? '(Untitled)'}\n${(n.payload as { summary?: string }).summary ?? ''}`)
     .join('\n\n');
   const vicTitles = vics.map((v) => `- ${v.videoId}: ${v.title}`).join('\n');
 
-  const prompt = [
-    'You are cross_video_synthesizer. Identify the 3-5 unifying theories or meta-narratives that thread through this creator\'s entire run.',
-    '',
-    '# Channel profile',
-    JSON.stringify(profile, null, 2),
-    '',
-    `# Source videos (${vics.length})`,
-    vicTitles,
-    '',
-    `# Canon nodes already extracted (${canonNodesWithIds.length})`,
-    canonBlock,
-    '',
-    '# Instructions',
-    'A "synthesis node" is a META-claim that connects 3+ existing canon nodes under a single unifying argument. Examples of the SHAPE we want (pretend this is for a different creator):',
-    '- "Hormozi\'s Unified Theory of Leverage" — connects 1-1-1 Rule, AI Workflow Thinking, Premium 1-on-1, Barbell Strategy under "every game has an asymmetric input."',
-    '- "The Founder\'s Survival-to-Scale Sequence" — connects First $100K Roadmap, Premium 1-on-1 Bootstrap, Workflow Thinking, AI as Leverage under a phased journey.',
-    '',
-    'Find 3-5 such cross-cutting theories. For each, identify which canon nodes it connects (by ID) and why it matters strategically.',
-    '',
-    '# OUTPUT FORMAT — CRITICAL',
-    'Respond with a single JSON ARRAY of 3-5 synthesis objects. First char `[`, last char `]`. NEVER return a single object — wrap as `[{...}]`. No preamble, no markdown fences.',
-    '',
-    'Skeleton:',
-    '[',
-    '  { "title": "...",',
-    '    "summary": "1-2 sentences naming the unifying argument",',
-    '    "unifyingThread": "1 sentence — the single thread connecting the children",',
-    '    "childCanonNodeIds": ["cn_..."],  // 3+ IDs from the canon list above',
-    '    "whyItMatters": "1-2 sentences — why a hub reader benefits from seeing these together",',
-    '    "pageWorthinessScore": 0-100 },',
-    '  { ... another distinct synthesis ... }',
-    ']',
-  ].join('\n');
+  for (let i = 0; i < MAX_ITERATIONS; i += 1) {
+    const remaining = TARGET - accumulated.length;
+    if (remaining <= 0) break;
+    const alreadyBlock = accumulated.length > 0
+      ? `\n\n# Already-generated synthesis theories (DO NOT repeat — produce DIFFERENT cross-cutting theories)\n${[...seenTitles].map((t) => `- ${t}`).join('\n')}`
+      : '';
+    const prompt = [
+      'You are cross_video_synthesizer. Identify cross-cutting unified theories or meta-narratives that thread through this creator\'s entire run.',
+      '',
+      '# Channel profile',
+      JSON.stringify(profile, null, 2),
+      '',
+      `# Source videos (${vics.length})`,
+      vicTitles,
+      '',
+      `# Canon nodes already extracted (${canonNodesWithIds.length})`,
+      canonBlock,
+      alreadyBlock,
+      '',
+      '# Instructions',
+      `Find up to ${remaining} more DISTINCT meta-claims that connect 3+ existing canon nodes under a single unifying argument. Examples of the SHAPE we want:`,
+      '- "The Money/Cashflow Sequence" — connects First-100K Roadmap, Premium 1-on-1 Bootstrap, Expensive-to-Few, etc.',
+      '- "The Anti-Comfort Theory" — connects Cringe Reframe, Frustration Tolerance, Passion Reality Test, Document the Comeback under "discomfort is the input."',
+      '- "Pricing-and-Positioning Thread" — connects Expensive-to-Few + Premium 1-on-1 + Value Deconstruction + Anchor-and-Downsell + Three Frames under "every offer is an asymmetric bet."',
+      '',
+      'Each synthesis must connect at least 3 canon nodes BY ID from the canon list above.',
+      '',
+      '# OUTPUT FORMAT — CRITICAL',
+      `Respond with a single JSON ARRAY of AT LEAST ${Math.min(remaining, 2)} synthesis objects. First char \`[\`, last char \`]\`. NEVER a single object — wrap as \`[{...}]\`. No preamble, no markdown fences.`,
+      '',
+      'Skeleton:',
+      '[',
+      '  { "title": "...",',
+      '    "summary": "1-2 sentences naming the unifying argument",',
+      '    "unifyingThread": "1 sentence — the single thread connecting the children",',
+      '    "childCanonNodeIds": ["cn_..."],  // 3+ IDs from the canon list above',
+      '    "whyItMatters": "1-2 sentences — why a hub reader benefits",',
+      '    "pageWorthinessScore": 0-100 },',
+      '  { ... another distinct synthesis ... }',
+      ']',
+    ].join('\n');
 
-  console.info('[codex-audit] Generating cross-video synthesis nodes…');
-  return codexJson<SynthesisNodeOut[]>(prompt, 'synthesis_nodes', 'array', DEFAULT_TIMEOUT_MS);
+    console.info(`[codex-audit] synthesis iteration ${i + 1}/${MAX_ITERATIONS} (have ${accumulated.length}, asking for up to ${remaining} more)…`);
+    let batch: SynthesisNodeOut[];
+    try {
+      batch = await codexJson<SynthesisNodeOut[]>(prompt, `synthesis_iter_${i + 1}`, 'array', DEFAULT_TIMEOUT_MS);
+    } catch (err) {
+      console.warn(`[codex-audit] synthesis iteration ${i + 1} failed: ${(err as Error).message}`);
+      continue;
+    }
+    let added = 0;
+    for (const s of batch) {
+      const title = s.title?.trim();
+      if (!title) continue;
+      const lower = title.toLowerCase();
+      if (seenTitles.has(lower)) continue;
+      seenTitles.add(lower);
+      accumulated.push(s);
+      added += 1;
+    }
+    console.info(`[codex-audit] synthesis iteration ${i + 1}: +${added} new (total ${accumulated.length})`);
+    if (added === 0) break;
+  }
+
+  console.info(`[codex-audit] synthesis complete: ${accumulated.length} distinct nodes`);
+  return accumulated;
 }
 
 interface ReaderJourneyOut {
@@ -982,6 +1017,7 @@ async function main() {
   const regenCanon = process.argv.includes('--regen-canon');
   const regenBriefs = process.argv.includes('--regen-briefs');
   const perVideoCanon = process.argv.includes('--per-video-canon');
+  const regenSynthesis = process.argv.includes('--regen-synthesis');
 
   const videos = await loadVideos(runId, run.videoSetId);
   if (videos.length === 0) throw new Error('Run has no videos');
@@ -1127,7 +1163,21 @@ async function main() {
     return (row[0]?.payload as { kind?: string })?.kind === 'synthesis';
   }))).some(Boolean);
 
-  if (!synthesisAlreadyExists) {
+  if (!synthesisAlreadyExists || regenSynthesis) {
+    if (regenSynthesis && synthesisAlreadyExists) {
+      // Delete only the synthesis-kind topic nodes (preserve reference_* topic nodes)
+      const toDelete = await db
+        .select({ id: canonNode.id, payload: canonNode.payload })
+        .from(canonNode)
+        .where(and(eq(canonNode.runId, runId), eq(canonNode.type, 'topic')));
+      const deleteIds = toDelete
+        .filter((r) => (r.payload as { kind?: string })?.kind === 'synthesis')
+        .map((r) => r.id);
+      if (deleteIds.length > 0) {
+        await db.delete(canonNode).where(inArray(canonNode.id, deleteIds));
+        console.info(`[codex-audit] --regen-synthesis: deleted ${deleteIds.length} prior synthesis nodes`);
+      }
+    }
     try {
       const synthOut = await generateSynthesisNodes(profilePayload, persistedCanonNodes, vicResults);
       const validIds = new Set(persistedCanonNodes.map((n) => n.id));
