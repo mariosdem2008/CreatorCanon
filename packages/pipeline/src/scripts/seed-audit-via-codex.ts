@@ -590,6 +590,122 @@ interface PageBriefOut {
   position: number;
 }
 
+interface SynthesisNodeOut {
+  title: string;
+  summary: string;
+  unifyingThread: string;
+  childCanonNodeIds: string[];
+  whyItMatters: string;
+  pageWorthinessScore: number;
+}
+
+async function generateSynthesisNodes(
+  profile: ChannelProfilePayload,
+  canonNodesWithIds: Array<{ id: string; type: string; payload: Record<string, unknown> }>,
+  vics: Array<{ videoId: string; title: string; payload: VicPayload }>,
+): Promise<SynthesisNodeOut[]> {
+  const canonBlock = canonNodesWithIds
+    .map((n) => `### [${n.id}] ${n.type} · ${(n.payload as { title?: string }).title ?? '(Untitled)'}\n${(n.payload as { summary?: string }).summary ?? ''}`)
+    .join('\n\n');
+  const vicTitles = vics.map((v) => `- ${v.videoId}: ${v.title}`).join('\n');
+
+  const prompt = [
+    'You are cross_video_synthesizer. Identify the 3-5 unifying theories or meta-narratives that thread through this creator\'s entire run.',
+    '',
+    '# Channel profile',
+    JSON.stringify(profile, null, 2),
+    '',
+    `# Source videos (${vics.length})`,
+    vicTitles,
+    '',
+    `# Canon nodes already extracted (${canonNodesWithIds.length})`,
+    canonBlock,
+    '',
+    '# Instructions',
+    'A "synthesis node" is a META-claim that connects 3+ existing canon nodes under a single unifying argument. Examples of the SHAPE we want (pretend this is for a different creator):',
+    '- "Hormozi\'s Unified Theory of Leverage" — connects 1-1-1 Rule, AI Workflow Thinking, Premium 1-on-1, Barbell Strategy under "every game has an asymmetric input."',
+    '- "The Founder\'s Survival-to-Scale Sequence" — connects First $100K Roadmap, Premium 1-on-1 Bootstrap, Workflow Thinking, AI as Leverage under a phased journey.',
+    '',
+    'Find 3-5 such cross-cutting theories. For each, identify which canon nodes it connects (by ID) and why it matters strategically.',
+    '',
+    '# OUTPUT FORMAT — CRITICAL',
+    'Respond with a single JSON ARRAY of 3-5 synthesis objects. First char `[`, last char `]`. NEVER return a single object — wrap as `[{...}]`. No preamble, no markdown fences.',
+    '',
+    'Skeleton:',
+    '[',
+    '  { "title": "...",',
+    '    "summary": "1-2 sentences naming the unifying argument",',
+    '    "unifyingThread": "1 sentence — the single thread connecting the children",',
+    '    "childCanonNodeIds": ["cn_..."],  // 3+ IDs from the canon list above',
+    '    "whyItMatters": "1-2 sentences — why a hub reader benefits from seeing these together",',
+    '    "pageWorthinessScore": 0-100 },',
+    '  { ... another distinct synthesis ... }',
+    ']',
+  ].join('\n');
+
+  console.info('[codex-audit] Generating cross-video synthesis nodes…');
+  return codexJson<SynthesisNodeOut[]>(prompt, 'synthesis_nodes', 'array', DEFAULT_TIMEOUT_MS);
+}
+
+interface ReaderJourneyOut {
+  title: string;
+  summary: string;
+  phases: Array<{
+    phaseNumber: number;
+    name: string;
+    readerState: string;
+    primaryCanonNodeIds: string[];
+    nextStepWhen: string;
+  }>;
+}
+
+async function generateReaderJourney(
+  profile: ChannelProfilePayload,
+  canonNodesWithIds: Array<{ id: string; type: string; payload: Record<string, unknown> }>,
+): Promise<ReaderJourneyOut> {
+  const canonBlock = canonNodesWithIds
+    .map((n) => `### [${n.id}] ${n.type} · ${(n.payload as { title?: string }).title ?? '(Untitled)'}\n${(n.payload as { summary?: string }).summary ?? ''}`)
+    .join('\n\n');
+
+  const prompt = [
+    'You are reader_journey_designer. Order this creator\'s canon content into a multi-phase journey a reader walks through over time.',
+    '',
+    '# Channel profile',
+    JSON.stringify(profile, null, 2),
+    '',
+    `# Canon nodes (${canonNodesWithIds.length})`,
+    canonBlock,
+    '',
+    '# Instructions',
+    'Identify 4-6 sequential phases a reader of this creator\'s hub passes through. Each phase has a reader state (where the reader IS), the canon nodes that serve that phase, and a "next-step when" that signals readiness to graduate to the next phase.',
+    '',
+    'For Hormozi-style operator content, phases typically look like:',
+    '1. Survival → first $100K roadmap',
+    '2. Cashflow → premium 1-on-1, focus, pricing',
+    '3. Scale → workflow thinking, hiring, offers',
+    '4. Leverage → AI as leverage, BYOA',
+    '5. Investing → barbell strategy, durable bets',
+    '',
+    'Adapt these to the actual canon nodes available. Skip phases that have no nodes.',
+    '',
+    '# OUTPUT FORMAT',
+    'Respond with EXACTLY ONE JSON object — first char `{`, last char `}`. No preamble, no markdown fences.',
+    '',
+    'Skeleton:',
+    '{',
+    '  "title": "The Hormozi Reader Journey",',
+    '  "summary": "1-2 sentences describing what the reader gets out of following this sequence",',
+    '  "phases": [',
+    '    { "phaseNumber": 1, "name": "...", "readerState": "1 sentence — what\'s true about the reader RIGHT NOW", "primaryCanonNodeIds": ["cn_..."], "nextStepWhen": "1 sentence — what signals readiness for phase 2" },',
+    '    { "phaseNumber": 2, ... }',
+    '  ]',
+    '}',
+  ].join('\n');
+
+  console.info('[codex-audit] Generating Reader Journey Card…');
+  return codexJson<ReaderJourneyOut>(prompt, 'reader_journey', 'object', DEFAULT_TIMEOUT_MS);
+}
+
 async function generatePageBriefs(
   profile: ChannelProfilePayload,
   canonNodesWithIds: Array<{ id: string; type: string; payload: Record<string, unknown>; pageWorthinessScore: number }>,
@@ -782,6 +898,100 @@ async function main() {
       persistedCanonNodes.push({ id, type: node.type, payload: node.payload as Record<string, unknown>, pageWorthinessScore: clampScore(node.pageWorthinessScore) });
     }
     console.info(`[codex-audit] ${persistedCanonNodes.length} canon nodes written`);
+  }
+
+  // ── 3.5 Cross-video synthesis nodes ────────────────────────────────
+  const existingSynthesis = await db
+    .select({ id: canonNode.id })
+    .from(canonNode)
+    .where(and(eq(canonNode.runId, runId), eq(canonNode.type, 'topic')));
+  const synthesisAlreadyExists = (await Promise.all(existingSynthesis.map(async (r) => {
+    const row = await db.select({ payload: canonNode.payload }).from(canonNode).where(eq(canonNode.id, r.id)).limit(1);
+    return (row[0]?.payload as { kind?: string })?.kind === 'synthesis';
+  }))).some(Boolean);
+
+  if (!synthesisAlreadyExists) {
+    try {
+      const synthOut = await generateSynthesisNodes(profilePayload, persistedCanonNodes, vicResults);
+      const validIds = new Set(persistedCanonNodes.map((n) => n.id));
+      for (const s of synthOut) {
+        const children = (s.childCanonNodeIds ?? []).filter((id) => validIds.has(id));
+        if (children.length < 2) {
+          console.warn(`[codex-audit] synthesis "${s.title}" dropped: only ${children.length} valid child IDs`);
+          continue;
+        }
+        const id = `cn_${crypto.randomUUID().slice(0, 12)}`;
+        await db.insert(canonNode).values({
+          id,
+          workspaceId: run.workspaceId,
+          runId,
+          type: 'topic',
+          payload: { kind: 'synthesis', title: s.title, summary: s.summary, unifyingThread: s.unifyingThread, childCanonNodeIds: children, whyItMatters: s.whyItMatters } as Record<string, unknown>,
+          evidenceSegmentIds: [],
+          sourceVideoIds: vicResults.map((v) => v.videoId),
+          evidenceQuality: 'high',
+          origin: 'derived',
+          confidenceScore: 90,
+          pageWorthinessScore: clampScore(s.pageWorthinessScore),
+          specificityScore: 80,
+          creatorUniquenessScore: 90,
+          citationCount: 0,
+          sourceCoverage: vicResults.length,
+        }).onConflictDoNothing();
+        persistedCanonNodes.push({ id, type: 'topic', payload: { kind: 'synthesis', title: s.title, summary: s.summary } as Record<string, unknown>, pageWorthinessScore: clampScore(s.pageWorthinessScore) });
+      }
+      console.info(`[codex-audit] wrote ${synthOut.length} cross-video synthesis nodes`);
+    } catch (err) {
+      console.warn(`[codex-audit] synthesis stage failed (continuing): ${(err as Error).message}`);
+    }
+  } else {
+    console.info(`[codex-audit] synthesis nodes already present; skipping`);
+  }
+
+  // ── 3.6 Reader Journey Card ────────────────────────────────────────
+  const existingJourney = await db
+    .select({ payload: canonNode.payload })
+    .from(canonNode)
+    .where(and(eq(canonNode.runId, runId), eq(canonNode.type, 'playbook')))
+    .limit(50);
+  const journeyAlreadyExists = existingJourney.some((r) => (r.payload as { kind?: string })?.kind === 'reader_journey');
+
+  if (!journeyAlreadyExists) {
+    try {
+      const journey = await generateReaderJourney(profilePayload, persistedCanonNodes);
+      const validIds = new Set(persistedCanonNodes.map((n) => n.id));
+      const cleanedPhases = (journey.phases ?? []).map((p) => ({
+        ...p,
+        primaryCanonNodeIds: (p.primaryCanonNodeIds ?? []).filter((id) => validIds.has(id)),
+      })).filter((p) => p.primaryCanonNodeIds.length > 0);
+      if (cleanedPhases.length === 0) {
+        console.warn(`[codex-audit] reader journey dropped: no phases reference valid canon node IDs`);
+      } else {
+        const id = `cn_${crypto.randomUUID().slice(0, 12)}`;
+        await db.insert(canonNode).values({
+          id,
+          workspaceId: run.workspaceId,
+          runId,
+          type: 'playbook',
+          payload: { kind: 'reader_journey', title: journey.title, summary: journey.summary, phases: cleanedPhases } as Record<string, unknown>,
+          evidenceSegmentIds: [],
+          sourceVideoIds: vicResults.map((v) => v.videoId),
+          evidenceQuality: 'high',
+          origin: 'derived',
+          confidenceScore: 95,
+          pageWorthinessScore: 95,
+          specificityScore: 85,
+          creatorUniquenessScore: 90,
+          citationCount: 0,
+          sourceCoverage: vicResults.length,
+        });
+        console.info(`[codex-audit] wrote Reader Journey Card with ${cleanedPhases.length} phases`);
+      }
+    } catch (err) {
+      console.warn(`[codex-audit] reader journey stage failed (continuing): ${(err as Error).message}`);
+    }
+  } else {
+    console.info(`[codex-audit] reader journey already present; skipping`);
   }
 
   // ── 4. Page briefs ──────────────────────────────────────────────────
