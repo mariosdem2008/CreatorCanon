@@ -210,6 +210,36 @@ export function buildAuditMarkdown(view: RunAuditView): string {
           if (allStrings) writeStringArray(lines, prettyKey(k), v);
         }
       }
+
+      const payloadKind = (n.payload as { kind?: string })?.kind;
+      if (payloadKind === 'reference_mistakes') {
+        const mistakes = (n.payload as { mistakes?: Array<{ mistake: string; why: string; correction: string }> }).mistakes ?? [];
+        if (mistakes.length > 0) {
+          lines.push(``);
+          lines.push(`**Mistakes (${mistakes.length}):**`);
+          for (const m of mistakes) {
+            lines.push(`- **Mistake:** ${m.mistake}`);
+            lines.push(`  - _Why:_ ${m.why}`);
+            lines.push(`  - _Correction:_ ${m.correction}`);
+          }
+          lines.push(``);
+        }
+      }
+      if (payloadKind === 'reader_journey') {
+        const phases = (n.payload as { phases?: Array<{ phaseNumber: number; name: string; readerState: string; primaryCanonNodeIds: string[]; nextStepWhen: string }> }).phases ?? [];
+        if (phases.length > 0) {
+          lines.push(``);
+          lines.push(`**Phases (${phases.length}):**`);
+          for (const phase of phases) {
+            lines.push(``);
+            lines.push(`- **Phase ${phase.phaseNumber}: ${phase.name}**`);
+            lines.push(`  - _Reader state:_ ${phase.readerState}`);
+            lines.push(`  - _Primary canon nodes:_ ${phase.primaryCanonNodeIds.join(', ')}`);
+            lines.push(`  - _Next step when:_ ${phase.nextStepWhen}`);
+          }
+          lines.push(``);
+        }
+      }
       lines.push(``);
     }
   }
@@ -261,6 +291,46 @@ export function buildAuditMarkdown(view: RunAuditView): string {
           const allStrings = v.every((x): x is string => typeof x === 'string');
           if (allStrings) writeStringArray(lines, prettyKey(k), v);
         }
+      }
+      lines.push(``);
+    }
+  }
+
+  // ── Cluster Topology ───────────────────────────────────
+  const briefsWithStrategy = view.pageBriefs.filter((b) => {
+    const strategy = (b.payload as { editorialStrategy?: unknown }).editorialStrategy;
+    return strategy != null;
+  });
+  if (briefsWithStrategy.length > 0) {
+    lines.push(``);
+    lines.push(`## Cluster Topology — ${briefsWithStrategy.length} briefs with editorial strategy`);
+    lines.push(``);
+    // Group by parentTopic; "null" parents are pillars
+    const byParent = new Map<string, typeof briefsWithStrategy>();
+    for (const b of briefsWithStrategy) {
+      const strategy = (b.payload as { editorialStrategy?: { clusterRole?: { tier?: string; parentTopic?: string | null } } }).editorialStrategy;
+      const tier = strategy?.clusterRole?.tier ?? 'spoke';
+      const parent = tier === 'pillar' ? '(pillars)' : (strategy?.clusterRole?.parentTopic ?? '(orphan)');
+      const arr = byParent.get(parent) ?? [];
+      arr.push(b);
+      byParent.set(parent, arr);
+    }
+    // Pillars first, then named clusters, then orphans
+    const sortedKeys = ['(pillars)', ...[...byParent.keys()].filter((k) => k !== '(pillars)' && k !== '(orphan)').sort(), '(orphan)'].filter((k) => byParent.has(k));
+    for (const key of sortedKeys) {
+      const arr = byParent.get(key)!;
+      lines.push(`### ${key === '(pillars)' ? 'Pillar pages' : key === '(orphan)' ? 'Unclustered (orphans)' : `Cluster: ${key}`} (${arr.length})`);
+      lines.push(``);
+      for (const b of arr) {
+        const p = b.payload as { pageTitle?: string; slug?: string; editorialStrategy?: { journeyPhase?: number; persona?: { name?: string }; seo?: { primaryKeyword?: string }; cta?: { primary?: string } } };
+        const phase = p.editorialStrategy?.journeyPhase;
+        const persona = p.editorialStrategy?.persona?.name;
+        const keyword = p.editorialStrategy?.seo?.primaryKeyword;
+        const cta = p.editorialStrategy?.cta?.primary;
+        lines.push(`- **${p.pageTitle ?? '(Untitled)'}** \`${p.slug ?? '?'}\``);
+        if (phase != null) lines.push(`  - _Phase ${phase}_${persona ? ` · _Persona: ${persona}_` : ''}`);
+        if (keyword) lines.push(`  - _SEO target: \`${keyword}\`_`);
+        if (cta) lines.push(`  - _CTA: ${cta}_`);
       }
       lines.push(``);
     }
@@ -404,14 +474,51 @@ function linkifyCitations(
   segmentMap: Record<string, { videoId: string; startMs: number }>,
   youtubeIdByVideoId: Record<string, string | null>,
 ): string {
-  // Match [<id>] where <id> is a UUID-like or 12+ char alphanumeric.
-  const pattern =
-    /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|[a-f0-9]{12,})\]/gi;
-  return markdown.replace(pattern, (whole, id: string) => {
+  // 1. UUID-shaped or 32+-char hex IDs in [...]
+  const uuidPattern = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|[a-f0-9]{32})\]/gi;
+  let out = markdown.replace(uuidPattern, (whole, id: string) => {
     const seg = segmentMap[id];
     if (!seg) return whole;
     const yt = youtubeIdByVideoId[seg.videoId];
     if (!yt) return `[${formatYoutubeTs(seg.startMs)}]`;
     return `[${formatYoutubeTs(seg.startMs)}](${youtubeWatchUrl(yt, seg.startMs)})`;
   });
+
+  // 2. Multi-ID brackets: [uuid1, uuid2, ...]. We linkify each that resolves.
+  const multiIdPattern = /\[((?:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(?:,\s*)?)+)\]/gi;
+  out = out.replace(multiIdPattern, (whole, ids: string) => {
+    const links = ids
+      .split(/,\s*/)
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => {
+        const seg = segmentMap[id];
+        if (!seg) return null;
+        const yt = youtubeIdByVideoId[seg.videoId];
+        const ts = formatYoutubeTs(seg.startMs);
+        return yt ? `[${ts}](${youtubeWatchUrl(yt, seg.startMs)})` : `[${ts}]`;
+      })
+      .filter(Boolean);
+    return links.length > 0 ? links.join(', ') : whole;
+  });
+
+  // 3. Pure ms-range brackets: [123456ms-789012ms] → linkify the start time
+  //    when we can resolve the segment. Without a segmentId, we fall back
+  //    to formatting the start as m:ss (no link, since we don't know the
+  //    video). Only useful when the citation is inline within a section
+  //    that already names the video.
+  const msRangePattern = /\[(\d+)ms-(\d+)ms\]/g;
+  out = out.replace(msRangePattern, (whole, startMs: string) => {
+    const ms = parseInt(startMs, 10);
+    if (!Number.isFinite(ms)) return whole;
+    return `[${formatYoutubeTs(ms)}]`;
+  });
+
+  // 4. Mixed time-range + short hex: [2:46-3:26, ae861cea] — leave the
+  //    h:m:s range as-is, drop the hex (it's a partial UUID we can't
+  //    resolve). Express the result as just the time range.
+  const mixedPattern = /\[(\d+:\d+(?:-\d+:\d+)?),\s*[a-f0-9]+(?:\/[a-f0-9]+)*\]/g;
+  out = out.replace(mixedPattern, (_whole, timeRange: string) => `[${timeRange}]`);
+
+  return out;
 }
