@@ -124,6 +124,110 @@ async function extractFrame(inputPath: string, timestampSec: number, outputJpg: 
   });
 }
 
+/**
+ * Extract scene-change frames using ffmpeg's `select='gt(scene,N)'` filter.
+ * Frames are written to `outputDir/scene_NNNN.jpg` and paired with their
+ * presentation timestamps via the `showinfo` filter (which emits one log
+ * line per output frame containing `pts_time:N.N`).
+ *
+ * Scene threshold is 0.0-1.0:
+ *   0.20 → very sensitive, catches subtle camera moves
+ *   0.30 → balanced (default), catches slide changes + B-roll cuts
+ *   0.45 → only dramatic cuts (fast-paced edited content)
+ *
+ * Override via VISUAL_MOMENTS_SCENE_THRESHOLD. Hard cap on frame count via
+ * VISUAL_MOMENTS_SCENE_CAP so a fast-cut sequence doesn't explode the
+ * vision-LLM call count — we stride-thin to the cap if exceeded.
+ *
+ * Returns [] when ffmpeg's scene filter found no scene changes (which
+ * happens for purely static talking-head video) — caller should fall
+ * back to fixed-interval sampling.
+ */
+async function extractSceneChangeFrames(
+  inputPath: string,
+  outputDir: string,
+): Promise<Array<{ timestampSec: number; jpgPath: string }>> {
+  const threshold = parseFloat(process.env.VISUAL_MOMENTS_SCENE_THRESHOLD ?? '0.3');
+  const frameCap = parseInt(process.env.VISUAL_MOMENTS_SCENE_CAP ?? '40', 10);
+
+  // showinfo writes pts_time:N.N to stderr per emitted frame. We capture
+  // stderr and parse it to recover the timestamp for each scene_NNNN.jpg.
+  const stderr = await new Promise<string>((resolve, reject) => {
+    const proc = spawn(ffmpegBin(), [
+      '-y',
+      '-i', inputPath,
+      '-vf', `select='gt(scene\\,${threshold})',showinfo`,
+      '-vsync', 'vfr',
+      '-q:v', '2',
+      path.join(outputDir, 'scene_%04d.jpg'),
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let buf = '';
+    proc.stderr?.on('data', (d: Buffer) => { buf += d.toString(); });
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      // ffmpeg returns 0 even when the scene filter emits zero frames.
+      if (code !== 0) reject(new Error(`ffmpeg scene-extract exit ${code}: ${buf.slice(-300)}`));
+      else resolve(buf);
+    });
+  });
+
+  const ptsRe = /pts_time:(\d+(?:\.\d+)?)/g;
+  const timestamps: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = ptsRe.exec(stderr)) !== null) {
+    timestamps.push(parseFloat(m[1]!));
+  }
+
+  // Pair each extracted timestamp with its filename (scene_0001.jpg,
+  // scene_0002.jpg, ...). Skip pairs whose .jpg didn't materialize.
+  const frames: Array<{ timestampSec: number; jpgPath: string }> = [];
+  for (let i = 0; i < timestamps.length; i += 1) {
+    const idx = String(i + 1).padStart(4, '0');
+    const jpgPath = path.join(outputDir, `scene_${idx}.jpg`);
+    if (await fileExists(jpgPath)) {
+      frames.push({ timestampSec: timestamps[i]!, jpgPath });
+    }
+  }
+
+  // Cap if a fast-cut sequence produced too many — stride-thin uniformly
+  // so we keep coverage of the whole timeline.
+  if (frames.length > frameCap) {
+    const stride = Math.ceil(frames.length / frameCap);
+    const thinned = frames.filter((_, i) => i % stride === 0).slice(0, frameCap);
+    console.info(`[visual-moments]   scene detector emitted ${frames.length} frames; stride-thinning to ${thinned.length}`);
+    return thinned;
+  }
+  return frames;
+}
+
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Fallback to fixed-interval sampling when scene-detect is disabled or yields too few frames. */
+function buildFixedIntervalSamples(
+  tempDir: string,
+  durationSec: number,
+): Array<{ timestampSec: number; jpgPath: string; preExtracted: boolean }> {
+  const totalFrames = Math.min(
+    MAX_FRAMES_PER_VIDEO,
+    Math.max(1, Math.floor(durationSec / SAMPLE_INTERVAL_SEC)),
+  );
+  return Array.from({ length: totalFrames }, (_, i) => {
+    const tsSec = i * SAMPLE_INTERVAL_SEC;
+    return {
+      timestampSec: tsSec,
+      jpgPath: path.join(tempDir, `frame_${tsSec}.jpg`),
+      preExtracted: false,
+    };
+  });
+}
+
 async function classifyFrame(
   chain: ChainRunner,
   jpgPath: string,
@@ -205,29 +309,48 @@ async function processVideo(args: {
       return { framesAttempted: 0, framesKept: 0, providerCounts: {} };
     }
 
-    // 5. Build the timestamp list (every 10s, cap at 60).
-    const totalFrames = Math.min(
-      MAX_FRAMES_PER_VIDEO,
-      Math.max(1, Math.floor(durationSec / SAMPLE_INTERVAL_SEC)),
-    );
-    const timestamps: number[] = [];
-    for (let i = 0; i < totalFrames; i += 1) {
-      timestamps.push(i * SAMPLE_INTERVAL_SEC);
+    // 5. Build the frame list. Prefer scene-change extraction (gives us
+    //    the meaningful frames — slide transitions, B-roll cuts, demo
+    //    screens — while skipping near-duplicate talking-head shots).
+    //    Fall back to fixed-interval sampling when the scene detector
+    //    finds <3 frames (purely static talking-head video).
+    interface FrameSample { timestampSec: number; jpgPath: string; preExtracted: boolean }
+    const useSceneDetect = (process.env.VISUAL_MOMENTS_SCENE_DETECT ?? 'true').toLowerCase() !== 'false';
+    let sampleList: FrameSample[];
+    let strategy: 'scene-change' | 'fixed-interval';
+    if (useSceneDetect) {
+      try {
+        const scenes = await extractSceneChangeFrames(localMp4, tempDir);
+        if (scenes.length >= 3) {
+          sampleList = scenes.map((s) => ({ timestampSec: s.timestampSec, jpgPath: s.jpgPath, preExtracted: true }));
+          strategy = 'scene-change';
+        } else {
+          console.info(`[visual-moments]   scene detector found only ${scenes.length} frames; falling back to fixed-interval`);
+          sampleList = buildFixedIntervalSamples(tempDir, durationSec);
+          strategy = 'fixed-interval';
+        }
+      } catch (err) {
+        console.warn(`[visual-moments]   scene-detect failed (${(err as Error).message.slice(0, 200)}); falling back to fixed-interval`);
+        sampleList = buildFixedIntervalSamples(tempDir, durationSec);
+        strategy = 'fixed-interval';
+      }
+    } else {
+      sampleList = buildFixedIntervalSamples(tempDir, durationSec);
+      strategy = 'fixed-interval';
     }
 
     console.info(
       `[visual-moments] ${v.id} (${v.title ?? 'no title'}): ` +
-      `duration=${durationSec.toFixed(0)}s · sampling ${timestamps.length} frames`,
+      `duration=${durationSec.toFixed(0)}s · ${strategy} · ${sampleList.length} frames`,
     );
 
     const providerCounts: Record<string, number> = {};
-    for (let i = 0; i < timestamps.length; i += 1) {
-      const tsSec = timestamps[i]!;
-      const tsMs = tsSec * 1000;
-      const jpgPath = path.join(tempDir, `frame_${tsSec}.jpg`);
+    for (let i = 0; i < sampleList.length; i += 1) {
+      const { timestampSec: tsSec, jpgPath, preExtracted } = sampleList[i]!;
+      const tsMs = Math.round(tsSec * 1000);
       framesAttempted += 1;
       try {
-        await extractFrame(localMp4, tsSec, jpgPath);
+        if (!preExtracted) await extractFrame(localMp4, tsSec, jpgPath);
         const { classification: cls, provider } = await classifyFrame(visionChain, jpgPath);
         providerCounts[provider] = (providerCounts[provider] ?? 0) + 1;
 
@@ -264,18 +387,20 @@ async function processVideo(args: {
           });
           framesKept += 1;
           const desc = cls.description.length > 70 ? cls.description.slice(0, 67) + '...' : cls.description;
-          console.info(`[visual-moments]   t=${tsSec}s · KEEP · ${cls.type} · score=${cls.usefulnessScore} · ${desc}`);
+          console.info(`[visual-moments]   t=${tsSec.toFixed(1)}s · KEEP · ${cls.type} · score=${cls.usefulnessScore} · ${desc}`);
         }
         // else: low usefulness, drop silently to keep logs readable.
       } catch (err) {
-        console.warn(`[visual-moments]   t=${tsSec}s · WARN · ${(err as Error).message.slice(0, 200)}`);
+        console.warn(`[visual-moments]   t=${tsSec.toFixed(1)}s · WARN · ${(err as Error).message.slice(0, 200)}`);
       } finally {
         // Clean up frame file even on error so we don't blow up tempdir.
         await fs.rm(jpgPath, { force: true }).catch(() => undefined);
       }
 
-      // Rate-limit between Groq calls. Skip the sleep on the last frame.
-      if (i < timestamps.length - 1) {
+      // Rate-limit between vision-LLM calls. Skip the sleep on the last
+      // frame. Local Ollama doesn't need this but the chain may be using
+      // a remote provider, so keep the throttle in place.
+      if (i < sampleList.length - 1) {
         await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
       }
     }
