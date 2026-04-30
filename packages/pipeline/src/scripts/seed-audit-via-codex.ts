@@ -450,6 +450,166 @@ function extractMustCoverFromVics(
   };
 }
 
+/**
+ * Per-video must-cover extractor: pulls named frameworks, defined terms,
+ * and high-weight lessons from a SINGLE VIC. Used by the per-video canon
+ * pass so Codex focuses on canonizing one video's named library at a time.
+ */
+function extractMustCoverFromOneVic(
+  vic: { videoId: string; title: string; payload: VicPayload },
+): { frameworks: string[]; definitions: string[]; lessons: string[] } {
+  const frameworks = new Set<string>();
+  const definitions = new Set<string>();
+  const lessons = new Set<string>();
+  for (const f of vic.payload.frameworks ?? []) {
+    const name = (f as { name?: unknown }).name;
+    if (typeof name === 'string' && name.trim().length > 0) frameworks.add(name.trim());
+  }
+  for (const t of vic.payload.termsDefined ?? []) {
+    const term = (t as { term?: unknown }).term;
+    if (typeof term === 'string' && term.trim().length > 0) definitions.add(term.trim());
+  }
+  for (const l of vic.payload.lessons ?? []) {
+    if (typeof l === 'string' && l.trim().length > 20) lessons.add(l.trim().slice(0, 140));
+  }
+  return {
+    frameworks: [...frameworks],
+    definitions: [...definitions],
+    lessons: [...lessons].slice(0, 12),
+  };
+}
+
+function buildPerVideoCanonPrompt(
+  profile: ChannelProfilePayload,
+  vic: { videoId: string; title: string; payload: VicPayload },
+  alreadyHave: string[],
+  remaining: number,
+  mustCover: { frameworks: string[]; definitions: string[]; lessons: string[] },
+): string {
+  const remainingFrameworks = mustCover.frameworks.filter(
+    (f) => !alreadyHave.some((t) => t.toLowerCase().includes(f.toLowerCase())),
+  );
+  const remainingDefinitions = mustCover.definitions.filter(
+    (d) => !alreadyHave.some((t) => t.toLowerCase().includes(d.toLowerCase())),
+  );
+  return [
+    'You are canon_architect. Extract canon nodes from ONE video\'s intelligence card.',
+    '',
+    '# Channel profile',
+    JSON.stringify(profile, null, 2),
+    '',
+    `# Video: ${vic.title} (${vic.videoId})`,
+    '',
+    '# Video Intelligence Card (full payload)',
+    JSON.stringify(vic.payload, null, 2),
+    '',
+    alreadyHave.length > 0
+      ? `# Already-canonized titles from this video (do NOT repeat)\n${alreadyHave.map((t) => `- ${t}`).join('\n')}\n`
+      : '',
+    '# MUST-COVER LIST (every name from THIS video that deserves its own canon node)',
+    '## Named frameworks not yet canonized:',
+    remainingFrameworks.length > 0 ? remainingFrameworks.map((f) => `- ${f}`).join('\n') : '(all covered)',
+    '## Defined terms not yet canonized:',
+    remainingDefinitions.length > 0
+      ? remainingDefinitions.slice(0, 8).map((d) => `- ${d}`).join('\n')
+      : '(all covered)',
+    '',
+    '# Instructions',
+    `Produce up to ${remaining} canon nodes from THIS video. Prefer items from the must-cover list. Each node must be a distinct, named, teachable unit (framework / playbook / lesson / principle / pattern / tactic / definition / aha_moment / quote / topic / example).`,
+    '',
+    'For EACH node, the payload MUST include (use null where the source genuinely doesn\'t address it):',
+    '- title (use the EXACT name from the must-cover list when it applies)',
+    '- summary (1-2 sentences)',
+    '- whenToUse (1-2 sentences)',
+    '- whenNotToUse (1-2 sentences OR null)',
+    '- commonMistake (1 sentence OR null)',
+    '- successSignal (1 sentence)',
+    '- preconditions (string[]): for frameworks/playbooks/lessons',
+    '- steps (string[]): for frameworks/playbooks',
+    '- sequencingRationale (string OR null)',
+    '- failureModes (string[])',
+    '- examples (string[])',
+    '- definition (string): for definition-type nodes',
+    '',
+    'Set sourceVideoIds to ["' + vic.videoId + '"] and origin to "single_video".',
+    '',
+    '# OUTPUT FORMAT — CRITICAL',
+    `Respond with a single JSON ARRAY of AT LEAST ${Math.min(remaining, 5)} canon node objects. First char \`[\`, last char \`]\`. NEVER a single object — wrap as \`[{...}]\`. No preamble, no markdown fences.`,
+    '',
+    'Skeleton:',
+    '[',
+    '  { "type": "framework"|"lesson"|"playbook"|"principle"|"pattern"|"tactic"|"definition"|"aha_moment"|"quote"|"topic"|"example",',
+    '    "payload": { "title": "...", "summary": "...", "whenToUse": "...", "whenNotToUse": null, "commonMistake": null, "successSignal": "...", "preconditions": [], "steps": [], "sequencingRationale": null, "failureModes": [], "examples": [] },',
+    `    "sourceVideoIds": ["${vic.videoId}"],`,
+    '    "origin": "single_video",',
+    '    "confidenceScore": 0-100, "pageWorthinessScore": 0-100, "specificityScore": 0-100, "creatorUniquenessScore": 0-100,',
+    '    "evidenceQuality": "high"|"medium"|"low" },',
+    '  { ... another distinct node ... }',
+    ']',
+    '',
+    `Begin with \`[\` and produce ${Math.min(remaining, 5)}-${remaining} entries.`,
+  ].join('\n');
+}
+
+/**
+ * Per-video canon pass: for each VIC, run iterations against ONE video's
+ * named library. Smaller prompt + tighter must-cover = better Codex yield
+ * per call. Accumulates with title-dedup the same way the cross-video
+ * accumulator does.
+ */
+async function generatePerVideoCanonNodes(
+  profile: ChannelProfilePayload,
+  vics: Array<{ videoId: string; title: string; payload: VicPayload }>,
+): Promise<CanonNodeOut[]> {
+  const PER_VIDEO_TARGET = 6;
+  const PER_VIDEO_MAX_ITERATIONS = 4;
+  const accumulated: CanonNodeOut[] = [];
+  const seenTitles = new Set<string>();
+
+  for (let vIdx = 0; vIdx < vics.length; vIdx += 1) {
+    const vic = vics[vIdx]!;
+    const mustCover = extractMustCoverFromOneVic(vic);
+    const totalNamed = mustCover.frameworks.length + mustCover.definitions.length;
+    console.info(`[codex-audit] per-video canon (${vIdx + 1}/${vics.length}) ${vic.title} — must-cover: ${mustCover.frameworks.length} frameworks, ${mustCover.definitions.length} definitions`);
+
+    if (totalNamed === 0) {
+      console.warn(`[codex-audit] per-video canon: ${vic.videoId} has no named frameworks/definitions; skipping`);
+      continue;
+    }
+
+    const myTitles: string[] = [];
+    for (let i = 0; i < PER_VIDEO_MAX_ITERATIONS; i += 1) {
+      const remaining = PER_VIDEO_TARGET - myTitles.length;
+      if (remaining <= 0) break;
+      const prompt = buildPerVideoCanonPrompt(profile, vic, [...myTitles], remaining, mustCover);
+      console.info(`[codex-audit]   iter ${i + 1}/${PER_VIDEO_MAX_ITERATIONS} (have ${myTitles.length} for this video, asking for up to ${remaining} more)…`);
+      let batch: CanonNodeOut[];
+      try {
+        batch = await codexJson<CanonNodeOut[]>(prompt, `pv_canon_${vic.videoId}_iter_${i + 1}`, 'array', CANON_TIMEOUT_MS);
+      } catch (err) {
+        console.warn(`[codex-audit]   iter ${i + 1} failed: ${(err as Error).message}`);
+        continue;
+      }
+      let added = 0;
+      for (const node of batch) {
+        const title = node.payload?.title?.toString().trim();
+        if (!title) continue;
+        const lower = title.toLowerCase();
+        if (seenTitles.has(lower)) continue;
+        seenTitles.add(lower);
+        myTitles.push(title);
+        accumulated.push(node);
+        added += 1;
+      }
+      console.info(`[codex-audit]   iter ${i + 1}: +${added} new (this video=${myTitles.length}, total=${accumulated.length})`);
+      if (added === 0) break;
+    }
+  }
+
+  console.info(`[codex-audit] per-video canon synthesis complete: ${accumulated.length} distinct nodes`);
+  return accumulated;
+}
+
 function buildCanonPrompt(
   profile: ChannelProfilePayload,
   vics: Array<{ videoId: string; title: string; payload: VicPayload }>,
@@ -821,6 +981,7 @@ async function main() {
 
   const regenCanon = process.argv.includes('--regen-canon');
   const regenBriefs = process.argv.includes('--regen-briefs');
+  const perVideoCanon = process.argv.includes('--per-video-canon');
 
   const videos = await loadVideos(runId, run.videoSetId);
   if (videos.length === 0) throw new Error('Run has no videos');
@@ -922,7 +1083,9 @@ async function main() {
       // also clear page_brief because briefs reference deleted canon ids
       await db.delete(pageBrief).where(eq(pageBrief.runId, runId));
     }
-    const canonNodesOut = await generateCanonNodes(profilePayload, vicResults);
+    const canonNodesOut = perVideoCanon
+      ? await generatePerVideoCanonNodes(profilePayload, vicResults)
+      : await generateCanonNodes(profilePayload, vicResults);
     console.info(`[codex-audit] Codex returned ${canonNodesOut.length} canon nodes`);
     persistedCanonNodes = [];
     for (const node of canonNodesOut) {
