@@ -1,5 +1,5 @@
 ---
-archetype: _default
+archetype: _DEFAULT
 description: Generic fallback archetype used when the heuristic detector cannot confidently match a creator to one of the named archetypes. Stays adaptive and lets channel-profile fields drive prompt customization.
 ---
 

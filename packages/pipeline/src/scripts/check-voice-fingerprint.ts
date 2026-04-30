@@ -96,9 +96,37 @@ function avgWordsPerSentence(prose: string): number {
   return totalWords / sentences.length;
 }
 
-function scoreTone(prose: string, tonePreset: string | undefined): { score: number; notes: string[] } {
+/**
+ * Codex-generated briefs frequently declare non-canonical tone presets like
+ * "blunt, tactical, urgent, operator-first, contrarian" or
+ * "blunt-tactical-operator" instead of the four canonical values
+ * (blunt-tactical | analytical-detached | warm-coaching | reflective-thoughtful).
+ *
+ * Normalize by token-matching: the canonical preset whose dominant tone word
+ * is contained in the declared string wins. Falls through to the raw string
+ * if no canonical preset matches.
+ */
+function normalizeTonePreset(declared: string | undefined): string | undefined {
+  if (!declared) return undefined;
+  const lower = declared.toLowerCase();
+  // Order matters: blunt-tactical's "blunt" must be checked before
+  // analytical-detached's "analytical" because some Codex outputs combine
+  // operator-coach voice with analytical descriptors.
+  if (/\bblunt\b|\btactical\b|\boperator\b|\bcontrarian\b|\bdirect\b|\bno-excuses\b/.test(lower)) return 'blunt-tactical';
+  if (/\banalytical\b|\bmeasured\b|\bevidence-based\b|\bdetailed\b|\bscientific\b/.test(lower)) return 'analytical-detached';
+  if (/\bwarm\b|\bcoaching\b|\bencouraging\b|\bpatient\b|\bdemonstrative\b/.test(lower)) return 'warm-coaching';
+  if (/\breflective\b|\bthoughtful\b|\bcontemplative\b|\binquisitive\b|\bparadoxical\b/.test(lower)) return 'reflective-thoughtful';
+  return declared; // unknown — let the switch's default branch surface it
+}
+
+function scoreTone(prose: string, declaredTonePreset: string | undefined): { score: number; notes: string[] } {
   const notes: string[] = [];
-  if (!tonePreset) return { score: 50, notes: ['(no tone preset declared)'] };
+  if (!declaredTonePreset) return { score: 50, notes: ['(no tone preset declared)'] };
+
+  const tonePreset = normalizeTonePreset(declaredTonePreset);
+  if (tonePreset && tonePreset !== declaredTonePreset) {
+    notes.push(`(normalized "${declaredTonePreset}" → "${tonePreset}")`);
+  }
 
   const avgLen = avgWordsPerSentence(prose);
   const hedges = (prose.match(HEDGES_PATTERN) ?? []).length;
