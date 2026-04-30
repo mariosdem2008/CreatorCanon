@@ -589,10 +589,38 @@ function buildPerVideoCanonPrompt(
 }
 
 /**
+ * Bounded-concurrency map: runs `fn(item, i)` for every item in `items`
+ * but never more than `limit` in flight at once. Output is in input order.
+ */
+async function mapWithConcurrency<T, U>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<U>,
+): Promise<U[]> {
+  const results: U[] = new Array(items.length);
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = cursor;
+      cursor += 1;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i]!, i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+/**
  * Per-video canon pass: for each VIC, run iterations against ONE video's
  * named library. Smaller prompt + tighter must-cover = better Codex yield
- * per call. Accumulates with title-dedup the same way the cross-video
- * accumulator does.
+ * per call. Each video's iteration loop runs independently — there's no
+ * shared state during the loop — so we fan out across videos with
+ * bounded concurrency, then dedup the per-video accumulators by title at
+ * the end. AUDIT_PER_VIDEO_CANON_CONCURRENCY caps the in-flight Codex
+ * processes (default 2 — Codex CLI is fine at 2-3, more risks rate-
+ * limiting against Codex's own per-account ceiling).
  */
 async function generatePerVideoCanonNodes(
   profile: ChannelProfilePayload,
@@ -600,31 +628,30 @@ async function generatePerVideoCanonNodes(
 ): Promise<CanonNodeOut[]> {
   const PER_VIDEO_TARGET = 6;
   const PER_VIDEO_MAX_ITERATIONS = 4;
-  const accumulated: CanonNodeOut[] = [];
-  const seenTitles = new Set<string>();
+  const concurrency = Math.max(1, parseInt(process.env.AUDIT_PER_VIDEO_CANON_CONCURRENCY ?? '2', 10));
 
-  for (let vIdx = 0; vIdx < vics.length; vIdx += 1) {
-    const vic = vics[vIdx]!;
+  console.info(`[codex-audit] per-video canon: ${vics.length} videos, concurrency=${concurrency}`);
+
+  const perVideoBatches = await mapWithConcurrency(vics, concurrency, async (vic, vIdx) => {
     const mustCover = extractMustCoverFromOneVic(vic);
     const totalNamed = mustCover.frameworks.length + mustCover.definitions.length;
     console.info(`[codex-audit] per-video canon (${vIdx + 1}/${vics.length}) ${vic.title} — must-cover: ${mustCover.frameworks.length} frameworks, ${mustCover.definitions.length} definitions`);
-
     if (totalNamed === 0) {
       console.warn(`[codex-audit] per-video canon: ${vic.videoId} has no named frameworks/definitions; skipping`);
-      continue;
+      return [] as CanonNodeOut[];
     }
-
     const myTitles: string[] = [];
+    const myAccumulated: CanonNodeOut[] = [];
     for (let i = 0; i < PER_VIDEO_MAX_ITERATIONS; i += 1) {
       const remaining = PER_VIDEO_TARGET - myTitles.length;
       if (remaining <= 0) break;
       const prompt = buildPerVideoCanonPrompt(profile, vic, [...myTitles], remaining, mustCover);
-      console.info(`[codex-audit]   iter ${i + 1}/${PER_VIDEO_MAX_ITERATIONS} (have ${myTitles.length} for this video, asking for up to ${remaining} more)…`);
+      console.info(`[codex-audit]   ${vic.videoId} iter ${i + 1}/${PER_VIDEO_MAX_ITERATIONS} (have ${myTitles.length}, asking for up to ${remaining} more)…`);
       let batch: CanonNodeOut[];
       try {
         batch = await codexJson<CanonNodeOut[]>(prompt, `pv_canon_${vic.videoId}_iter_${i + 1}`, 'array', CANON_TIMEOUT_MS);
       } catch (err) {
-        console.warn(`[codex-audit]   iter ${i + 1} failed: ${(err as Error).message}`);
+        console.warn(`[codex-audit]   ${vic.videoId} iter ${i + 1} failed: ${(err as Error).message}`);
         continue;
       }
       let added = 0;
@@ -632,18 +659,35 @@ async function generatePerVideoCanonNodes(
         const title = node.payload?.title?.toString().trim();
         if (!title) continue;
         const lower = title.toLowerCase();
-        if (seenTitles.has(lower)) continue;
-        seenTitles.add(lower);
+        if (myTitles.some((t) => t.toLowerCase() === lower)) continue;
         myTitles.push(title);
-        accumulated.push(node);
+        myAccumulated.push(node);
         added += 1;
       }
-      console.info(`[codex-audit]   iter ${i + 1}: +${added} new (this video=${myTitles.length}, total=${accumulated.length})`);
+      console.info(`[codex-audit]   ${vic.videoId} iter ${i + 1}: +${added} new (this video=${myTitles.length})`);
       if (added === 0) break;
+    }
+    return myAccumulated;
+  });
+
+  // Merge per-video batches into a single deduped list. Cross-video
+  // dedup happens here — when video A and video B both produce a node
+  // titled "Two-Process Model of Sleep", we keep video A's (first
+  // index wins) and drop video B's.
+  const allTitles = new Set<string>();
+  const accumulated: CanonNodeOut[] = [];
+  for (const batch of perVideoBatches) {
+    for (const node of batch) {
+      const title = node.payload?.title?.toString().trim();
+      if (!title) continue;
+      const lower = title.toLowerCase();
+      if (allTitles.has(lower)) continue;
+      allTitles.add(lower);
+      accumulated.push(node);
     }
   }
 
-  console.info(`[codex-audit] per-video canon synthesis complete: ${accumulated.length} distinct nodes`);
+  console.info(`[codex-audit] per-video canon synthesis complete: ${accumulated.length} distinct nodes (across ${vics.length} videos in parallel)`);
   return accumulated;
 }
 
@@ -1142,20 +1186,28 @@ async function main() {
   const vicByVideoId = new Map(existingVics.map((r) => [r.videoId, r]));
   console.info(`[codex-audit] ${vicByVideoId.size}/${videos.length} VICs already in DB; resuming the rest`);
 
-  const vicResults: Array<{ videoId: string; title: string; payload: VicPayload; evidenceSegmentIds: string[] }> = [];
-  for (let i = 0; i < videos.length; i += 1) {
-    const v = videos[i]!;
-    const existing = vicByVideoId.get(v.videoId);
-    if (existing) {
-      vicResults.push({
-        videoId: v.videoId,
-        title: v.title,
-        payload: existing.payload as unknown as VicPayload,
-        evidenceSegmentIds: existing.evidenceSegmentIds ?? [],
-      });
-      continue;
-    }
-    console.info(`[codex-audit] (${i + 1}/${videos.length}) VIC for ${v.title}`);
+  // Each VIC is independent — no shared state during generation. Fan out
+  // across videos with bounded concurrency. AUDIT_VIC_CONCURRENCY caps
+  // in-flight Codex processes (default 3).
+  const vicConcurrency = Math.max(1, parseInt(process.env.AUDIT_VIC_CONCURRENCY ?? '3', 10));
+  const videosNeedingVic = videos.filter((v) => !vicByVideoId.has(v.videoId));
+  const videosWithExistingVic = videos.filter((v) => vicByVideoId.has(v.videoId));
+
+  console.info(`[codex-audit] VIC generation: ${videosWithExistingVic.length} resumed, ${videosNeedingVic.length} to generate (concurrency=${vicConcurrency})`);
+
+  // Resumed VICs are pulled from the in-memory map directly — no Codex calls.
+  const resumedResults = videosWithExistingVic.map((v) => {
+    const existing = vicByVideoId.get(v.videoId)!;
+    return {
+      videoId: v.videoId,
+      title: v.title,
+      payload: existing.payload as unknown as VicPayload,
+      evidenceSegmentIds: existing.evidenceSegmentIds ?? [],
+    };
+  });
+
+  const newResults = await mapWithConcurrency(videosNeedingVic, vicConcurrency, async (v, i) => {
+    console.info(`[codex-audit] (${i + 1}/${videosNeedingVic.length}) VIC for ${v.title}`);
     const { payload, evidenceSegmentIds } = await generateVic(runId, v, profilePayload);
     await db.insert(videoIntelligenceCard).values({
       id: crypto.randomUUID(),
@@ -1165,8 +1217,16 @@ async function main() {
       payload: payload as unknown as Record<string, unknown>,
       evidenceSegmentIds,
     }).onConflictDoNothing();
-    vicResults.push({ videoId: v.videoId, title: v.title, payload, evidenceSegmentIds });
-  }
+    return { videoId: v.videoId, title: v.title, payload, evidenceSegmentIds };
+  });
+
+  // Preserve original video order in the merged result (videos[] already
+  // matches videoSet position order from loadVideos).
+  const vicResults = videos.map((v) => {
+    const resumed = resumedResults.find((r) => r.videoId === v.videoId);
+    if (resumed) return resumed;
+    return newResults.find((r) => r.videoId === v.videoId)!;
+  });
   console.info(`[codex-audit] ${vicResults.length} VICs total`);
 
   // ── 3. Canon nodes ──────────────────────────────────────────────────
