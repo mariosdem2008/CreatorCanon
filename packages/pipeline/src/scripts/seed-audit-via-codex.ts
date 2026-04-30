@@ -31,6 +31,7 @@ import {
   channelProfile,
   generationRun,
   pageBrief,
+  project,
   segment,
   video,
   videoIntelligenceCard,
@@ -271,14 +272,47 @@ interface ChannelProfilePayload {
 async function generateChannelProfile(
   runId: string,
   videos: Array<{ videoId: string; title: string; durationSec: number }>,
+  creatorHint: string | null = null,
 ): Promise<ChannelProfilePayload> {
-  // Sample first 12 segments per video to give Codex enough voice to work with.
+  // Scatter-sample segments across each video so the channel profile sees
+  // representative voice from intro, middle, and outro — long-form how-to
+  // videos often introduce themselves only in the outro / call-to-action,
+  // and rich vocabulary surfaces in the body, not the opening hook. We pull
+  // ~16 segments per video stratified into 4 buckets (head/early/mid/tail).
+  const SEGMENTS_PER_VIDEO = 16;
   const samples: string[] = [];
   for (const v of videos) {
     const segs = await loadSegments(runId, v.videoId);
-    const head = segs.slice(0, 12).map((s) => `[${s.segmentId}] ${s.text}`).join('\n');
-    samples.push(`### ${v.title} (${Math.round(v.durationSec / 60)} min)\n${head}`);
+    if (segs.length <= SEGMENTS_PER_VIDEO) {
+      samples.push(`### ${v.title} (${Math.round(v.durationSec / 60)} min)\n${segs.map((s) => `[${s.segmentId}] ${s.text}`).join('\n')}`);
+      continue;
+    }
+    const buckets = 4;
+    const perBucket = Math.floor(SEGMENTS_PER_VIDEO / buckets);
+    const stride = Math.floor(segs.length / buckets);
+    const picked: typeof segs = [];
+    for (let b = 0; b < buckets; b += 1) {
+      const start = b * stride;
+      const end = b === buckets - 1 ? segs.length : start + stride;
+      const slice = segs.slice(start, end);
+      // Take perBucket evenly-spaced segments within this slice.
+      const innerStride = Math.max(1, Math.floor(slice.length / perBucket));
+      for (let i = 0; i < slice.length && picked.length < (b + 1) * perBucket; i += innerStride) {
+        picked.push(slice[i]!);
+      }
+    }
+    const block = picked.map((s) => `[${s.segmentId}] ${s.text}`).join('\n');
+    samples.push(`### ${v.title} (${Math.round(v.durationSec / 60)} min)\n${block}`);
   }
+
+  const creatorHintBlock = creatorHint && creatorHint.trim().length > 0
+    ? [
+        '',
+        '# CREATOR NAME HINT (operator-supplied)',
+        `The operator who set up this run identified the creator as "${creatorHint}". Many creators do not say their own name in long-form how-to videos because they assume the audience already knows them. If you cannot find their name in the segments, USE THIS HINT for the creatorName field rather than emitting "unknown". If the segments contradict the hint, prefer the segments and explain in positioningSummary.`,
+        '',
+      ].join('\n')
+    : '';
 
   const prompt = [
     'You are channel_profiler. Build a one-shot creator profile that every other agent in the pipeline will use as context.',
@@ -287,7 +321,7 @@ async function generateChannelProfile(
     '',
     `# Videos (${videos.length})`,
     videos.map((v) => `- ${v.videoId}: ${v.title} (${Math.round(v.durationSec / 60)} min)`).join('\n'),
-    '',
+    creatorHintBlock,
     '# Segment samples',
     samples.join('\n\n'),
     '',
@@ -308,7 +342,7 @@ async function generateChannelProfile(
     '  "creatorTerminology": string[] (the creator\'s named concepts, drawn from the segments)',
     '}',
     '',
-    'Rules: be specific. "unknown" beats a guess. JSON only.',
+    'Rules: be specific. Prefer the operator-supplied creator name hint over "unknown" when the transcript is silent on the name. JSON only.',
   ].join('\n');
 
   console.info('[codex-audit] Generating channel_profile…');
@@ -1069,7 +1103,23 @@ async function main() {
     profilePayload = existingCp[0].payload as unknown as ChannelProfilePayload;
     console.info(`[codex-audit] channel_profile resumed from DB: ${profilePayload.creatorName} / ${profilePayload.niche}`);
   } else {
-    profilePayload = await generateChannelProfile(runId, videos);
+    // Pull the creator-name hint from the project title — the onboard
+    // script seeds project.title as "<Creator Name> — <description>", so the
+    // text before the first em-dash / hyphen-double-space is the operator-
+    // supplied creator name. Falls back to null when the title doesn't have
+    // that shape.
+    let creatorHint: string | null = null;
+    if (run.projectId) {
+      const proj = await db
+        .select({ title: project.title })
+        .from(project)
+        .where(eq(project.id, run.projectId))
+        .limit(1);
+      const t = proj[0]?.title ?? '';
+      const m = t.match(/^([^—–\-]+?)(?:\s*[—–\-]\s+|$)/);
+      if (m && m[1]) creatorHint = m[1].trim();
+    }
+    profilePayload = await generateChannelProfile(runId, videos, creatorHint);
     await db.insert(channelProfile).values({
       id: crypto.randomUUID(),
       workspaceId: run.workspaceId,
