@@ -96,7 +96,11 @@ export function buildAuditMarkdown(view: RunAuditView): string {
   lines.push(`## Per-Video Intelligence (${view.videoIntelligenceCards.length})`);
   lines.push(``);
   for (const v of view.videoIntelligenceCards) {
-    lines.push(`### Video: ${v.videoTitle}`);
+    const youtubeId = view.youtubeIdByVideoId[v.videoId] ?? null;
+    const headerSuffix = youtubeId
+      ? ` · [▶ Watch on YouTube](https://www.youtube.com/watch?v=${youtubeId})`
+      : '';
+    lines.push(`### Video: ${v.videoTitle}${headerSuffix}`);
     lines.push(`_Video ID: \`${v.videoId}\` · Citing ${v.evidenceSegmentCount} segments_`);
     lines.push(``);
     const pl = v.payload;
@@ -275,7 +279,8 @@ export function buildAuditMarkdown(view: RunAuditView): string {
   }
   lines.push(``);
 
-  return lines.join('\n');
+  const raw = lines.join('\n');
+  return linkifyCitations(raw, view.segmentMap, view.youtubeIdByVideoId);
 }
 
 function formatTs(ms: number): string {
@@ -371,4 +376,42 @@ function renderArraySection(
 function prettyKey(camel: string): string {
   const out = camel.replace(/([A-Z])/g, ' $1').toLowerCase();
   return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+function formatYoutubeTs(startMs: number): string {
+  const totalSec = Math.max(0, Math.floor(startMs / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function youtubeWatchUrl(youtubeId: string, startMs: number): string {
+  const t = Math.max(0, Math.floor(startMs / 1000));
+  return `https://www.youtube.com/watch?v=${youtubeId}&t=${t}s`;
+}
+
+/**
+ * Replace inline `[seg_id]` tokens (UUIDs or hex IDs) with clickable
+ * timestamp links. The agents' VIC outputs sometimes embed segmentIds in
+ * brackets — we recognise UUID-shaped strings and look them up. Tokens
+ * that don't resolve are left as-is so the audit still parses.
+ */
+function linkifyCitations(
+  markdown: string,
+  segmentMap: Record<string, { videoId: string; startMs: number }>,
+  youtubeIdByVideoId: Record<string, string | null>,
+): string {
+  // Match [<id>] where <id> is a UUID-like or 12+ char alphanumeric.
+  const pattern =
+    /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|[a-f0-9]{12,})\]/gi;
+  return markdown.replace(pattern, (whole, id: string) => {
+    const seg = segmentMap[id];
+    if (!seg) return whole;
+    const yt = youtubeIdByVideoId[seg.videoId];
+    if (!yt) return `[${formatYoutubeTs(seg.startMs)}]`;
+    return `[${formatYoutubeTs(seg.startMs)}](${youtubeWatchUrl(yt, seg.startMs)})`;
+  });
 }

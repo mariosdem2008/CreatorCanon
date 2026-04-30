@@ -29,6 +29,10 @@ export interface RunAuditView {
   costByStage: Array<{ stage: string; costCents: number }>;
   /** videoId -> human title, for resolving canon node sourceVideoIds and brief refs. */
   videoTitleById: Record<string, string>;
+  /** segmentId → { videoId, startMs } — used by the markdown export to render clickable YouTube timestamps. */
+  segmentMap: Record<string, { videoId: string; startMs: number }>;
+  /** videoId → YouTube video ID (the `v=` parameter) — null when no YouTube linkage exists. */
+  youtubeIdByVideoId: Record<string, string | null>;
 }
 
 export interface ChannelProfileView {

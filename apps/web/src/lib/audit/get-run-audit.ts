@@ -6,6 +6,7 @@ import {
   generationStageRun,
   pageBrief,
   project,
+  segment,
   video,
   videoIntelligenceCard,
   videoSetItem,
@@ -183,6 +184,25 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
   const videoTitleById: Record<string, string> = {};
   for (const [k, v] of titleByVideoId.entries()) videoTitleById[k] = v;
 
+  // Load all segments for this run, indexed by id → { videoId, startMs }.
+  const segmentRows = await db
+    .select({ id: segment.id, videoId: segment.videoId, startMs: segment.startMs })
+    .from(segment)
+    .where(eq(segment.runId, runId));
+  const segmentMap: Record<string, { videoId: string; startMs: number }> = {};
+  for (const s of segmentRows) segmentMap[s.id] = { videoId: s.videoId, startMs: s.startMs };
+
+  // Load YouTube IDs for the run's videos.
+  const ytRows = run.videoSetId
+    ? await db
+        .select({ id: video.id, youtubeId: video.youtubeVideoId })
+        .from(video)
+        .innerJoin(videoSetItem, eq(videoSetItem.videoId, video.id))
+        .where(eq(videoSetItem.videoSetId, run.videoSetId))
+    : [];
+  const youtubeIdByVideoId: Record<string, string | null> = {};
+  for (const v of ytRows) youtubeIdByVideoId[v.id] = v.youtubeId ?? null;
+
   return {
     runId: run.id,
     projectId: run.projectId,
@@ -196,6 +216,8 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
     costCents,
     costByStage,
     videoTitleById,
+    segmentMap,
+    youtubeIdByVideoId,
   };
 }
 
