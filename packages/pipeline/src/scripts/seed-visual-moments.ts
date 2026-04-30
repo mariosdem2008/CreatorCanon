@@ -26,8 +26,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
-import OpenAI from 'openai';
-
 import { createR2Client } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import { and, asc, closeDb, eq, getDb, inArray } from '@creatorcanon/db';
@@ -42,28 +40,12 @@ import {
 import { VISUAL_FRAME_ANALYST_PROMPT } from '../agents/specialists/prompts';
 import { loadDefaultEnvFiles } from '../env-files';
 import { trackStageRun } from './util/track-stage';
+import { buildChain, type ChainRunner, type FrameClassification, type ProviderName } from './util/vision-providers';
 
 const SAMPLE_INTERVAL_SEC = 10;
 const MAX_FRAMES_PER_VIDEO = 60;
 const USEFULNESS_THRESHOLD = 60;
-const RATE_LIMIT_DELAY_MS = 2000;
-// Groq's currently-supported free-tier vision model. The llama-3.2-90b-vision
-// variant has been decommissioned; llama-4-maverick requires a paid plan;
-// llama-4-scout is the current free vision model per
-// https://console.groq.com/docs/vision (5 images/req, 128K context, JSON mode).
-// Override with GROQ_VISION_MODEL env var.
-const GROQ_VISION_MODEL = process.env.GROQ_VISION_MODEL?.trim() || 'meta-llama/llama-4-scout-17b-16e-instruct';
-
-interface FrameClassification {
-  isUseful: boolean;
-  type: string;
-  description: string;
-  extractedText: string;
-  hubUse: string;
-  usefulnessScore: number;
-  visualClaims: string[];
-  warnings: string[];
-}
+const RATE_LIMIT_DELAY_MS = parseInt(process.env.VISUAL_MOMENTS_DELAY_MS ?? '', 10) || 2000;
 
 interface SegmentRow {
   id: string;
@@ -142,39 +124,11 @@ async function extractFrame(inputPath: string, timestampSec: number, outputJpg: 
   });
 }
 
-async function classifyFrame(client: OpenAI, jpgPath: string): Promise<FrameClassification> {
-  const bytes = await fs.readFile(jpgPath);
-  const base64 = bytes.toString('base64');
-  const response = await client.chat.completions.create({
-    model: GROQ_VISION_MODEL,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: VISUAL_FRAME_ANALYST_PROMPT },
-          {
-            type: 'image_url',
-            image_url: { url: `data:image/jpeg;base64,${base64}` },
-          },
-        ],
-      },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.2,
-    max_tokens: 1024,
-  });
-  const content = response.choices[0]?.message?.content ?? '{}';
-  const parsed = JSON.parse(content) as Partial<FrameClassification>;
-  return {
-    isUseful: Boolean(parsed.isUseful),
-    type: typeof parsed.type === 'string' ? parsed.type : 'other',
-    description: typeof parsed.description === 'string' ? parsed.description : '',
-    extractedText: typeof parsed.extractedText === 'string' ? parsed.extractedText : '',
-    hubUse: typeof parsed.hubUse === 'string' ? parsed.hubUse : '',
-    usefulnessScore: typeof parsed.usefulnessScore === 'number' ? parsed.usefulnessScore : 0,
-    visualClaims: Array.isArray(parsed.visualClaims) ? parsed.visualClaims.map(String) : [],
-    warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String) : [],
-  };
+async function classifyFrame(
+  chain: ChainRunner,
+  jpgPath: string,
+): Promise<{ classification: FrameClassification; provider: ProviderName }> {
+  return chain.classify(jpgPath, VISUAL_FRAME_ANALYST_PROMPT);
 }
 
 function nearestSegmentId(segments: SegmentRow[], timestampMs: number): string | null {
@@ -197,21 +151,12 @@ function nearestSegmentId(segments: SegmentRow[], timestampMs: number): string |
   return best;
 }
 
-function buildGroqVisionClient(): OpenAI {
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) throw new Error('GROQ_API_KEY is not set');
-  return new OpenAI({
-    apiKey: groqKey,
-    baseURL: 'https://api.groq.com/openai/v1',
-  });
-}
-
 async function processVideo(args: {
   v: { id: string; workspaceId: string; localR2Key: string; contentType: string | null; title: string | null; durationSeconds: number | null };
   runId: string;
-  groq: OpenAI;
-}): Promise<{ framesAttempted: number; framesKept: number }> {
-  const { v, runId, groq } = args;
+  visionChain: ChainRunner;
+}): Promise<{ framesAttempted: number; framesKept: number; providerCounts: Record<string, number> }> {
+  const { v, runId, visionChain } = args;
   const env = parseServerEnv(process.env);
   const r2 = createR2Client(env);
   const db = getDb();
@@ -224,7 +169,7 @@ async function processVideo(args: {
     .limit(1);
   if (existing.length > 0) {
     console.info(`[visual-moments] ${v.id}: already has visual_moment rows; skipping`);
-    return { framesAttempted: 0, framesKept: 0 };
+    return { framesAttempted: 0, framesKept: 0, providerCounts: {} };
   }
 
   // 2. Pull segments once for nearest-segment lookup.
@@ -257,7 +202,7 @@ async function processVideo(args: {
     }
     if (durationSec <= 0) {
       console.warn(`[visual-moments] ${v.id}: could not determine duration (DB + ffprobe both failed); skipping`);
-      return { framesAttempted: 0, framesKept: 0 };
+      return { framesAttempted: 0, framesKept: 0, providerCounts: {} };
     }
 
     // 5. Build the timestamp list (every 10s, cap at 60).
@@ -275,6 +220,7 @@ async function processVideo(args: {
       `duration=${durationSec.toFixed(0)}s · sampling ${timestamps.length} frames`,
     );
 
+    const providerCounts: Record<string, number> = {};
     for (let i = 0; i < timestamps.length; i += 1) {
       const tsSec = timestamps[i]!;
       const tsMs = tsSec * 1000;
@@ -282,7 +228,8 @@ async function processVideo(args: {
       framesAttempted += 1;
       try {
         await extractFrame(localMp4, tsSec, jpgPath);
-        const cls = await classifyFrame(groq, jpgPath);
+        const { classification: cls, provider } = await classifyFrame(visionChain, jpgPath);
+        providerCounts[provider] = (providerCounts[provider] ?? 0) + 1;
 
         if (cls.usefulnessScore >= USEFULNESS_THRESHOLD) {
           const frameKey = `workspaces/${v.workspaceId}/runs/${runId}/visual-moments/${v.id}/${tsMs}.jpg`;
@@ -333,8 +280,11 @@ async function processVideo(args: {
       }
     }
 
-    console.info(`[visual-moments] ${v.id}: extracted ${framesAttempted} frames, kept ${framesKept} with score >= ${USEFULNESS_THRESHOLD}`);
-    return { framesAttempted, framesKept };
+    const providerSummary = Object.keys(providerCounts).length > 0
+      ? ` · classifier mix: ${Object.entries(providerCounts).map(([k, v]) => `${k}=${v}`).join(', ')}`
+      : '';
+    console.info(`[visual-moments] ${v.id}: extracted ${framesAttempted} frames, kept ${framesKept} with score >= ${USEFULNESS_THRESHOLD}${providerSummary}`);
+    return { framesAttempted, framesKept, providerCounts };
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
@@ -382,21 +332,29 @@ async function main() {
 
   console.info(`[visual-moments] Run ${runId}: ${vids.length} videos in set, ${targets.length} manual-upload videos with localR2Key`);
 
-  const groq = buildGroqVisionClient();
+  const visionChain = buildChain();
+  console.info(`[visual-moments] vision chain: ${visionChain.describe()}`);
+  if (visionChain.chain.length === 0) {
+    throw new Error('No vision provider is available. Set GEMINI_API_KEY, GROQ_API_KEY, or run a local Ollama with the configured model.');
+  }
 
   let totalAttempted = 0;
   let totalKept = 0;
   let videosProcessed = 0;
+  const aggregateProviderCounts: Record<string, number> = {};
   const failures: Array<{ id: string; title: string | null; error: string }> = [];
 
   for (let i = 0; i < targets.length; i += 1) {
     const v = targets[i]!;
     console.info(`[visual-moments] (${i + 1}/${targets.length}) ${v.id} ${v.title ?? ''}`);
     try {
-      const res = await processVideo({ v, runId, groq });
+      const res = await processVideo({ v, runId, visionChain });
       totalAttempted += res.framesAttempted;
       totalKept += res.framesKept;
       videosProcessed += 1;
+      for (const [k, n] of Object.entries(res.providerCounts)) {
+        aggregateProviderCounts[k] = (aggregateProviderCounts[k] ?? 0) + n;
+      }
     } catch (err) {
       failures.push({ id: v.id, title: v.title, error: (err as Error).message });
       console.error(`[visual-moments] ${v.id} permanently failed: ${(err as Error).message}`);
@@ -410,8 +368,9 @@ async function main() {
     startedAt,
     completedAt,
     summary: {
-      provider: 'groq',
-      model: GROQ_VISION_MODEL,
+      providerChain: visionChain.chain.map((p) => p.name),
+      providerCounts: aggregateProviderCounts,
+      providerExhausted: [...visionChain.exhausted],
       videosProcessed,
       videosFailed: failures.length,
       framesSampled: totalAttempted,
@@ -424,7 +383,10 @@ async function main() {
 
   await closeDb();
 
-  console.info(`[visual-moments] DONE — ${videosProcessed} videos, ${totalAttempted} frames sampled, ${totalKept} visual_moment rows written.`);
+  const providerSummary = Object.keys(aggregateProviderCounts).length > 0
+    ? ` · classifier mix: ${Object.entries(aggregateProviderCounts).map(([k, v]) => `${k}=${v}`).join(', ')}`
+    : '';
+  console.info(`[visual-moments] DONE — ${videosProcessed} videos, ${totalAttempted} frames sampled, ${totalKept} visual_moment rows written${providerSummary}.`);
   if (failures.length > 0) {
     console.error(`[visual-moments] ${failures.length} video(s) failed:`);
     for (const f of failures) console.error(`  - ${f.id} ${f.title}: ${f.error}`);
