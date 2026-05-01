@@ -192,6 +192,43 @@ export function computeVerificationStatus(
 
 Use the canon-body-writer's `buildBodyPrompt` as the structural reference.
 
+**CRITICAL: the prompt MUST contain the inline examples below verbatim.** Codex's tendency without examples is to paraphrase the supportingPhrase (which breaks the substring quality gate) and to over-classify everything as `claim`. These examples cure both:
+
+````
+# supportingPhrase rules (HARD-FAIL if violated)
+supportingPhrase MUST be a contiguous substring of the source segment text.
+NO paraphrasing. NO cleaning. NO abbreviation. Copy the EXACT characters.
+
+✓ GOOD examples (these phrases ARE in the segment text verbatim):
+  segment text: "...we ran 100 prospects every single day for six weeks..."
+  supportingPhrase: "ran 100 prospects every single day"
+
+  segment text: "...the mistake I made was niching too early before market feedback..."
+  supportingPhrase: "the mistake I made was niching too early"
+
+  segment text: "...REM sleep paradoxically activates the same threat-detection circuits..."
+  supportingPhrase: "REM sleep paradoxically activates the same threat-detection circuits"
+
+✗ BAD examples (these are paraphrases — would FAIL the substring check):
+  segment text: "...we ran 100 prospects every single day..."
+  supportingPhrase: "ran a hundred prospects daily"      ← NO. Not verbatim.
+  supportingPhrase: "100 prospects per day"              ← NO. Reworded.
+  supportingPhrase: "ran 100 prospects... every day"     ← NO. Has "..." which isn't in source.
+
+# evidenceType examples (one per type)
+- claim: cites a creator's assertion. Body context: "I prospect daily because rent is due [UUID]" → claim
+- framework_step: cites a step in a numbered/named procedure. "Step 3 of CPS is to invert the objection [UUID]" → framework_step
+- example: cites a concrete instance. "When I sold a £5K retainer to a dental clinic [UUID]" → example
+- caveat: cites a conditional/exception. "Don't apply this if you have <100 prospects [UUID]" → caveat
+- mistake: cites a named anti-pattern. "I niched too early before market feedback [UUID]" → mistake
+- tool: cites a named tool/product/service. "I use Apollo for the prospect list [UUID]" → tool
+- story: cites a narrative arc with stakes. "The first time I closed a £10K month [UUID]" → story
+- proof: cites external evidence (study, data, named authority). "Studies show 80% of buyers [UUID]" → proof
+
+If two types fit equally, pick the more specific one (mistake > caveat > claim).
+Use roleEvidence to explain the choice in 1 sentence.
+````
+
 - [ ] **Step 4: Parser + quality gates.** Single-entity tagger function:
 
 ```ts
@@ -212,7 +249,7 @@ export async function tagEntityEvidence(
 
 Quality gates throw to trigger retry-on-failure.
 
-- [ ] **Step 5: Parallel orchestrator.**
+- [ ] **Step 5: Parallel orchestrator with graceful-degraded fallback.**
 
 ```ts
 export async function tagAllEntities(
@@ -223,12 +260,79 @@ export async function tagAllEntities(
 
 Same shape as `writeCanonBodiesParallel`. Concurrency 3, max 2 retries, exponential backoff.
 
-- [ ] **Step 6: Typecheck + commit.**
+**Fallback when retries exhaust** (CRITICAL — without this, a single tagger flake during backfill blocks the entire validation):
+
+When all 3 attempts fail for an entity, do NOT return an empty registry. Instead, return a *minimal-degraded* registry where every cited UUID gets a synthetic entry:
+
+```ts
+function buildDegradedRegistry(
+  body: string,
+  segmentTextById: Record<string, string>,
+): Record<string, EvidenceEntry> {
+  const registry: Record<string, EvidenceEntry> = {};
+  const uuids = Array.from(body.matchAll(/\[([a-f0-9-]{36})\]/g)).map((m) => m[1]!);
+  for (const id of [...new Set(uuids)]) {
+    const segText = segmentTextById[id] ?? '';
+    registry[id] = {
+      segmentId: id,
+      supportingPhrase: segText.slice(0, 80),  // first 80 chars — guaranteed substring
+      evidenceType: 'claim',
+      supports: '(tagger failed — manual review required)',
+      relevanceScore: 0,
+      confidence: 'low',
+      roleEvidence: '(tagger failed; default classification applied)',
+      whyThisSegmentFits: '(tagger failed; manual review required)',
+      verificationStatus: 'unsupported',
+    };
+  }
+  return registry;
+}
+```
+
+This keeps every cited UUID resolvable downstream (the validator's "orphan citation" check passes) but flags every entry as `unsupported` so the operator sees clearly which entities need re-tagging. Log at WARN level when this fallback fires.
+
+- [ ] **Step 6: Unit tests for `computeVerificationStatus`.** Create `packages/pipeline/src/scripts/util/evidence-tagger.test.ts` with Vitest cases that pin the rule logic:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { computeVerificationStatus } from './evidence-tagger';
+
+describe('computeVerificationStatus', () => {
+  const baseEntry = {
+    segmentId: 'a', supportingPhrase: 'foo bar', evidenceType: 'claim' as const,
+    supports: '', relevanceScore: 0, confidence: 'high' as const,
+    roleEvidence: '', whyThisSegmentFits: '', verificationStatus: 'verified' as const,
+  };
+
+  it('returns unsupported when supportingPhrase not in segment text', () => {
+    expect(computeVerificationStatus({ ...baseEntry, relevanceScore: 95 }, 'lorem ipsum')).toBe('unsupported');
+  });
+  it('returns unsupported when score < 40 even if substring matches', () => {
+    expect(computeVerificationStatus({ ...baseEntry, relevanceScore: 30 }, 'foo bar baz')).toBe('unsupported');
+  });
+  it('returns verified when substring matches and score >= 70 and confidence high', () => {
+    expect(computeVerificationStatus({ ...baseEntry, relevanceScore: 80 }, 'foo bar baz')).toBe('verified');
+  });
+  it('returns verified when substring matches and score >= 70 and confidence medium', () => {
+    expect(computeVerificationStatus({ ...baseEntry, relevanceScore: 80, confidence: 'medium' }, 'foo bar baz')).toBe('verified');
+  });
+  it('returns needs_review when substring matches and score 70+ but confidence low', () => {
+    expect(computeVerificationStatus({ ...baseEntry, relevanceScore: 80, confidence: 'low' }, 'foo bar baz')).toBe('needs_review');
+  });
+  it('returns needs_review when substring matches and 40 <= score < 70', () => {
+    expect(computeVerificationStatus({ ...baseEntry, relevanceScore: 50 }, 'foo bar baz')).toBe('needs_review');
+  });
+});
+```
+
+Run: `cd packages/pipeline && pnpm vitest run src/scripts/util/evidence-tagger.test.ts` — expected: 6/6 pass.
+
+- [ ] **Step 7: Typecheck + commit.**
 
 ```bash
 cd packages/pipeline && pnpm typecheck
-cd ../.. && git add packages/pipeline/src/scripts/util/evidence-tagger.ts
-git commit -m "feat(v2/phase-7): evidence-tagger module — per-entity citation role + relevance overlay"
+cd ../.. && git add packages/pipeline/src/scripts/util/evidence-tagger.ts packages/pipeline/src/scripts/util/evidence-tagger.test.ts
+git commit -m "feat(v2/phase-7): evidence-tagger module — per-entity citation role + relevance overlay + unit tests"
 ```
 
 ---
@@ -442,12 +546,56 @@ export async function buildAllWorkshopStages(
 
 Concurrency 2 (workshops are large context). Max 2 retries.
 
-- [ ] **Step 6: Typecheck + commit.**
+- [ ] **Step 6: Unit test for `filterCandidates`.** Create `packages/pipeline/src/scripts/util/workshop-builder.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { filterCandidates } from './workshop-builder';
+
+describe('filterCandidates', () => {
+  const mkSegment = (id: string) => ({ id, videoId: 'v1', startMs: 0, endMs: 60_000, text: `text for ${id}` });
+  const segmentMap = new Map([['s1', mkSegment('s1')], ['s2', mkSegment('s2')], ['s3', mkSegment('s3')]]);
+
+  const phase = { _index_primary_canon_node_ids: ['cn_1'] } as any;
+
+  it('keeps high-confidence high-relevance verified entries with workshop-shaped roles', () => {
+    const canon = { title: 'X', _index_evidence_registry: {
+      s1: { evidenceType: 'framework_step', confidence: 'high', relevanceScore: 90, verificationStatus: 'verified', supportingPhrase: 'p', whyThisSegmentFits: 'w' },
+      s2: { evidenceType: 'claim', confidence: 'high', relevanceScore: 95, verificationStatus: 'verified', supportingPhrase: 'p', whyThisSegmentFits: 'w' },         // wrong role
+      s3: { evidenceType: 'tool', confidence: 'medium', relevanceScore: 90, verificationStatus: 'verified', supportingPhrase: 'p', whyThisSegmentFits: 'w' },        // medium confidence
+    }} as any;
+    const map = new Map([['cn_1', canon]]);
+    const out = filterCandidates(phase, map, segmentMap);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.segmentId).toBe('s1');
+  });
+
+  it('rejects unverified entries even at high score', () => {
+    const canon = { title: 'X', _index_evidence_registry: {
+      s1: { evidenceType: 'framework_step', confidence: 'high', relevanceScore: 90, verificationStatus: 'needs_review', supportingPhrase: 'p', whyThisSegmentFits: 'w' },
+    }} as any;
+    const out = filterCandidates(phase, new Map([['cn_1', canon]]), segmentMap);
+    expect(out).toHaveLength(0);
+  });
+
+  it('rejects relevance < 80', () => {
+    const canon = { title: 'X', _index_evidence_registry: {
+      s1: { evidenceType: 'framework_step', confidence: 'high', relevanceScore: 75, verificationStatus: 'verified', supportingPhrase: 'p', whyThisSegmentFits: 'w' },
+    }} as any;
+    const out = filterCandidates(phase, new Map([['cn_1', canon]]), segmentMap);
+    expect(out).toHaveLength(0);
+  });
+});
+```
+
+Run: `cd packages/pipeline && pnpm vitest run src/scripts/util/workshop-builder.test.ts` — expected: 3/3 pass.
+
+- [ ] **Step 7: Typecheck + commit.**
 
 ```bash
 cd packages/pipeline && pnpm typecheck
-cd ../.. && git add packages/pipeline/src/scripts/util/workshop-builder.ts
-git commit -m "feat(v2/phase-7): workshop-builder module — stage shell + clip generator from evidence pool"
+cd ../.. && git add packages/pipeline/src/scripts/util/workshop-builder.ts packages/pipeline/src/scripts/util/workshop-builder.test.ts
+git commit -m "feat(v2/phase-7): workshop-builder module — stage shell + clip generator from evidence pool + unit tests"
 ```
 
 ---
@@ -457,13 +605,37 @@ git commit -m "feat(v2/phase-7): workshop-builder module — stage shell + clip 
 **Files:**
 - Modify: `packages/pipeline/src/scripts/seed-audit-v2.ts`
 
-**Why:** Stage 11 generates one workshop stage per journey phase, persists to `workshop_stage` table.
+**Why:** Stage 11 generates one workshop stage per journey phase, persists to `workshop_stage` table. ALSO: add a fast-path skip when only `--regen-evidence` and/or `--regen-workshops` are set (avoid running Stages 1-9 wastefully).
 
-- [ ] **Step 1: Add `--regen-workshops` flag.**
+- [ ] **Step 1: Add `--regen-workshops` flag + late-stages-only fast path.**
 
 ```ts
 const regenWorkshops = process.argv.includes('--regen-workshops');
+
+// Late-stages-only fast path: if the operator runs ONLY --regen-evidence
+// and/or --regen-workshops (no other regen flags), the existing v2 entities
+// from Stages 1-9 are reused as-is. The flag set below short-circuits the
+// stage-1-through-9 work without disturbing it.
+const onlyLateStages =
+  (regenEvidence || regenWorkshops) &&
+  !regenChannel && !regenVic && !regenCanon && !regenBodies &&
+  !regenSynthesis && !regenJourney && !regenBriefs && !regenHero;
+if (onlyLateStages) {
+  console.info('[v2] late-stages-only mode: Stages 1-9 will load existing v2 entities without regenerating.');
+}
 ```
+
+Then in each of Stages 1-9, check the standard idempotency (existing v2 entity present + no `--regen-*` flag for that stage) — that already exists from Phase 5. The `onlyLateStages` flag is informational (logged) and ALSO disables the unconditional Stage 4 weaving call (Stage 4 has no idempotency check today; add `if (!onlyLateStages) { ...weave... }`).
+
+For Stage 4 weaving specifically, find the existing block and wrap it:
+
+```ts
+if (!onlyLateStages) {
+  // existing Stage 4 weaving block
+}
+```
+
+If `onlyLateStages` is true, the canon shells already have `_index_supporting_examples`/etc. populated from Phase 5 — no re-weave needed.
 
 - [ ] **Step 2: Add Stage 11 block** after Stage 10:
 
