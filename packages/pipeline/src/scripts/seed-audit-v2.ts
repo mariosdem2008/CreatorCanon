@@ -106,6 +106,7 @@ import {
 } from './util/brief-body-writer';
 import { enforceTitleCase } from './util/title-casing';
 import { refineHeroBlock } from './util/hero-rewrite';
+import { tagAllEntities, type EvidenceTaggerInput } from './util/evidence-tagger';
 
 loadDefaultEnvFiles();
 
@@ -626,6 +627,7 @@ async function main() {
   const regenJourney = process.argv.includes('--regen-journey');
   const regenBriefs = process.argv.includes('--regen-briefs');
   const regenHero = process.argv.includes('--regen-hero');
+  const regenEvidence = process.argv.includes('--regen-evidence');
   const perVideo = process.argv.includes('--per-video-canon');
 
   const run = await loadRun(runId);
@@ -1277,8 +1279,158 @@ async function main() {
     console.info(`[v2] hero candidates persisted: "${profile.hub_title}" / ${profile.hero_candidates.length} candidates (${refined.rewriteCount} rewritten)`);
   }
 
+  // ── Stage 10: Evidence registry tagger ─────────────────────
+  console.info(`[v2] Stage 10: evidence registry tagger`);
+
+  // Reload all v2 body-bearing entities + segments table for tagger input.
+  const stage10CanonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+    .from(canonNode).where(eq(canonNode.runId, runId));
+  const stage10BriefRows = await db.select({ id: pageBrief.id, payload: pageBrief.payload })
+    .from(pageBrief).where(eq(pageBrief.runId, runId));
+
+  // Build a segmentId → text lookup for ALL segments referenced in this run.
+  const stage10SegRows = await db.select({ id: segment.id, text: segment.text })
+    .from(segment).where(eq(segment.runId, runId));
+  const segmentTextById: Record<string, string> = {};
+  for (const s of stage10SegRows) segmentTextById[s.id] = s.text;
+
+  // Build the list of entities to tag.
+  type EvidenceJob = {
+    kind: 'canon' | 'brief' | 'journey_phase';
+    entityId: string;
+    body: string;
+    // For canon/brief: rowId for db.update. For journey_phase: rowId of journey canon + phase number.
+    rowId: string;
+    phaseNumber?: number;
+  };
+  const evidenceJobs: EvidenceJob[] = [];
+
+  const UUID_RE = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
+
+  function extractCitedUuids(body: string): string[] {
+    const ids = new Set<string>();
+    for (const m of body.matchAll(UUID_RE)) ids.add(m[1]!);
+    return [...ids];
+  }
+
+  function alreadyTagged(payload: any, body: string): boolean {
+    const reg = payload?._index_evidence_registry;
+    if (!reg || typeof reg !== 'object') return false;
+    const cited = extractCitedUuids(body);
+    if (cited.length === 0) return true; // no citations = trivially "tagged"
+    return cited.every((id) => id in reg);
+  }
+
+  // Canon nodes (includes synthesis — kind === 'synthesis')
+  // EXCLUDES reader_journey nodes — those are handled per-phase below.
+  for (const c of stage10CanonRows) {
+    const p = c.payload as { schemaVersion?: string; kind?: string; body?: string };
+    if (p.schemaVersion !== 'v2') continue;
+    if (p.kind === 'reader_journey') continue;
+    const body = p.body ?? '';
+    if (body.length < 50) continue;
+    if (!regenEvidence && alreadyTagged(p, body)) continue;
+    evidenceJobs.push({ kind: 'canon', entityId: c.id, body, rowId: c.id });
+  }
+
+  // Journey phases — each gets its own registry on the phase object inside _index_phases[]
+  for (const c of stage10CanonRows) {
+    const p = c.payload as { schemaVersion?: string; kind?: string; _index_phases?: any[] };
+    if (p.schemaVersion !== 'v2' || p.kind !== 'reader_journey') continue;
+    for (const phase of (p._index_phases ?? [])) {
+      const body = phase.body ?? '';
+      if (body.length < 50) continue;
+      if (!regenEvidence && alreadyTagged(phase, body)) continue;
+      evidenceJobs.push({
+        kind: 'journey_phase',
+        entityId: `${c.id}#phase${phase._index_phase_number}`,
+        body,
+        rowId: c.id,
+        phaseNumber: phase._index_phase_number,
+      });
+    }
+  }
+
+  // Page briefs
+  for (const b of stage10BriefRows) {
+    const p = b.payload as { schemaVersion?: string; body?: string };
+    if (p.schemaVersion !== 'v2') continue;
+    const body = p.body ?? '';
+    if (body.length < 50) continue;
+    if (!regenEvidence && alreadyTagged(p, body)) continue;
+    evidenceJobs.push({ kind: 'brief', entityId: b.id, body, rowId: b.id });
+  }
+
+  let evidenceJobsCount = 0;
+  if (evidenceJobs.length === 0) {
+    console.info(`[v2] Stage 10: all entities already tagged (use --regen-evidence to force)`);
+  } else {
+    console.info(`[v2] Stage 10: tagging ${evidenceJobs.length} entities (canon=${evidenceJobs.filter(j=>j.kind==='canon').length}, journey_phases=${evidenceJobs.filter(j=>j.kind==='journey_phase').length}, briefs=${evidenceJobs.filter(j=>j.kind==='brief').length})`);
+
+    // Build EvidenceTaggerInput per job. Each input scopes segmentTextById to ONLY the UUIDs cited in this entity's body.
+    const taggerInputs: EvidenceTaggerInput[] = evidenceJobs.map((j) => {
+      const cited = extractCitedUuids(j.body);
+      const scopedSegText: Record<string, string> = {};
+      for (const id of cited) {
+        if (segmentTextById[id]) scopedSegText[id] = segmentTextById[id];
+      }
+      return {
+        entityId: j.entityId,
+        body: j.body,
+        segmentTextById: scopedSegText,
+        voiceFingerprint: {
+          tonePreset: profile._internal_dominant_tone,
+          preserveTerms: profile._index_creator_terminology.slice(0, 12),
+        },
+      };
+    });
+
+    const taggerResults = await tagAllEntities(taggerInputs, { concurrency: 3 });
+    evidenceJobsCount = taggerResults.size;
+
+    // Merge registry back into each entity's payload, persist.
+    for (const job of evidenceJobs) {
+      const result = taggerResults.get(job.entityId);
+      if (!result) continue;
+
+      if (job.kind === 'canon') {
+        const row = stage10CanonRows.find((r) => r.id === job.rowId)!;
+        const updatedPayload = {
+          ...(row.payload as Record<string, unknown>),
+          _index_evidence_registry: result.registry,
+        };
+        await db.update(canonNode)
+          .set({ payload: updatedPayload as Record<string, unknown> })
+          .where(eq(canonNode.id, job.rowId));
+      } else if (job.kind === 'journey_phase') {
+        const row = stage10CanonRows.find((r) => r.id === job.rowId)!;
+        const p = row.payload as { _index_phases?: any[] };
+        const updatedPhases = (p._index_phases ?? []).map((ph) => {
+          if (ph._index_phase_number !== job.phaseNumber) return ph;
+          return { ...ph, _index_evidence_registry: result.registry };
+        });
+        const updatedPayload = { ...(row.payload as Record<string, unknown>), _index_phases: updatedPhases };
+        // Update the in-memory cache too, so subsequent jobs touching the same journey row see the merged phases.
+        row.payload = updatedPayload;
+        await db.update(canonNode)
+          .set({ payload: updatedPayload as Record<string, unknown> })
+          .where(eq(canonNode.id, job.rowId));
+      } else if (job.kind === 'brief') {
+        const row = stage10BriefRows.find((r) => r.id === job.rowId)!;
+        const updatedPayload = {
+          ...(row.payload as Record<string, unknown>),
+          _index_evidence_registry: result.registry,
+        };
+        await db.update(pageBrief)
+          .set({ payload: updatedPayload as Record<string, unknown> })
+          .where(eq(pageBrief.id, job.rowId));
+      }
+    }
+    console.info(`[v2] Stage 10: ${evidenceJobs.length} entities tagged`);
+  }
+
   await db.update(generationRun).set({ status: 'audit_ready' }).where(eq(generationRun.id, runId));
-  console.info(`[v2] DONE — schemaVersion=v2, canon=${canonShells.length}, bodies=${bodyResults.size}, synthesis=${synthesisIds.length}, journey=${journeyId ? 1 : 0}`);
+  console.info(`[v2] DONE — schemaVersion=v2, canon=${canonShells.length}, bodies=${bodyResults.size}, synthesis=${synthesisIds.length}, journey=${journeyId ? 1 : 0}, evidence=${evidenceJobsCount}`);
   console.info(`[v2] Audit URL: http://localhost:3001/app/projects/${run.projectId}/runs/${runId}/audit`);
 
   await closeDb();
