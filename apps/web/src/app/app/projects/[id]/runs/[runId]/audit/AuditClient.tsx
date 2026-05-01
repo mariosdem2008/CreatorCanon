@@ -2,16 +2,19 @@
 
 import { useState, useTransition } from 'react';
 
-import { approveAuditAndStartHubBuild, discardRun, getAuditMarkdown } from './actions';
+import { approveAuditAndStartHubBuild, discardRun, getAuditMarkdown, getHubSourceDocument } from './actions';
 
 export function AuditActions({
   runId,
   projectId,
   isReady,
+  schemaVersion,
 }: {
   runId: string;
   projectId: string;
   isReady: boolean;
+  /** 'v2' = Hub Source Document JSON; otherwise legacy markdown */
+  schemaVersion: 'v2' | 'v1-legacy';
 }) {
   const [isPending, startTransition] = useTransition();
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -20,8 +23,10 @@ export function AuditActions({
   async function handleCopy() {
     setCopyState('copying');
     try {
-      const md = await getAuditMarkdown(runId);
-      await navigator.clipboard.writeText(md);
+      const text = schemaVersion === 'v2'
+        ? await getHubSourceDocument(runId)
+        : await getAuditMarkdown(runId);
+      await navigator.clipboard.writeText(text);
       setCopyState('copied');
       setTimeout(() => setCopyState('idle'), 2000);
     } catch (err) {
@@ -30,6 +35,8 @@ export function AuditActions({
       setTimeout(() => setCopyState('idle'), 3000);
     }
   }
+
+  const copyLabel = schemaVersion === 'v2' ? 'Copy Hub Source' : 'Copy audit';
 
   return (
     <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-[12px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] p-4 shadow-[var(--cc-shadow-2)] sm:flex-row sm:items-center sm:justify-between">
@@ -51,7 +58,7 @@ export function AuditActions({
               ? 'Copied!'
               : copyState === 'error'
                 ? 'Copy failed'
-                : 'Copy audit'}
+                : copyLabel}
         </button>
         {!confirmDiscard ? (
           <button

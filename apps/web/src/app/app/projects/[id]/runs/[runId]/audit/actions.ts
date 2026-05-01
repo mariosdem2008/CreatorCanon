@@ -10,6 +10,7 @@ import { eq, getDb } from '@creatorcanon/db';
 import { generationRun } from '@creatorcanon/db/schema';
 
 import { buildAuditMarkdown } from '@/lib/audit/build-audit-markdown';
+import { buildHubSourceDocument } from '@/lib/audit/build-hub-source-doc';
 import { getRunAudit } from '@/lib/audit/get-run-audit';
 
 /**
@@ -73,6 +74,26 @@ export async function getAuditMarkdown(runId: string): Promise<string> {
   const view = await getRunAudit(runId);
   if (!view) throw new Error('Run not found');
   return buildAuditMarkdown(view);
+}
+
+/**
+ * Build the v2 Hub Source Document — a single JSON object containing
+ * everything the builder needs to render the hub. This is the production
+ * handoff format (when this becomes a SaaS, the builder consumes this
+ * directly via API).
+ *
+ * Spec: docs/superpowers/specs/2026-05-01-hub-source-document-schema.md
+ *
+ * Format: pretty-printed JSON. The Copy Audit button calls this for v2
+ * runs and the markdown action for v1 runs (selected client-side via
+ * channel profile schemaVersion).
+ */
+export async function getHubSourceDocument(runId: string): Promise<string> {
+  if (!runId) throw new Error('Missing runId');
+  const view = await getRunAudit(runId);
+  if (!view) throw new Error('Run not found');
+  const doc = buildHubSourceDocument(view);
+  return JSON.stringify(doc, null, 2);
 }
 
 function spawnHubBuildDispatch(runId: string): void {
