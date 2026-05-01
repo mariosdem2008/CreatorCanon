@@ -17,6 +17,7 @@
 
 import { extractJsonFromCodexOutput } from '../../agents/providers/codex-extract-json';
 import { runCodex } from './codex-runner';
+import { repairTruncatedJson } from './json-repair';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -137,6 +138,16 @@ function buildEvidencePrompt(input: EvidenceTaggerInput): string {
   lines.push(`supportingPhrase MUST be a contiguous substring of the source segment text.`);
   lines.push(`NO paraphrasing. NO cleaning. NO abbreviation. Copy the EXACT characters.`);
   lines.push(``);
+  lines.push('# supportingPhrase length rule');
+  lines.push('Pick a 10-25 word substring. NOT the whole segment. NOT a single word.');
+  lines.push('The phrase should be the TIGHTEST verbatim chunk that supports the cited claim.');
+  lines.push('Avoid phrases ending mid-sentence — pick complete clauses where possible.');
+  lines.push('');
+  lines.push('✓ GOOD: "the mistake I made was niching too early" (8 words, complete clause)');
+  lines.push('✓ GOOD: "we want to make sure that we\'re going for clients that are high demand" (14 words, complete clause)');
+  lines.push('✗ BAD: "we ran 100 prospects every single day for six weeks straight, and what we found was that the conversion rate was higher" (>25 words — too long)');
+  lines.push('✗ BAD: "the mistake" (2 words — not enough context)');
+  lines.push('');
   lines.push(`✓ GOOD examples (these phrases ARE in the segment text verbatim):`);
   lines.push(`  segment text: "...we ran 100 prospects every single day for six weeks..."`);
   lines.push(`  supportingPhrase: "ran 100 prospects every single day"`);
@@ -260,7 +271,11 @@ export async function tagEntityEvidence(
   const prompt = buildEvidencePrompt(input);
   const raw = await runCodex(prompt, { timeoutMs, label: `evidence_tagger_${input.entityId}` });
   const json = extractJsonFromCodexOutput(raw);
-  const parsed = JSON.parse(json) as { registry?: Record<string, Partial<EvidenceEntry>> };
+  const parsedRaw = repairTruncatedJson(json);
+  if (parsedRaw === null) {
+    throw new Error(`[evidence_tagger_${input.entityId}] failed to parse + repair JSON output`);
+  }
+  const parsed = parsedRaw as { registry?: Record<string, Partial<EvidenceEntry>> };
 
   if (!parsed.registry || typeof parsed.registry !== 'object') {
     throw new Error(`[evidence_tagger_${input.entityId}] Codex returned no registry object`);

@@ -64,3 +64,8 @@ describe('computeVerificationStatus', () => {
     );
   });
 });
+
+describe('json-repair integration', () => {
+  test.todo('repairs a truncated registry by dropping the unterminated last entry');
+  test.todo('returns degraded registry when JSON is unrepairable');
+});
