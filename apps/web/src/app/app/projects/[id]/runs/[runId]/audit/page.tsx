@@ -83,6 +83,7 @@ export default async function AuditPage({
           debug={debugMode}
           segmentById={new Map(Object.entries(audit.segmentMap))}
           youtubeIdByVideoId={audit.youtubeIdByVideoId}
+          workshopStages={audit.workshopStages}
         />
       ) : (
         <>

@@ -41,6 +41,7 @@ interface HubSourceDocument {
     endMs: number;
     text: string;
   }>;
+  workshop_stages: Array<Record<string, unknown>>;
 }
 
 const THIRD_PERSON_PATTERNS = [
@@ -132,6 +133,8 @@ export function buildHubSourceDocument(view: RunAuditView): HubSourceDocument {
     text: '',
   }));
 
+  const workshop_stages = view.workshopStages.map((w) => w.payload);
+
   return {
     metadata: {
       runId: view.runId,
@@ -152,5 +155,6 @@ export function buildHubSourceDocument(view: RunAuditView): HubSourceDocument {
     videos,
     visualMoments,
     segments,
+    workshop_stages,
   };
 }

@@ -25,6 +25,7 @@ export interface RunAuditView {
   videoIntelligenceCards: VideoIntelligenceCardView[];
   canonNodes: CanonNodeView[];
   pageBriefs: PageBriefView[];
+  workshopStages: WorkshopStageView[];
   costCents: number;
   costByStage: Array<{ stage: string; costCents: number }>;
   /** videoId -> human title, for resolving canon node sourceVideoIds and brief refs. */
@@ -109,4 +110,10 @@ export interface PageBriefView {
   supportingCanonNodeIds: string[];
   /** Full payload for any planning fields (anglesToHit, mustCite, structureNotes…). */
   payload: Record<string, unknown>;
+}
+
+export interface WorkshopStageView {
+  id: string;
+  payload: Record<string, unknown>;
+  position: number;
 }

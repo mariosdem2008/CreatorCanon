@@ -11,6 +11,7 @@ import {
   videoIntelligenceCard,
   videoSetItem,
   visualMoment,
+  workshopStage,
 } from '@creatorcanon/db/schema';
 import type {
   CanonNodeView,
@@ -19,6 +20,7 @@ import type {
   RunAuditView,
   VideoIntelligenceCardView,
   VisualMomentView,
+  WorkshopStageView,
 } from './types';
 
 /**
@@ -203,6 +205,22 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
   const youtubeIdByVideoId: Record<string, string | null> = {};
   for (const v of ytRows) youtubeIdByVideoId[v.id] = v.youtubeId ?? null;
 
+  // Load workshop stages for this run.
+  const wsRows = await db
+    .select({
+      id: workshopStage.id,
+      payload: workshopStage.payload,
+      position: workshopStage.position,
+    })
+    .from(workshopStage)
+    .where(eq(workshopStage.runId, runId))
+    .orderBy(workshopStage.position);
+  const workshopStagesView: WorkshopStageView[] = wsRows.map((row) => ({
+    id: row.id,
+    payload: (row.payload as Record<string, unknown>) ?? {},
+    position: row.position,
+  }));
+
   return {
     runId: run.id,
     projectId: run.projectId,
@@ -213,6 +231,7 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
     videoIntelligenceCards: vicView,
     canonNodes: canonNodesView,
     pageBriefs: pageBriefsView,
+    workshopStages: workshopStagesView,
     costCents,
     costByStage,
     videoTitleById,
