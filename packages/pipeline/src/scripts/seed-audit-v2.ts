@@ -445,7 +445,7 @@ async function generateVicV2(
     '{',
     `  "schemaVersion": "v2",`,
     `  "videoId": "${v.videoId}",`,
-    '  "video_summary": "<100-200 word first-person summary of this video, as if the creator wrote it for a /videos/<id> page>",',
+    '  "video_summary": "<100-200 word first-person summary, as if the creator wrote a chapter intro. NEVER \\"in this video\\", \\"the speaker\\", or third-person attribution — write \\"I cover X\\" or \\"this is where I explain Y\\" instead>",',
     '  "_internal_creator_voice_notes": ["string"],',
     '  "_index_main_ideas": [{"id":"mi_xxx","text":"...","segments":["<segId>"]}],',
     '  "_index_lessons": [{"id":"les_xxx","text":"...","segments":["<segId>"]}],',
