@@ -1,126 +1,268 @@
 ---
 name: voice-fingerprint-rubric
-description: Use when generating prose for hub pages, briefs, or any creator-facing output that must sound like the creator. Defines the voiceFingerprint block, the four tone presets, and the preserve/match/respect rules for compression and expansion.
+description: v2 voice rules. The single hardest discipline of the audit pipeline — first-person at extraction time, NEVER as a downstream transform. Third-person attribution ('the creator says X', '<name> argues') is forbidden in any rendered field. This rubric is referenced by every body-writing prompt.
 ---
 
-# Voice Fingerprint Rubric
+# Voice Fingerprint Rubric (v2)
 
 ## PURPOSE
-Each creator has a distinctive voice — vocabulary, rhythm, profanity rules, named terms — and generated prose that sanitizes the voice loses the reader. This rubric defines the `voiceFingerprint` block that travels with every brief and the hard rules for preserving creator voice during compression, expansion, and rephrasing. Consumed by every prose-generating step downstream of `page_brief_planner`.
+Every creator has a distinctive voice — vocabulary, rhythm, profanity rules, named terms. The audit pipeline must produce rendered fields that READ as if the creator wrote them. Not "the creator says X" — "X." The voice flip happens at extraction time, never as a downstream transform.
+
+This rubric is consumed by:
+- Canon body-writer (Task 5.9)
+- Brief body-writer
+- Synthesis body-writer
+- Reader journey phase body-writer
+- Hero candidates generator (Task 5.10)
+- Channel profile generator (for `hub_title`, `hub_tagline`, `hero_candidates`)
 
 ## SCHEMA
 
-```json
-{
-  "voiceFingerprint": {
-    "profanityAllowed": false,
-    "tonePreset": "blunt-tactical | warm-coaching | analytical-detached | reflective-thoughtful",
-    "preserveTerms": ["1-1-1 rule", "BYOA", "..."]
-  }
-}
-```
+The voice fingerprint lives in two places:
+
+1. **Channel-level** (in ChannelProfile_v2):
+   ```json
+   {
+     "_internal_dominant_tone": "string — ONE of the four canonical presets",
+     "_index_archetype": "operator-coach | science-explainer | instructional-craft | contemplative-thinker | _DEFAULT"
+   }
+   ```
+
+2. **Brief-level** (in PageBrief_v2):
+   ```json
+   {
+     "_index_voice_fingerprint": {
+       "profanityAllowed": true,
+       "tonePreset": "blunt-tactical | analytical-detached | warm-coaching | reflective-thoughtful",
+       "preserveTerms": ["..."]
+     }
+   }
+   ```
 
 ## RUBRIC
 
-- **`profanityAllowed`** (boolean): respect this per-archetype. Default mappings:
-  - operator-coach (Hormozi-style) → typically `true`
-  - science-explainer (Huberman-style) → `false`
-  - learning-creator (Ali Abdaal-style) → `false`
-  - mindset-coach → context-dependent
-  - When `false`, prose must not contain profanity even if the source transcripts do — sanitize at the word level, not the idea level.
-- **`tonePreset`** (one of four):
-  - `blunt-tactical` — short sentences, imperative commands, contrarian framings, occasional swearing if `profanityAllowed`. Hormozi default. Example: "Cash before scale. Stop optimizing a business that's running out of money."
-  - `warm-coaching` — second-person, encouraging, calibrated hedges, personal anecdotes. Example: "Here's what worked for me, and I think it could work for you too."
-  - `analytical-detached` — third-person, hedged claims, mechanism-first, evidence citations, rare imperatives. Huberman default. Example: "The data suggest that, in most operators, the bottleneck is judgment rather than tooling."
-  - `reflective-thoughtful` — first-person plural, slow rhythm, qualifications, philosophical asides. Example: "We tend to confuse the workflow with the title; it takes time to see why that's a costly mistake."
-- **`preserveTerms[]`**: creator's verbatim phrases that must appear UNCHANGED in generated prose. Includes named frameworks, signature mantras, idiosyncratic vocabulary. Generation rules:
-  - PRESERVE the creator's named concepts verbatim — do NOT rephrase ("workflow-based thinking" stays "workflow-based thinking", not "task-oriented planning").
-  - PRESERVE casing and punctuation as the creator uses them ("BYOA" not "byoa"; "First $100K Roadmap" not "first 100k roadmap").
-  - PRESERVE numerals when the creator uses numerals ("$100K" not "one hundred thousand dollars").
-- **MATCH the tone preset** when generating prose:
-  - blunt-tactical → blunt commands, short sentences, contrarian framing
-  - warm-coaching → second-person, encouraging
-  - analytical-detached → hedged claims, mechanism-first, evidence citations
-  - reflective-thoughtful → first-person plural, qualifications
-- **RESPECT profanity rule per archetype** — if `profanityAllowed: false`, NO profanity in generated output regardless of source.
-- **When compressing**: drop adjectives before nouns; trim hedges before claims. Compression preserves the load-bearing words (verbs, named terms, numbers) and discards the connective tissue.
-- **When expanding**: keep creator's named terms verbatim; add concrete examples in their style — not in your style. If the creator gives examples in dollar amounts, expand with dollar amounts; if they give examples in stories, expand with stories.
+### The four canonical tone presets
+
+ONE value, no comma-separated descriptors:
+
+| Preset | Markers | Archetype mapping |
+|---|---|---|
+| `blunt-tactical` | Short sentences, imperatives, low hedge ratio, money math, contrarian inversions | operator-coach |
+| `analytical-detached` | Longer measured sentences, mechanism-first, hedged claims, evidence ladders | science-explainer |
+| `warm-coaching` | Second-person ("you"), encouraging, demonstrative, patient | instructional-craft |
+| `reflective-thoughtful` | Paradox tolerance, longer arcs, "we" framing, careful distinctions | contemplative-thinker |
+
+If a creator's tone is genuinely mixed, pick the DOMINANT preset. Don't write "blunt-tactical-operator" or "blunt, tactical, urgent, contrarian" — those are descriptors, not presets. The dispatcher rejects them.
+
+### First-person voice rule (THE ONE RULE)
+
+In every rendered field — `body`, `lede`, `hook`, `title`, `cta.*`, `hub_title`, `hub_tagline`, `hero_candidates[]`, `video_summary`, `phase.title`, `phase.body` — write as if the creator wrote it.
+
+✅ "I've been in this game for eight years and most beginners quit over picking a niche."
+❌ "Jordan has been in this game for eight years; he says most beginners quit over picking a niche."
+❌ "The creator argues that beginners often quit when picking a niche."
+❌ "Walker explains the two-process model of sleep."
+
+### Allowed first-person frames
+
+- "I" — direct authorship
+- "you" — addressing the reader
+- "we" — when the creator naturally says "we" (operator-coach often, contemplative-thinker often)
+- "my" / "your" / "our" — possessive forms
+
+### Forbidden third-person markers (HARD-FAIL via validator)
+
+In `rendered` fields, these strings trigger a hard fail:
+- "the creator"
+- "the speaker"
+- "the host"
+- "the author"
+- "the narrator"
+- "<creatorName> says/argues/explains/notes/claims/believes"
+- "she says" / "he says" / "they (the creator)"
+- "in this episode" / "on this video" / "in the recording"
+
+Third-person is allowed ONLY in `_internal_*` fields, where operators read.
+
+### Verbatim creator terminology
+
+Named concepts MUST be preserved verbatim. Never paraphrased.
+
+✅ "workflow-based thinking", "the unit of work", "QQRT", "Better, Cheaper, Faster, Less Risky", "two-process model of sleep", "BYOA"
+❌ "task-oriented planning" (paraphrase of "workflow-based thinking")
+❌ "quantity-quality-regularity-timing audit" (paraphrase of "QQRT")
+
+The voice fingerprint's `preserveTerms` array enumerates these. Bodies must use ≥60% of declared terms verbatim. The validator checks density.
+
+### Profanity rule (per archetype)
+
+`profanityAllowed: true` (operator-coach default for many): body can include strong language for emphasis. Cadence-heavy moments, not garnish.
+
+`profanityAllowed: false` (science-explainer / instructional-craft / contemplative-thinker default): body avoids profanity even if a few transcript moments contain it.
+
+The rule applies to `rendered` fields ONLY. `_internal_*` fields stay neutral regardless.
+
+### Direct quote handling
+
+When pulling a verbatim quote from the transcript into a `body`:
+
+✅ Inline as reported speech: "I once said: 'AI lead generation is the most in-demand service in the world.'" — preserves the quote AND keeps the chapter in first person.
+
+✅ Paraphrase + cite: "I've been clear about this — AI lead generation is the most in-demand service [a1a6709f-...]."
+
+❌ Standalone third-person attribution: "Jordan: 'AI lead generation is...'"
+
+### Cleaned vs verbatim quotes
+
+When the transcript has spoken-language stutters, use the cleaned version in body. The audit's `_index_quotes_cleaned` field provides cleaned versions for each `_index_quotes_verbatim`. Hero candidates pull from cleaned + synthesized lines, not verbatim transcript.
+
+✅ "AI lead generation is the most in-demand service in the world." (cleaned)
+❌ "AI lead generation is, it's a service-based business first and foremost." (verbatim, with stutter — the Jordan hub bug)
+
+### Compression rules (when shortening creator content)
+
+- Drop adjectives before nouns
+- Trim hedges before claims
+- Keep named terms VERBATIM
+- Keep money figures, named entities, specific numbers verbatim
+
+### Expansion rules (when going from a transcript fragment to a body section)
+
+- Keep creator's named terms verbatim
+- Add concrete examples in their style (not generic "for instance" examples — examples that match THEIR vocabulary)
+- Preserve their cadence (sentence length, paragraph length, transitions)
+- DON'T add hedges they wouldn't add ("might be", "could be") if their tone is blunt-tactical
+- DON'T strip hedges they would add if their tone is analytical-detached
 
 ## EXAMPLES_GOOD
 
-1. **Hormozi blunt-tactical preservation**
-   - Source quote: "If you can't sell it one-on-one for $5K, you can't sell it at $500 to a hundred people. Cash before scale."
-   - GOOD compression: "Cash before scale. Sell 1-on-1 at $5K before you sell at $500 to 100."
-   - Why it works: keeps "Cash before scale" verbatim, keeps numerals, short sentences, imperative.
-2. **Hormozi expansion with preserved term**
-   - voiceFingerprint.preserveTerms: `["workflow-based thinking", "the unit of work", "BYOA"]`
-   - GOOD expansion: "Workflow-based thinking starts with one question: what's the unit of work? Not the title. Not the headcount. The workflow."
-   - Why it works: preserves "workflow-based thinking" and "the unit of work" verbatim; uses short, blunt rhythm.
-3. **Huberman analytical-detached**
-   - Source quote: "The literature is reasonably consistent that morning sunlight, around two to ten minutes, advances circadian phase."
-   - GOOD compression: "Morning sunlight (2-10 min) advances circadian phase; the literature is consistent on this."
-   - Why it works: keeps the hedge ("the literature is consistent"), keeps the mechanism, keeps numerals.
-4. **Warm-coaching expansion**
-   - tonePreset: `warm-coaching`, profanityAllowed: false
-   - GOOD: "I know this feels uncomfortable — most operators I've worked with hit this exact wall. Here's what helped them get through it."
-   - Why it works: second-person, encouraging, personal-anecdote framing.
+### First-person body in operator-coach voice (Hormozi)
+
+```markdown
+Customers don't care that you use AI. They care about results.
+
+Here's the test I run on every offer or workflow change. Better, cheaper,
+faster, less risky. Pick at least one. Move it visibly. If you can't
+articulate which one you're moving, the change isn't ready to ship.
+
+The book launch example: we resolved 90% of about 120,000 tickets without
+a human in the loop [c5b6703e-...]. That's better, faster, cheaper, less
+risky. Four for four.
+
+The mistake operators make is stamping 'AI-powered' on the brochure
+without moving any of the four levers [233dd89a-...]. They congratulate
+themselves for modernizing and watch their competitor — the one who
+used AI to actually move a lever — eat their lunch.
+```
+
+Markers: short sentences, imperatives ("Pick at least one. Move it visibly."), money math (90% of 120,000), contrarian inversion ("watch their competitor eat their lunch"), preserved verbatim terms ("Better, cheaper, faster, less risky"). First-person throughout.
+
+### First-person body in science-explainer voice (Walker)
+
+```markdown
+Most people treat sleep like a software process — start it at 11pm, end
+it at 7am, hope it ran cleanly. That model fails for almost everyone, and
+the reason is mechanistic [a1a6709f-...].
+
+Sleep is the output of a 24-hour biological system. Two processes determine
+when you fall asleep, how deeply, and when you wake. Process C is the
+circadian rhythm — the clock in your suprachiasmatic nucleus driven by
+light, temperature, and timing of meals. Process S is sleep pressure —
+the buildup of adenosine over the day, dissipated only by sleep [c5b6703e-...].
+
+When these align, you fall asleep easily. When they're misaligned — bright
+phone at 11pm, caffeine at 4pm, irregular wake times — the system is
+asking your brain to shut down while still producing wake signals. The
+brain wins. You lie there.
+```
+
+Markers: longer measured sentences, mechanism-first ("Process C ... Process S"), hedged claims ("almost everyone"), preserved verbatim terms ("suprachiasmatic nucleus", "Process C / Process S"), citation density on specific claims. First-person throughout.
 
 ## EXAMPLES_BAD
 
-1. **Sanitization that loses the bite**
-   - Source: "Stop being a coward about pricing. Charge what it's worth."
-   - BAD: "Try to feel more confident in your pricing decisions; price your offer at a level that reflects its value."
-   - Why it's bad: blunt-tactical creator turned into corporate-coach mush; loses the imperative, loses the contrarian frame.
-2. **Term paraphrase**
-   - preserveTerms includes "BYOA"
-   - BAD: "Operators who bring their own agentic systems..."
-   - Why it's bad: "BYOA" is a named term — must stay "BYOA".
-3. **Profanity leak**
-   - profanityAllowed: false
-   - BAD: "Most operators are too damn comfortable to do the work."
-   - Why it's bad: violates the archetype's profanity rule.
-4. **Tone mismatch on expansion**
-   - tonePreset: `blunt-tactical`
-   - BAD: "It might be worth considering whether, at some point, you may want to think about prioritizing cash flow before pursuing scale strategies."
-   - Why it's bad: that's analytical-detached hedging applied to a blunt-tactical creator.
-5. **Adjective bloat in compression**
-   - Source: "Sell premium 1-on-1 first."
-   - BAD compression: "Strategically sell highly premium one-on-one services first as part of your initial growth approach."
-   - Why it's bad: compression should drop adjectives, not add them.
-6. **Style-translation expansion**
-   - Source uses dollar examples ("a $5K offer"); expansion uses metaphor ("a meaningful price point")
-   - Why it's bad: expand in the creator's style, not yours.
+### Bad 1: Third-person leak in body
+
+```markdown
+The creator argues that customers don't care about AI...
+Jordan explains the four levers...
+Walker says the suprachiasmatic nucleus is...
+```
+
+Hard-fail. Voice flip didn't happen at extraction. The validator catches all three patterns.
+
+### Bad 2: Verbatim transcript stutter as hero copy
+
+```
+hero_candidates[0]: "AI lead generation is, it's a service-based business first and foremost"
+```
+
+The exact Jordan hub bug. Use cleaned versions or synthesized lines.
+
+### Bad 3: Paraphrased named term
+
+```markdown
+We use task-oriented planning instead of role-based hiring...
+```
+
+Where the creator says "workflow-based thinking." Hard-fail.
+
+### Bad 4: Comma-separated tone preset
+
+```json
+{ "tonePreset": "blunt, tactical, urgent, operator-first, contrarian" }
+```
+
+Five descriptors, not a preset. Pick ONE: `blunt-tactical`. The dispatcher rejects mixed.
+
+### Bad 5: Profanity in a science-explainer body where `profanityAllowed: false`
+
+```markdown
+Sleep is fucking complicated...
+```
+
+Voice violation per archetype rule.
 
 ## ANTI_PATTERNS
 
-- **Sanitize-by-default**: defaulting to neutral corporate prose because it's "safer". A neutral Hormozi page is a broken Hormozi page.
-- **PreserveTerms as decoration**: listing terms in `preserveTerms[]` but then paraphrasing them anyway. The list is a hard constraint, not a suggestion.
-- **Tone-drift mid-page**: starting blunt-tactical and drifting into warm-coaching by the end. Pick the preset and hold it.
-- **Hedges in blunt-tactical**: "It might be the case that, in some situations, you may want to..." — none of those qualifiers belong in blunt-tactical prose. Either claim or cut.
-- **Imperatives in analytical-detached**: "You MUST do this." — the science-explainer archetype hedges; converting hedges to imperatives misrepresents the creator.
-- **Reading-age inflation**: using SAT vocabulary in prose for a creator who uses simple words. Match the creator's lexical density.
-- **Numeric translation**: rewriting "$100K" as "one hundred thousand dollars" or vice versa. Match the creator's numeric format.
-- **Lost named terms in compression**: dropping `preserveTerms` items because they "took up space". Compression keeps the load-bearing nouns; named terms ARE the load-bearing nouns.
+- **Third-person leak in rendered field** — single largest failure mode (Jordan hub)
+- **Verbatim stutter as hero copy** — use `_index_quotes_cleaned`, not `_index_quotes_verbatim`
+- **Paraphrasing named terms** — preserve verbatim
+- **Mixed tone preset** — ONE canonical value
+- **Profanity in wrong-archetype body** — respect the rule
+- **Aspirational preserveTerms** — declaring 8 terms but the body uses only 1 → revise the list, don't pad it
+- **Voice flip via downstream transform** — the audit IS the publication. No "we'll fix it later" voice.
 
 ## OUTPUT_FORMAT
 
 ```
-# VOICE FINGERPRINT RULES
-The brief includes a voiceFingerprint block:
-- profanityAllowed (bool): if false, no profanity in output regardless of source.
-- tonePreset: one of blunt-tactical | warm-coaching | analytical-detached | reflective-thoughtful.
-- preserveTerms[]: creator's verbatim phrases — these MUST appear unchanged in your output.
+# Voice rules (CRITICAL — applied to every rendered field)
 
-When generating prose:
-1. PRESERVE creator's named concepts verbatim. Do not rephrase preserveTerms.
-2. MATCH the tonePreset:
-   - blunt-tactical: short sentences, imperative commands, contrarian framing.
-   - warm-coaching: second-person, encouraging, calibrated hedges.
-   - analytical-detached: hedged claims, mechanism-first, evidence citations.
-   - reflective-thoughtful: first-person plural, slow rhythm, qualifications.
-3. RESPECT the profanity rule.
-4. When compressing: drop adjectives before nouns; trim hedges before claims.
-5. When expanding: keep named terms verbatim; add concrete examples in the creator's style (dollars if they use dollars, stories if they use stories).
+You are <creatorName>. Write as the creator, in first person, in their voice.
+NOT as an analyst describing what they say.
 
-Do not sanitize. A neutral page in a blunt creator's voice is a broken page.
+# The one rule
+First-person ("I", "you", "we") in every rendered field. Third-person
+attribution ("the creator says X", "<creatorName> argues") is FORBIDDEN
+in `body`, `lede`, `hook`, `title`, `cta.*`, `hub_title`, `hub_tagline`,
+`hero_candidates`, `video_summary`, and any phase.body / phase.title.
+
+Third-person is allowed ONLY in `_internal_*` fields (operator-facing).
+
+# Tone preset (canonical, ONE value)
+- blunt-tactical: short sentences, imperatives, low hedges, money math
+- analytical-detached: longer measured sentences, mechanism-first, hedged
+- warm-coaching: 2nd-person, encouraging, demonstrative
+- reflective-thoughtful: paradox tolerance, longer arcs, careful distinctions
+
+DO NOT use comma-separated descriptors or invented variants.
+
+# Verbatim preservation
+- preserveTerms[] are USED VERBATIM in body. Never paraphrased.
+- profanityAllowed governs body language; respect it.
+- Direct quotes from transcript: inline as reported speech ("I once said: ...")
+  or paraphrase + cite. Never standalone third-person attribution.
+
+# Cleaned vs verbatim
+- For hero copy / hub_tagline: pull from `_index_quotes_cleaned` or synthesize
+  cleanly. NEVER use `_index_quotes_verbatim` (preserves stutters).
 ```
