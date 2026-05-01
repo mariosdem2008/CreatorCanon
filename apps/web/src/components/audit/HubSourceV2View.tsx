@@ -11,7 +11,8 @@
  */
 
 import type { ChannelProfileView, CanonNodeView, PageBriefView } from '@/lib/audit/types';
-import { type EvidenceEntry, renderBodyWithChips } from '@/components/audit/EvidenceChip';
+import { type EvidenceEntry } from '@/components/audit/EvidenceChip';
+import { renderBodyWithChips } from '@/components/audit/render-body-with-chips';
 import { WorkshopStagesView, type WorkshopStage } from '@/components/audit/WorkshopStagesView';
 
 interface ChannelProfileV2 {
