@@ -234,14 +234,6 @@ function buildBodyPrompt(input: CanonBodyInput): string {
   lines.push(voiceRulesPrompt(voiceMode, input.creatorName));
   lines.push('');
 
-  if (voiceMode === 'hybrid') {
-    lines.push('# Hybrid mode structure');
-    lines.push('Structure the body in 3 layers:');
-    lines.push('1. Editorial third-person framing for the concept (defines the topic)');
-    lines.push('2. 1-3 first-person aphorism slots as blockquotes from the creator');
-    lines.push('3. Editorial third-person tie-back to "what this means"');
-    lines.push('');
-  }
   lines.push(`# Weaving requirement`);
   lines.push(`The woven items above MUST appear in your body — paraphrased or directly. Reference`);
   lines.push(`them BY CONTENT in your prose (e.g., "the dentist value-ladder example", "the £5,000`);
