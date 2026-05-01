@@ -238,7 +238,11 @@ async function transcribeOnce(
  * Drive a Python faster-whisper subprocess. Local Whisper has no audio-size
  * cap and no rate limit, so we hand it the full audio path in one call.
  */
-async function transcribeOnceLocal(
+/** Run the Python local-whisper subprocess once. Accepts valid JSON output
+ * even when the process exits non-zero — faster-whisper on Windows + CUDA
+ * occasionally crashes during cleanup (exit 0xC0000409, STATUS_STACK_BUFFER_OVERRUN)
+ * after the actual transcription has succeeded and emitted JSON to stdout. */
+async function transcribeOnceLocalRaw(
   audioPath: string,
   label: string,
   runner: LocalWhisperRunner,
@@ -254,25 +258,59 @@ async function transcribeOnceLocal(
     proc.stderr?.on('data', (b: Buffer) => {
       const text = b.toString();
       stderr += text;
-      // Forward heartbeats live so the operator can see progress.
       process.stderr.write(text);
     });
     proc.on('error', (err) => {
       reject(new Error(`local-whisper spawn failed for ${label}: ${err.message}. Install with: ${runner.pythonBin} -m pip install faster-whisper`));
     });
     proc.on('close', (code) => {
+      // Accept JSON output even on non-zero exit if stdout looks valid —
+      // CUDA shutdown crashes on Windows post-transcription happen after
+      // the JSON has already been written.
+      const trimmed = stdout.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed) as VerboseRes;
+          if (Array.isArray(parsed.segments)) {
+            if (code !== 0) {
+              process.stderr.write(`[local-whisper] ${label} exit ${code} but JSON is valid (${parsed.segments.length} segments) — accepting\n`);
+            }
+            resolve(parsed);
+            return;
+          }
+        } catch {
+          // fall through to the error branch
+        }
+      }
       if (code !== 0) {
         reject(new Error(`local-whisper ${label} exited ${code}: ${stderr.slice(-400)}`));
         return;
       }
-      try {
-        const parsed = JSON.parse(stdout) as VerboseRes;
-        resolve(parsed);
-      } catch (e) {
-        reject(new Error(`local-whisper ${label} output not JSON: ${(e as Error).message}; preview: ${stdout.slice(0, 200)}`));
-      }
+      reject(new Error(`local-whisper ${label} output not JSON; preview: ${stdout.slice(0, 200)}`));
     });
   });
+}
+
+/** With per-chunk retry — a flaky CUDA shutdown shouldn't fail the whole video. */
+async function transcribeOnceLocal(
+  audioPath: string,
+  label: string,
+  runner: LocalWhisperRunner,
+): Promise<VerboseRes> {
+  const maxAttempts = 3;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await transcribeOnceLocalRaw(audioPath, label, runner);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts) break;
+      const backoffMs = 5000 * attempt;
+      process.stderr.write(`[local-whisper] ${label} attempt ${attempt}/${maxAttempts} failed (${(err as Error).message.slice(0, 200)}) — retrying in ${backoffMs}ms\n`);
+      await new Promise((r) => setTimeout(r, backoffMs));
+    }
+  }
+  throw lastErr;
 }
 
 /**
@@ -282,6 +320,13 @@ async function transcribeOnceLocal(
  * Local-whisper bypasses chunking entirely — it streams audio of any length
  * with no rate limit, and chunking would just add re-encoding overhead.
  */
+/** Local-whisper memory chunking: faster-whisper loads the whole audio
+ * into memory before extracting features. For a 2.7hr podcast that's
+ * ~1.5 GB of float32 — easily exceeds the available RAM on a 16 GB box
+ * with Chrome + dev tools open. Chunk by duration (default 25 min, env-
+ * overridable) so each chunk's feature array fits in ~250 MB. */
+const LOCAL_WHISPER_CHUNK_SEC = Math.max(60, parseInt(process.env.LOCAL_WHISPER_CHUNK_SEC ?? '1500', 10));
+
 async function transcribeWithChunking(
   audioPath: string,
   audioBytes: number,
@@ -291,8 +336,42 @@ async function transcribeWithChunking(
   transcriber: Transcriber,
 ): Promise<VerboseRes> {
   if (transcriber.kind === 'local-whisper') {
-    console.info(`[transcribe] ${videoId}: using ${transcriber.providerLabel} (no chunking, no rate limit)`);
-    return transcribeOnceLocal(audioPath, videoId, transcriber);
+    if (durationSec <= LOCAL_WHISPER_CHUNK_SEC) {
+      console.info(`[transcribe] ${videoId}: using ${transcriber.providerLabel} (single pass, ${Math.round(durationSec)}s)`);
+      return transcribeOnceLocal(audioPath, videoId, transcriber);
+    }
+    // Long audio: chunk by duration to bound RAM during feature extraction.
+    const chunks = Math.ceil(durationSec / LOCAL_WHISPER_CHUNK_SEC);
+    const chunkSeconds = Math.ceil(durationSec / chunks);
+    console.info(`[transcribe] ${videoId}: ${(durationSec / 60).toFixed(1)}min audio > ${LOCAL_WHISPER_CHUNK_SEC}s; ${transcriber.providerLabel} chunking into ${chunks} pieces of ~${chunkSeconds}s each`);
+    const merged: VerboseRes = { text: '', segments: [], duration: durationSec };
+    for (let i = 0; i < chunks; i += 1) {
+      const startSec = i * chunkSeconds;
+      const chunkPath = path.join(tempDir, `lw_chunk_${i}.m4a`);
+      await runCommand(ffmpegBin(), [
+        '-y',
+        '-ss', String(startSec),
+        '-t', String(chunkSeconds),
+        '-i', audioPath,
+        '-vn',
+        '-c:a', 'aac',
+        chunkPath,
+      ]);
+      const stat = await fs.stat(chunkPath);
+      console.info(`[transcribe]   chunk ${i + 1}/${chunks}: ${(stat.size / 1024 / 1024).toFixed(1)} MB at ${startSec}s`);
+      const partial = await transcribeOnceLocal(chunkPath, `${videoId}_${i}`, transcriber);
+      if (partial.text) merged.text += (merged.text ? ' ' : '') + partial.text;
+      for (const s of partial.segments ?? []) {
+        merged.segments!.push({
+          start: s.start + startSec,
+          end: s.end + startSec,
+          text: s.text,
+        });
+      }
+      // Clean up chunk file immediately so we don't pile up tempdir entries.
+      await fs.unlink(chunkPath).catch(() => undefined);
+    }
+    return merged;
   }
   if (audioBytes <= WHISPER_MAX_BYTES) {
     return transcribeOnce(audioPath, videoId, transcriber);
