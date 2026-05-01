@@ -12,6 +12,7 @@
 
 import type { ChannelProfileView, CanonNodeView, PageBriefView } from '@/lib/audit/types';
 import { type EvidenceEntry, renderBodyWithChips } from '@/components/audit/EvidenceChip';
+import { WorkshopStagesView, type WorkshopStage } from '@/components/audit/WorkshopStagesView';
 
 interface ChannelProfileV2 {
   schemaVersion?: 'v2';
@@ -96,6 +97,7 @@ export function HubSourceV2View({
   debug,
   segmentById,
   youtubeIdByVideoId,
+  workshopStages = [],
 }: {
   channelProfile: ChannelProfileView | null;
   canonNodes: CanonNodeView[];
@@ -103,6 +105,7 @@ export function HubSourceV2View({
   debug: boolean;
   segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
   youtubeIdByVideoId: Record<string, string | null>;
+  workshopStages?: Array<{ id: string; payload: Record<string, unknown>; position: number }>;
 }) {
   const cp = channelProfile?.payload as ChannelProfileV2 | null;
   if (!cp) return null;
@@ -228,6 +231,16 @@ export function HubSourceV2View({
 
       {/* READER JOURNEY (timeline) */}
       {journeyNode ? <ReaderJourneyTimeline node={journeyNode} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} /> : null}
+
+      {/* WORKSHOP STAGES */}
+      {workshopStages.length > 0 ? (
+        <WorkshopStagesView
+          stages={workshopStages.map((w) => w.payload as unknown as WorkshopStage)}
+          segmentById={segmentById}
+          youtubeIdByVideoId={youtubeIdByVideoId}
+          debug={debug}
+        />
+      ) : null}
 
       {/* CANON NODES (the body teaching content) — grouped under their pillars */}
       {standardNodes.length > 0 ? (
