@@ -9,7 +9,7 @@
     "start": "next start --port 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --import \"../../node_modules/.pnpm/tsx@4.19.1/node_modules/tsx/dist/loader.mjs\" --test \"src/**/*.test.ts\"",
+    "test": "bash -O globstar -c 'node --import \"../../node_modules/.pnpm/tsx@4.19.1/node_modules/tsx/dist/loader.mjs\" --test src/**/*.test.ts'",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:install": "playwright install --with-deps chromium",
