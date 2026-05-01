@@ -70,6 +70,18 @@ export const pageBrief = pgTable('page_brief', {
   runPositionIdx: index('page_brief_run_position_idx').on(t.runId, t.position),
 }));
 
+// One row per WorkshopStage payload — one per reader-journey phase. Mirrors pageBrief.
+export const workshopStage = pgTable('workshop_stage', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').notNull().references(() => workspace.id, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull().references(() => generationRun.id, { onDelete: 'cascade' }),
+  payload: jsonb('payload').notNull(),
+  position: integer('position').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (t) => ({
+  runPositionIdx: index('workshop_stage_run_position_idx').on(t.runId, t.position),
+}));
+
 export const pageQualityReport = pgTable('page_quality_report', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspace.id, { onDelete: 'cascade' }),
@@ -113,5 +125,6 @@ export type ChannelProfile = typeof channelProfile.$inferSelect;
 export type VideoIntelligenceCard = typeof videoIntelligenceCard.$inferSelect;
 export type CanonNode = typeof canonNode.$inferSelect;
 export type PageBrief = typeof pageBrief.$inferSelect;
+export type WorkshopStage = typeof workshopStage.$inferSelect;
 export type PageQualityReport = typeof pageQualityReport.$inferSelect;
 export type VisualMoment = typeof visualMoment.$inferSelect;
