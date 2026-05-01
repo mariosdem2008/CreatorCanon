@@ -6,8 +6,12 @@
  *   2. Trim trailing whitespace + dangling commas, retry parse.
  *   3. Walk from start counting brackets/braces; when depth returns to 0
  *      (last balanced top-level close), parse only that prefix.
- *   4. If 3 fails, drop the last incomplete entry of the outermost array
- *      or object and parse the rest.
+ *   4. Walk forward recording every comma's position + the opener-stack
+ *      snapshot at that point. From the most recent comma backward, try
+ *      `slice(startIdx, commaIdx) + reversedClosers(stackSnapshot)` and
+ *      accept the first that JSON.parse succeeds on. This handles Codex's
+ *      `{"registry": {"u1": {...}, "u2": {...}}}` shape where entry
+ *      separators live at depth 2.
  *
  * Returns null when no strategy recovers a parseable result. Caller then
  * falls back to its own degraded path (e.g., evidence-tagger's degraded
@@ -42,8 +46,9 @@ export function repairTruncatedJson(raw: string): unknown | null {
     }
   }
 
-  // Strategy 4: drop the last incomplete top-level entry, retry
-  const dropped = dropLastTopLevelEntry(trimmed);
+  // Strategy 4: walk forward, snapshot stack at every comma; from most recent
+  // backward, try truncating at that comma + appending the matching closers.
+  const dropped = dropLastIncompleteEntry(trimmed);
   if (dropped) {
     try {
       return JSON.parse(dropped);
@@ -99,21 +104,23 @@ function findLastBalancedPrefix(raw: string): string | null {
   return raw.slice(startIdx, lastBalancedEnd + 1);
 }
 
-/** Drop the last incomplete top-level array/object entry. Returns a string
- *  that — if it parses — represents everything before the truncation. */
-function dropLastTopLevelEntry(raw: string): string | null {
+/** Walk the input forward, snapshotting the opener stack at every comma.
+ *  At end-of-input (potentially mid-string or mid-escape), find the most
+ *  recent comma whose snapshot produces a parseable prefix when truncated
+ *  there and balanced with the matching closers. Falls back to earlier
+ *  commas if the most recent fails to parse.
+ *
+ *  This handles deep-nested truncation patterns that the simpler
+ *  "drop last top-level entry" approach misses — specifically the
+ *  `{"registry": {...}}` shape where entry separators live at depth 2. */
+function dropLastIncompleteEntry(raw: string): string | null {
   const startIdx = raw.search(/[{[]/);
   if (startIdx < 0) return null;
-  const opener = raw[startIdx];
-  const closer = opener === '{' ? '}' : ']';
 
-  // Walk forward, tracking depth + string state. Find the LAST comma at
-  // depth 1 that's NOT inside a string. Truncate after that comma, append
-  // the closer.
-  let depth = 0;
+  const stack: Array<'{' | '['> = [];
   let inString = false;
   let escaped = false;
-  let lastTopLevelComma = -1;
+  const commaHistory: Array<{ idx: number; closers: string }> = [];
 
   for (let i = startIdx; i < raw.length; i += 1) {
     const ch = raw[i];
@@ -134,14 +141,31 @@ function dropLastTopLevelEntry(raw: string): string | null {
       continue;
     }
     if (ch === '{' || ch === '[') {
-      depth += 1;
+      stack.push(ch);
     } else if (ch === '}' || ch === ']') {
-      depth -= 1;
-    } else if (ch === ',' && depth === 1) {
-      lastTopLevelComma = i;
+      stack.pop();
+    } else if (ch === ',') {
+      // Closers needed to balance from this comma's depth back to 0.
+      const closers = stack
+        .slice()
+        .reverse()
+        .map((o) => (o === '{' ? '}' : ']'))
+        .join('');
+      commaHistory.push({ idx: i, closers });
     }
   }
 
-  if (lastTopLevelComma < 0) return null;
-  return raw.slice(startIdx, lastTopLevelComma) + closer;
+  // Try the most recent comma first (deepest recovery), fall back to earlier ones.
+  for (let h = commaHistory.length - 1; h >= 0; h -= 1) {
+    const entry = commaHistory[h]!;
+    const candidate = raw.slice(startIdx, entry.idx) + entry.closers;
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // try the next earlier comma
+    }
+  }
+
+  return null;
 }
