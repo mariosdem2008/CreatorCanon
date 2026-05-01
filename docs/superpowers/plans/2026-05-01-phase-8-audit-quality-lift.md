@@ -456,17 +456,23 @@ describe('defaultVoiceMode', () => {
 });
 
 describe('hasFirstPersonMarkers', () => {
-  test('matches I / my / we / us / our as standalone words', () => {
+  test('matches I / my as standalone words (only personal first-person)', () => {
     assert.equal(hasFirstPersonMarkers('I prospect daily'), true);
     assert.equal(hasFirstPersonMarkers('my system is built on'), true);
-    assert.equal(hasFirstPersonMarkers('we cover the agency model'), true);
     assert.equal(hasFirstPersonMarkers('the path I took'), true);
   });
 
   test('does not match inside other words', () => {
-    assert.equal(hasFirstPersonMarkers('iridescent ousing'), false);
-    // Note: "weekday", "myth", "myriad" don't have I/my/we as standalone words
-    assert.equal(hasFirstPersonMarkers('a weekday myth'), false);
+    assert.equal(hasFirstPersonMarkers('iridescent'), false);
+    assert.equal(hasFirstPersonMarkers('myth myriad mystic'), false);
+  });
+
+  test('does not flag editorial we/our/us (those are intentionally allowed)', () => {
+    // Editorial third-person legitimately uses "we as a field" / "our
+    // understanding has improved" — these are NOT first-person markers.
+    assert.equal(hasFirstPersonMarkers('we as a field'), false);
+    assert.equal(hasFirstPersonMarkers('our understanding of sleep'), false);
+    assert.equal(hasFirstPersonMarkers('the topic helps us see'), false);
   });
 
   test('handles empty input', () => {
@@ -529,8 +535,12 @@ export function defaultVoiceMode(archetype: ArchetypeSlug | string): VoiceMode {
   }
 }
 
-/** First-person markers that should NOT appear in third_person_editorial bodies. */
-const FIRST_PERSON_RE = /\b(I|my|we|us|our)\b/i;
+/** Personal first-person markers that should NOT appear in third_person_editorial
+ *  bodies. INTENTIONALLY narrow: only "I" and "my" — NOT "we"/"us"/"our" because
+ *  editorial third-person legitimately uses "we" / "our" in the sense of "we as
+ *  a field" or "our understanding." Walker's third-person body could say "our
+ *  understanding of REM sleep has improved" without that being a violation. */
+const FIRST_PERSON_RE = /\b(I|my)\b/;
 
 export function hasFirstPersonMarkers(text: string | undefined | null): boolean {
   if (!text) return false;
@@ -588,8 +598,25 @@ export function voiceRulesPrompt(voiceMode: VoiceMode, creatorName: string): str
         '- Mixed register: third-person editorial framing + first-person aphoristic insertions',
         `- Default register is third-person editorial — claims/mechanisms/structure are "the topic does X"`,
         `- Insert 1-3 first-person aphorism slots as direct quotes from ${creatorName}: "I do X" or "my rule is Y"`,
-        '- Aphorisms set off with blockquote markdown (>) or italic emphasis',
+        '- Aphorisms set off with blockquote markdown (>)',
         '- Markdown allowed: ## subheadings, **bold**, lists, blockquotes',
+        '',
+        '# Hybrid mode example structure (use this shape for body):',
+        '',
+        '## [Concept name]',
+        '',
+        '[Third-person editorial framing of the concept — 50-100 words. Defines the topic, names the mechanism.]',
+        '',
+        `> [First-person aphorism from ${creatorName} — 1-3 sentences in their voice. e.g. "I do not think wealth is about money. It\'s about not having to think about money."]`,
+        '',
+        '[Third-person editorial unfold — 100-200 words explaining the mechanism, citing evidence with [<segmentId>] tokens.]',
+        '',
+        `> [Second first-person aphorism — sharp, memorable. e.g. "I want to play games where the time horizon is years, not minutes."]`,
+        '',
+        '[Third-person tie-back — 80-150 words on what the reader should do, in editorial register.]',
+        '',
+        '✓ The blockquoted aphorisms are the ONLY first-person sentences in the body.',
+        '✗ DO NOT put first-person voice in the editorial framing paragraphs. Those stay third-person.',
       ].join('\n');
   }
 }
@@ -704,6 +731,43 @@ function targetWordCount(type: string): { min: number; max: number } {
 }
 ```
 
+- [ ] **Step 3.5: Add graceful degradation for thin source content**
+
+Naval's content is sparse (short clips, aphoristic). If the body writer hits the new 500w/700w/800w floor on a canon backed by only 30 seconds of source segment, retry-on-failure could spin forever. Add a downgrade path: after 2 retries fail to hit the floor, accept the body at the lower length AND log a warning.
+
+In `writeCanonBody`'s retry loop (or in `writeCanonBodiesParallel`), modify the retry-exhausted branch to NOT throw. Instead, return the body with a `degraded: true` marker:
+
+```ts
+// Inside writeCanonBodiesParallel's worker loop, after maxRetries exhausted:
+if (!out.has(input.id) && lastErr) {
+  const wordCountErr = lastErr.message.includes('body too short');
+  if (wordCountErr && lastResult) {
+    // Accept the under-length body; log + continue rather than degraded-fallback
+    console.warn(
+      `[body] ${input.id} permanently under length after ${1 + maxRetries} attempts ` +
+      `(got ${lastResult.body.split(/\s+/).filter(Boolean).length} words, target ${minWordCount(input.type)}); ` +
+      `accepting at lower length to avoid blocking pipeline.`
+    );
+    out.set(input.id, lastResult);
+  } else {
+    // Other failure modes (parse error, third-person leak, etc.) still hard-fail.
+    console.error(`[body] ${input.id} permanently failed: ${lastErr.message.slice(0, 200)}`);
+    out.set(input.id, {
+      body: '',
+      cited_segment_ids: [],
+      used_example_ids: [],
+      used_story_ids: [],
+      used_mistake_ids: [],
+      used_contrarian_take_ids: [],
+    });
+  }
+}
+```
+
+This requires capturing `lastResult` from the most recent attempt (even when it threw). Track it in the for-loop: store `result` in a `lastResult` variable BEFORE the throw inside the try block.
+
+Tradeoff: a short body with citations is better than no body at all for thin-content creators. For agency-quality creators with thick content, the 800w floor is realistic.
+
 - [ ] **Step 4: Typecheck**
 
 ```bash
@@ -739,31 +803,53 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 **Why:** Synthesis bodies (pillar pages) need the same voice-mode discipline as canon bodies. Word floors stay at 400-1000w (synthesis is argument-thread content, not deep teaching — no need to raise).
 
-- [ ] **Step 1: Add VoiceMode import + extend SynthesisBodyInput type**
+- [ ] **Step 1: Add VoiceMode import**
+
+At the top of `synthesis-body-writer.ts`, after existing imports:
 
 ```ts
 import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
+```
 
+- [ ] **Step 2: Add `voiceMode` field to `SynthesisBodyInput` interface**
+
+Find the `SynthesisBodyInput` interface declaration. Add the field at the top (right after `id` / `shell`):
+
+```ts
 export interface SynthesisBodyInput {
-  // ... all existing fields ...
-  voiceMode: VoiceMode;
-  // ... rest ...
+  id: string;
+  shell: SynthesisShell;
+  voiceMode: VoiceMode;          // NEW (Phase 8)
+  // ... existing fields below unchanged ...
+  children: ChildCanonRef[];
+  creatorName: string;
+  archetype: ArchetypeSlug;
+  voiceFingerprint: VoiceFingerprint;
+  channelDominantTone?: string;
+  channelAudience?: string;
 }
 ```
 
-- [ ] **Step 2: Replace inline voice-rules block in the synthesis prompt builder**
+- [ ] **Step 3: Replace inline voice-rules block with voiceRulesPrompt**
 
-Find the existing voice-rules block in the synthesis prompt (currently hard-coded first-person). Replace with:
+Find the inline voice-rules block in the synthesis prompt builder (`buildBodyPrompt`). It currently has hard-coded first-person rules. Replace those lines with:
 
 ```ts
 lines.push(voiceRulesPrompt(input.voiceMode, input.creatorName));
 lines.push('');
 ```
 
-- [ ] **Step 3: Typecheck + commit**
+- [ ] **Step 4: Typecheck**
 
 ```bash
 cd packages/pipeline && npx tsc --noEmit
+```
+
+Expected: no errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
 cd ../..
 git add packages/pipeline/src/scripts/util/synthesis-body-writer.ts
 git commit -m "feat(phase-8): synthesis-body-writer reads voiceMode
@@ -780,25 +866,50 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 **Why:** Reader-journey phase bodies (200-400w each) need the same voice-mode discipline.
 
-- [ ] **Step 1: Add VoiceMode import + extend PhaseBodyInput type**
+- [ ] **Step 1: Add VoiceMode import**
 
 ```ts
 import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
+```
 
+- [ ] **Step 2: Add voiceMode to PhaseBodyInput interface**
+
+Find the `PhaseBodyInput` interface. Add:
+
+```ts
 export interface PhaseBodyInput {
-  // ... existing fields ...
-  voiceMode: VoiceMode;
+  phase: ReaderJourneyPhaseShell;
+  voiceMode: VoiceMode;               // NEW (Phase 8)
+  // ... existing fields below unchanged ...
+  primaryCanons: CanonRefForJourney[];
+  creatorName: string;
+  archetype: ArchetypeSlug;
+  voiceFingerprint: VoiceFingerprint;
+  channelDominantTone?: string;
+  channelAudience?: string;
+  phaseNumber: number;
+  totalPhases: number;
 }
 ```
 
-- [ ] **Step 2: Replace voice-rules block in phase prompt builder with voiceRulesPrompt call**
+- [ ] **Step 3: Replace inline voice-rules block in phase prompt builder**
 
-Same pattern as Tasks 8.4 + 8.5.
+Find the existing voice-rules block in `buildPhaseBodyPrompt` (currently hard-coded first-person). Replace with:
 
-- [ ] **Step 3: Typecheck + commit**
+```ts
+lines.push(voiceRulesPrompt(input.voiceMode, input.creatorName));
+lines.push('');
+```
+
+- [ ] **Step 4: Typecheck**
 
 ```bash
 cd packages/pipeline && npx tsc --noEmit
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
 cd ../..
 git add packages/pipeline/src/scripts/util/journey-body-writer.ts
 git commit -m "feat(phase-8): journey-body-writer reads voiceMode
@@ -815,25 +926,48 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 **Why:** Page-brief intro bodies (200-400w each) need the same voice-mode discipline.
 
-- [ ] **Step 1: Add VoiceMode import + extend BriefBodyInput type**
+- [ ] **Step 1: Add VoiceMode import**
 
 ```ts
 import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
+```
 
+- [ ] **Step 2: Add voiceMode to BriefBodyInput interface**
+
+Find the `BriefBodyInput` interface. Add:
+
+```ts
 export interface BriefBodyInput {
-  // ... existing fields ...
-  voiceMode: VoiceMode;
+  brief: PageBriefShell;
+  voiceMode: VoiceMode;               // NEW (Phase 8)
+  // ... existing fields below unchanged ...
+  primaryCanons: CanonRefForBrief[];
+  creatorName: string;
+  archetype: ArchetypeSlug;
+  voiceFingerprint: VoiceFingerprint;
+  channelDominantTone?: string;
+  channelAudience?: string;
 }
 ```
 
-- [ ] **Step 2: Replace voice-rules block in brief prompt builder with voiceRulesPrompt call**
+- [ ] **Step 3: Replace inline voice-rules block in brief prompt builder**
 
-Same pattern as Tasks 8.4-8.6.
+Find the existing voice-rules block in `buildBodyPrompt` (currently hard-coded first-person). Replace with:
 
-- [ ] **Step 3: Typecheck + commit**
+```ts
+lines.push(voiceRulesPrompt(input.voiceMode, input.creatorName));
+lines.push('');
+```
+
+- [ ] **Step 4: Typecheck**
 
 ```bash
 cd packages/pipeline && npx tsc --noEmit
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
 cd ../..
 git add packages/pipeline/src/scripts/util/brief-body-writer.ts
 git commit -m "feat(phase-8): brief-body-writer reads voiceMode
@@ -1212,29 +1346,29 @@ async function main() {
       { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 },
     );
 
-    // Parse plaintext outputs (they all use predictable [tag] runId=... shape).
-    // For each metric, extract via regex from stdout.
-    const compOut = completeness.stdout;
-    const vmOut = voiceMode.stdout;
-    const leakOut = leak.stdout;
-    const wsOut = workshops.stdout;
+    // Parse machine-readable METRIC lines emitted by each validator. The
+    // validators print `[<tag>] METRIC <key>=<value>` lines for stable parsing.
+    // (See `--metric-line` flag in each validator — Task 8.10 also tweaks
+    // the existing validators to emit these.)
+    const all = [completeness.stdout, voiceMode.stdout, leak.stdout, workshops.stdout].join('\n');
 
-    const matchOr = (s: string, re: RegExp, fallback: string) => {
-      const m = s.match(re);
+    function metric(key: string, fallback: string): string {
+      const re = new RegExp(`METRIC ${key}=(\\S+)`);
+      const m = all.match(re);
       return m ? m[1]! : fallback;
-    };
+    }
 
     results.push({
       runId,
-      creator: matchOr(compOut, /Creator: +(.+)/, '?'),
-      archetype: matchOr(compOut, /Archetype: +(.+)/, '?'),
-      voiceMode: matchOr(vmOut, /voiceMode: (.+)/, '?'),
-      layersGreen: matchOr(compOut, /(\d+ \/ \d+ layers ready)/, '?'),
-      verificationRate: matchOr(compOut, /(\d+)% verified/, '?') + '%',
-      workshopAvgRelevance: matchOr(wsOut, /avg relevance: ([\d.]+)/, '?'),
-      workshopHardFails: matchOr(wsOut, /hard-fail count: (\d+)/, '?'),
-      thirdPersonLeaks: matchOr(leakOut, /leaks found: (\d+)/, '?'),
-      voiceModeViolations: matchOr(vmOut, /violations: (\d+)/, '?'),
+      creator: metric('creator', '?'),
+      archetype: metric('archetype', '?'),
+      voiceMode: metric('voice_mode', '?'),
+      layersGreen: metric('layers_green', '?'),
+      verificationRate: metric('verification_rate', '?') + '%',
+      workshopAvgRelevance: metric('workshop_avg_relevance', '?'),
+      workshopHardFails: metric('workshop_hard_fails', '?'),
+      thirdPersonLeaks: metric('third_person_leaks', '?'),
+      voiceModeViolations: metric('voice_mode_violations', '?'),
     });
   }
 
@@ -1257,7 +1391,7 @@ async function main() {
 
   // Aggregate pass criteria
   const allGreen = results.every((r) =>
-    r.layersGreen === '7 / 7 layers ready' &&
+    r.layersGreen === '7/7' &&
     parseFloat(r.verificationRate) >= 95 &&
     parseFloat(r.workshopAvgRelevance) >= 90 &&
     r.workshopHardFails === '0' &&
@@ -1265,6 +1399,13 @@ async function main() {
     r.voiceModeViolations === '0',
   );
   console.log(`Aggregate: ${allGreen ? '✓ ALL CREATORS PASS AGENCY-PREMIUM BARS' : '✗ One or more creators fall short'}`);
+
+  // Delta from Phase 7 baseline (verification rate was 84-90%; aggregate audit grade was 7.2/10).
+  const verificationRates = results.map((r) => parseFloat(r.verificationRate));
+  const avgVerification = verificationRates.reduce((a, b) => a + b, 0) / verificationRates.length;
+  const phase7Baseline = 87;  // mean of Jordan 87 / Walker 84 / Hormozi 90 from Phase 7 results.
+  const delta = avgVerification - phase7Baseline;
+  console.log(`Verification rate: ${avgVerification.toFixed(1)}% (Phase 7 baseline: ${phase7Baseline}%, delta: ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}pp)`);
   console.log('');
 }
 
@@ -1274,51 +1415,107 @@ main().catch((err) => {
 });
 ```
 
+- [ ] **Step 1.5: Add METRIC lines to existing validators (so cohort report can parse stable)**
+
+Each existing validator (`v2-completeness-report.ts`, `check-third-person-leak.ts`, `check-voice-mode.ts`, `validate-workshops.ts`) gets a single new `console.info` line at the end emitting machine-readable metrics. Format: `[<tag>] METRIC <key>=<value>`.
+
+For `v2-completeness-report.ts`, add at the end of `main()`:
+
+```ts
+console.info(`[completeness] METRIC creator=${(cp?.creatorName ?? '?').replace(/\s+/g, '_')}`);
+console.info(`[completeness] METRIC archetype=${cp?._index_archetype ?? '?'}`);
+console.info(`[completeness] METRIC layers_green=${layersGreen}/${layersTotal}`);
+console.info(`[completeness] METRIC verification_rate=${Math.round(verificationRate * 100)}`);
+```
+
+For `check-third-person-leak.ts`, add at the end of `main()`:
+
+```ts
+console.info(`[3p-leak] METRIC third_person_leaks=${leaks.length}`);
+```
+
+For `check-voice-mode.ts`, add at the end of `main()`:
+
+```ts
+console.info(`[voice-mode] METRIC voice_mode=${voiceMode}`);
+console.info(`[voice-mode] METRIC voice_mode_violations=${violations.length}`);
+```
+
+For `validate-workshops.ts`, add at the end of `main()`:
+
+```ts
+console.info(`[workshops] METRIC workshop_avg_relevance=${avgRelevance.toFixed(1)}`);
+console.info(`[workshops] METRIC workshop_hard_fails=${hardFails.length}`);
+```
+
+(Variable names like `verificationRate`, `hardFails` should match what each script already computes — verify by grep before adding.)
+
 - [ ] **Step 2: Typecheck + commit**
 
 ```bash
 cd packages/pipeline && npx tsc --noEmit
 cd ../..
-git add packages/pipeline/src/scripts/v2-cohort-report.ts
-git commit -m "feat(phase-8): v2-cohort-report — single-page status across N creators
+git add packages/pipeline/src/scripts/v2-cohort-report.ts \
+  packages/pipeline/src/scripts/v2-completeness-report.ts \
+  packages/pipeline/src/scripts/check-third-person-leak.ts \
+  packages/pipeline/src/scripts/check-voice-mode.ts \
+  packages/pipeline/src/scripts/validate-workshops.ts
+git commit -m "feat(phase-8): cohort report + METRIC lines for stable cross-validator parsing
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 8.11: seed-creator-from-channel onboarding helper
+## Task 8.11: New-creator onboarding wrapper (uses existing manual upload helper)
 
 **Files:**
-- Create: `packages/pipeline/src/scripts/seed-creator-from-channel.ts`
+- Create: `packages/pipeline/src/scripts/seed-creator-batch.ts`
 
-**Why:** Operator helper for ingesting a new YouTube channel + dispatching a v2 audit. Used to onboard Naval, Nippard, Codie, Veritasium for Phase 8 cross-archetype testing. Wraps the existing ingestion pipeline (channel resolution, video selection, transcript fetch) with a single CLI entrypoint.
+**Why:** The existing `seed-hormozi-and-dispatch.ts` takes a directory of MP4 files and uploads them via the manual-upload pipeline. It does NOT fetch from YouTube by handle. Phase 8's onboarding workflow uses this manual MP4 path; YouTube fetching is **out of scope for Phase 8** (scoped to Phase 9).
 
-- [ ] **Step 1: Inspect existing ingestion utilities**
+The new wrapper accepts the same shape as `seed-hormozi-and-dispatch` plus a `--voice-mode` flag, then chains the dispatch to call `seed-audit-v2.ts` with the new flag.
 
-Before writing this from scratch, look at:
-- `packages/pipeline/src/scripts/seed-hormozi-and-dispatch.ts` (the user's existing helper for one-off channel onboarding)
-- `packages/pipeline/src/seed-alpha-audio-videos.ts` (alpha-audio variant)
+- [ ] **Step 1: Read the existing helper to confirm CLI shape**
 
-Use whichever pattern is simpler. The new script likely just wraps `seed-hormozi-and-dispatch` with a `--channel-handle <handle>` and `--video-count <N>` argument.
+```bash
+cd packages/pipeline
+head -80 src/scripts/seed-hormozi-and-dispatch.ts
+```
 
-- [ ] **Step 2: Implement (or document inheritance from existing helper)**
+Confirmed CLI shape: `--dir <path>`, `--workspaceId <id>`, `--userId <id>`, `--channelId <id>`, `--projectTitle <title>`, `[--dispatch]`. Takes a directory of MP4 files.
 
-If the existing helper covers the use case directly, this task becomes documentation only. Update the file to either:
+- [ ] **Step 2: Operator pre-step (one-time per creator) — download MP4s**
 
-(a) Be a thin wrapper that calls the existing helper:
+For each Phase 8 creator, the operator must download MP4s to a local directory before this script runs. Recommended tool: `yt-dlp` (operator runs locally, not in this script). Example for Naval:
+
+```bash
+mkdir -p "$HOME/Downloads/yt/naval"
+yt-dlp -f "best[height<=720]" -o "$HOME/Downloads/yt/naval/%(title)s.%(ext)s" \
+  "https://www.youtube.com/playlist?list=PLEHSnxAAhxECBOYUtznvjnURWbQiZ4LbS"
+```
+
+This is operator-side work, not part of the script.
+
+- [ ] **Step 3: Implement seed-creator-batch.ts as a wrapper around the existing helper**
 
 ```ts
-// packages/pipeline/src/scripts/seed-creator-from-channel.ts
+// packages/pipeline/src/scripts/seed-creator-batch.ts
 //
-// Usage: tsx ./src/scripts/seed-creator-from-channel.ts \
-//          --channel-handle <youtube-handle> \
-//          --video-count <N> \
-//          [--archetype <slug>] \
-//          [--voice-mode <mode>]
+// Phase 8 onboarding wrapper. Wraps seed-hormozi-and-dispatch with a
+// --voice-mode flag and ensures the resulting v2 audit run inherits the
+// archetype's voice mode default (or the explicit override).
 //
-// Wraps the existing seed-hormozi-and-dispatch onboarding flow with a CLI
-// argument shape suitable for Phase 8's 4-creator backfill.
+// Usage:
+//   tsx ./src/scripts/seed-creator-batch.ts \
+//     --dir "C:\\path\\to\\creator-mp4s" \
+//     --workspaceId <id> --userId <id> --channelId <id> \
+//     --projectTitle "Creator Name — Hub Title" \
+//     --archetype contemplative-thinker \
+//     --voice-mode hybrid
+//
+// (The existing helper handles MP4 upload + project/run creation. This
+// wrapper adds voice-mode propagation + archetype hint.)
 
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -1328,64 +1525,62 @@ function arg(name: string): string | undefined {
   return i < 0 ? undefined : process.argv[i + 1];
 }
 
-const channelHandle = arg('--channel-handle');
-const videoCount = arg('--video-count');
-const archetype = arg('--archetype');
+const dir = arg('--dir');
+const workspaceId = arg('--workspaceId');
+const userId = arg('--userId');
+const channelId = arg('--channelId');
+const projectTitle = arg('--projectTitle');
 const voiceMode = arg('--voice-mode');
+// archetype is informational; the channel-profile generator detects it
+// from segments. We log it for traceability.
+const archetype = arg('--archetype');
 
-if (!channelHandle || !videoCount) {
-  console.error('Usage: tsx ./src/scripts/seed-creator-from-channel.ts --channel-handle <handle> --video-count <N> [--archetype <slug>] [--voice-mode <mode>]');
+if (!dir || !workspaceId || !userId || !channelId || !projectTitle) {
+  console.error('Usage: tsx ./src/scripts/seed-creator-batch.ts --dir <path> --workspaceId <id> --userId <id> --channelId <id> --projectTitle <title> [--archetype <slug>] [--voice-mode <mode>]');
   process.exit(1);
 }
 
-// Spawn the existing helper. Its CLI shape varies — read its source first.
+console.info(`[seed-creator-batch] starting onboarding for ${projectTitle}`);
+if (archetype) console.info(`[seed-creator-batch] archetype hint: ${archetype}`);
+if (voiceMode) console.info(`[seed-creator-batch] voiceMode: ${voiceMode}`);
+
+// Step 1: upload + create run via existing helper (without --dispatch yet)
 const helperPath = path.join(__dirname, 'seed-hormozi-and-dispatch.ts');
-const args = [
-  helperPath,
-  '--handle', channelHandle,
-  '--count', videoCount,
-];
-if (archetype) args.push('--archetype', archetype);
-if (voiceMode) args.push('--voice-mode', voiceMode);
+const helperResult = spawnSync(
+  'tsx',
+  [helperPath, '--dir', dir, '--workspaceId', workspaceId, '--userId', userId, '--channelId', channelId, '--projectTitle', projectTitle],
+  { stdio: 'inherit' },
+);
+if (helperResult.status !== 0) {
+  console.error('[seed-creator-batch] helper failed; aborting');
+  process.exit(helperResult.status ?? 1);
+}
 
-const result = spawnSync('tsx', args, { stdio: 'inherit' });
-process.exit(result.status ?? 0);
+// Step 2: parse runId from helper's stdout. If helper doesn't expose it
+// programmatically, the operator copies it from the prior step's output
+// and re-runs seed-audit-v2 manually with --voice-mode.
+console.info('[seed-creator-batch] helper completed.');
+console.info('[seed-creator-batch] To dispatch v2 audit with the configured voice mode, run:');
+console.info(`  tsx ./src/scripts/seed-audit-v2.ts <runId> ${voiceMode ? `--voice-mode ${voiceMode}` : ''}`);
+console.info('(Replace <runId> with the runId printed by the helper above.)');
 ```
 
-(b) Or, if the existing helper has a different/awkward CLI shape, port the relevant logic into a fresh script. Choose based on what `seed-hormozi-and-dispatch.ts` actually does — the implementer reading this plan should use judgment.
-
-- [ ] **Step 3: Document the operator workflow**
-
-Add to the file's docblock comment a usage example for the 4 Phase 8 creators:
-
-```ts
-//   # Naval (8 videos from "How to Get Rich" series)
-//   tsx ./src/scripts/seed-creator-from-channel.ts --channel-handle naval --video-count 8 \
-//     --archetype contemplative-thinker --voice-mode hybrid
-//
-//   # Jeff Nippard (30 videos)
-//   tsx ./src/scripts/seed-creator-from-channel.ts --channel-handle JeffNippard --video-count 30 \
-//     --archetype instructional-craft --voice-mode first_person
-//
-//   # Codie Sanchez (10 videos)
-//   tsx ./src/scripts/seed-creator-from-channel.ts --channel-handle CodieSanchezCT --video-count 10 \
-//     --archetype operator-coach --voice-mode first_person
-//
-//   # Veritasium (10 videos)
-//   tsx ./src/scripts/seed-creator-from-channel.ts --channel-handle veritasium --video-count 10 \
-//     --archetype science-explainer --voice-mode third_person_editorial
-```
+This is pragmatic: the wrapper handles upload + project/run creation, then prints the next command for the operator to run with the explicit voiceMode flag. Manual but reliable.
 
 - [ ] **Step 4: Typecheck + commit**
 
 ```bash
 cd packages/pipeline && npx tsc --noEmit
 cd ../..
-git add packages/pipeline/src/scripts/seed-creator-from-channel.ts
-git commit -m "feat(phase-8): seed-creator-from-channel helper — onboards a channel + dispatches v2 audit
+git add packages/pipeline/src/scripts/seed-creator-batch.ts
+git commit -m "feat(phase-8): seed-creator-batch wrapper around manual-upload helper + voice-mode propagation
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
+
+**SCOPE NOTE:** Automated YouTube channel fetch + transcribe is OUT OF SCOPE for Phase 8 — moved to Phase 9. The 4 new creators will be onboarded via downloaded MP4s + the existing manual-upload pipeline.
+
+**SCALE NOTE:** Original plan called for 30 Nippard videos to stress-test scale. Reduced to **15 Nippard videos** to keep the operator's manual-download burden reasonable (15 × ~10 min videos = ~2.5 hours of download + ~75 min of pipeline run). 15 videos is sufficient to validate scale assumptions; we don't need to prove 30 works in Phase 8.
 
 ---
 
@@ -1465,7 +1660,46 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 **Why:** Phase 8's success criterion is "7 creators pass agency-premium bars." This task runs the pipeline against all 7 (3 existing + 4 new) and aggregates results.
 
-- [ ] **Step 1: Re-run Jordan / Walker / Hormozi with new prompts**
+- [ ] **Step 0: Snapshot existing v2 state (rollback safety)**
+
+Before any regen, snapshot the existing canon + brief payloads so we can restore Phase 7 state if Phase 8 regresses:
+
+```bash
+cd packages/pipeline
+mkdir -p /tmp/phase7-backup
+for runId in a8a05629-d400-4f71-a231-99614615521c \
+             cf6ee665-e7a8-48dd-bf1b-2b045bbc2fce \
+             037458ae-1439-4e56-a8da-aa967f2f5e1b; do
+  npx tsx ./src/scripts/inspect-audit-state.ts $runId > /tmp/phase7-backup/$runId.json
+  echo "snapshotted $runId"
+done
+```
+
+If Phase 8 regresses, the operator can restore from these JSON snapshots via the inspect-audit-state script's reverse mode (or by direct DB write).
+
+- [ ] **Step 1a: Walker spike test (HIGHEST RISK — do this BEFORE full regen)**
+
+Phase 8's biggest experiment is converting Walker from `first_person` to `third_person_editorial`. If the new mode produces stilted Wikipedia voice, we discover that BEFORE we regen all of Walker's bodies. Spike test on a single canon body first:
+
+```bash
+# Pick the SHORTEST canon node from Walker's audit (smallest test-batch size).
+# Look at the audit page — pick a definition or aha_moment with minimal body.
+# Then regen JUST that one body with --voice-mode third_person_editorial:
+npx tsx ./src/scripts/seed-audit-v2.ts cf6ee665-e7a8-48dd-bf1b-2b045bbc2fce \
+  --regen-bodies --regen-evidence \
+  --voice-mode third_person_editorial \
+  --canon-id-only <pick-one-canon-id-from-walker>
+```
+
+(Note: `--canon-id-only` doesn't exist yet. If the implementer wants this fast-fail capability, add a 1-step `--canon-id-only <id>` flag to seed-audit-v2 that filters Stage 5's body regen to a single canon. Otherwise: regen all and read 2-3 random outputs.)
+
+Read 2-3 of the resulting bodies. Ask:
+- Does it sound like a Stripe Press article? (good)
+- Does it sound like a Wikipedia summary? (BAD — iterate prompt with explicit good/bad examples before continuing)
+
+**If the spike fails, iterate the `voiceRulesPrompt` for `third_person_editorial`** with explicit good examples (paste 2-3 paragraphs of actual Stripe Press / Patagonia editorial) BEFORE proceeding to Step 1b. Don't waste the full Walker regen on a bad prompt.
+
+- [ ] **Step 1b: Re-run Jordan / Walker / Hormozi with new prompts (full)**
 
 ```bash
 cd packages/pipeline
@@ -1486,45 +1720,86 @@ npx tsx ./src/scripts/seed-audit-v2.ts 037458ae-1439-4e56-a8da-aa967f2f5e1b \
 
 Expected: 30-45 min per creator (canon body regen is the expensive stage). Total: ~1.5-2 hours.
 
-- [ ] **Step 2: Onboard Naval (contemplative-thinker × hybrid)**
+**Pre-step for steps 2-5: download MP4s + create channel rows**
+
+For each new creator, the operator first:
+
+1. **Downloads MP4s locally** (use `yt-dlp` — runs on operator's machine, NOT in the script):
+   ```bash
+   yt-dlp -f "best[height<=720]" -o "$HOME/Downloads/yt/<creator>/%(title)s.%(ext)s" \
+     <youtube-channel-or-playlist-url>
+   ```
+
+2. **Creates a channel row** in the DB for the new creator. Use the existing inspect-workspace-state.ts to find the user's workspaceId, then create a manual_upload channel via SQL or via the existing `seed-hormozi-and-dispatch` pattern.
+
+3. **Runs the seed-creator-batch wrapper** (new in Task 8.11) pointing at the local MP4 directory.
+
+- [ ] **Step 2: Onboard Naval (contemplative-thinker × hybrid)** — 8 videos
 
 ```bash
-npx tsx ./src/scripts/seed-creator-from-channel.ts \
-  --channel-handle naval --video-count 8 \
-  --archetype contemplative-thinker --voice-mode hybrid
+# After downloading 8 of his "How to Get Rich" series clips:
+cd packages/pipeline
+npx tsx ./src/scripts/seed-creator-batch.ts \
+  --dir "$HOME/Downloads/yt/naval" \
+  --workspaceId <workspaceId> \
+  --userId <userId> \
+  --channelId <newly-created-naval-channelId> \
+  --projectTitle "Naval Ravikant — Wealth & Clear Thinking" \
+  --archetype contemplative-thinker \
+  --voice-mode hybrid
 ```
+
+Then run the printed `seed-audit-v2.ts <runId> --voice-mode hybrid` command.
 
 Expected: 30-45 min for full pipeline run.
 
-- [ ] **Step 3: Onboard Jeff Nippard (instructional-craft × first_person, scale stress test)**
+- [ ] **Step 3: Onboard Jeff Nippard (instructional-craft × first_person)** — **15 videos** (reduced from 30 to keep manual download burden manageable; still validates scale)
 
 ```bash
-npx tsx ./src/scripts/seed-creator-from-channel.ts \
-  --channel-handle JeffNippard --video-count 30 \
-  --archetype instructional-craft --voice-mode first_person
+# After downloading 15 of his most-recent fitness/training videos:
+npx tsx ./src/scripts/seed-creator-batch.ts \
+  --dir "$HOME/Downloads/yt/nippard" \
+  --workspaceId <workspaceId> \
+  --userId <userId> \
+  --channelId <newly-created-nippard-channelId> \
+  --projectTitle "Jeff Nippard — Strength Training Science" \
+  --archetype instructional-craft \
+  --voice-mode first_person
 ```
 
-Expected: 90-120 min (scale stress test — 30 videos = ~150 canon nodes, ~600 evidence entries, ~25 workshop clips).
+Expected: 60-80 min. 15 videos = ~75 canon nodes, ~300 evidence entries, ~20 workshop clips.
 
-- [ ] **Step 4: Onboard Codie Sanchez (operator-coach × first_person)**
+- [ ] **Step 4: Onboard Codie Sanchez (operator-coach × first_person)** — 10 videos
 
 ```bash
-npx tsx ./src/scripts/seed-creator-from-channel.ts \
-  --channel-handle CodieSanchezCT --video-count 10 \
-  --archetype operator-coach --voice-mode first_person
+npx tsx ./src/scripts/seed-creator-batch.ts \
+  --dir "$HOME/Downloads/yt/codie" \
+  --workspaceId <workspaceId> \
+  --userId <userId> \
+  --channelId <newly-created-codie-channelId> \
+  --projectTitle "Codie Sanchez — Buying Boring Businesses" \
+  --archetype operator-coach \
+  --voice-mode first_person
 ```
 
 Expected: 35-50 min.
 
-- [ ] **Step 5: Onboard Veritasium (science-explainer × third_person_editorial)**
+- [ ] **Step 5: Onboard Veritasium (science-explainer × third_person_editorial)** — 10 videos
 
 ```bash
-npx tsx ./src/scripts/seed-creator-from-channel.ts \
-  --channel-handle veritasium --video-count 10 \
-  --archetype science-explainer --voice-mode third_person_editorial
+npx tsx ./src/scripts/seed-creator-batch.ts \
+  --dir "$HOME/Downloads/yt/veritasium" \
+  --workspaceId <workspaceId> \
+  --userId <userId> \
+  --channelId <newly-created-veritasium-channelId> \
+  --projectTitle "Veritasium — Counterintuitive Physics" \
+  --archetype science-explainer \
+  --voice-mode third_person_editorial
 ```
 
 Expected: 35-50 min.
+
+**TOTAL onboarding work for new creators:** ~3-4 hours of operator-side MP4 downloads + ~3-4 hours of pipeline execution. Realistic but a real time investment.
 
 - [ ] **Step 6: Run all validators on each of 7 creators**
 
@@ -1612,3 +1887,27 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 - 0 workshop hard-fails across all 7
 
 If any of those miss, iterate before claiming Phase 8 done.
+
+---
+
+## Pre-implementation hard audit (revisions applied 2026-05-01)
+
+After writing the original plan, ran an adversarial pre-implementation audit. Found 7 issues; all addressed inline:
+
+**Critical (would break implementation):**
+- **C1: Task 8.11 wrapper assumed YouTube channel fetch.** The existing `seed-hormozi-and-dispatch.ts` actually takes a directory of MP4 files (manual upload path), not a YouTube handle. Replaced 8.11 with `seed-creator-batch.ts` — a wrapper around the manual upload helper. Documented operator pre-step (download MP4s with `yt-dlp` locally first). Pulled YouTube channel fetch out of scope → Phase 9.
+- **C2: voice-mode `hasFirstPersonMarkers` regex was too aggressive.** Original regex matched `we|us|our` which would falsely flag editorial third-person ("we as a field," "our understanding"). Narrowed to `I|my` only.
+- **C3: Cohort report regex parsing was fragile.** Replaced ad-hoc stdout regex with stable `METRIC <key>=<value>` lines emitted by each validator. Added Task 8.10 sub-step to add METRIC lines to existing validators.
+
+**Important (would degrade quality):**
+- **I1: Body length floor lift could spin retry-on-failure forever on thin Naval-style content.** Added Step 3.5 to Task 8.4: graceful degradation — accept under-length body after retries exhaust + log warning, instead of all-degraded fallback.
+- **I2: Walker's voice-mode change is the highest-risk experiment.** Added Step 1a to Task 8.13: spike-test ONE Walker canon body with the new prompt BEFORE doing full regen. Iterate prompt with explicit good examples if voice reads as Wikipedia-stilted.
+- **I3: Nippard 30-video scale test is too aggressive for manual download.** Reduced to 15 videos. Still validates scale assumptions without forcing 30 manual downloads.
+- **I4: Hybrid voice mode under-defined.** Added concrete 200-word example structure to `voiceRulesPrompt('hybrid')` — third-person framing + blockquoted first-person aphorism slots. Codex now has a shape to copy.
+
+**Minor (cosmetic):**
+- **M1: Tasks 8.5/8.6/8.7 originally referenced "same pattern as 8.4" without inlining the import + type changes.** Inlined explicitly per writing-plans skill discipline.
+- **M2: No rollback plan for Phase 7 baseline if regen regresses.** Added Step 0 to Task 8.13: snapshot existing v2 payloads to /tmp before regen.
+- **M3: Cohort report could mark "FAIL" on substantial-but-incomplete progress.** Added delta-from-baseline reporting so 87% → 92% reads as "+5pp progress" even if the 95% absolute bar isn't yet hit.
+
+**Plan grade after fixes:** 7.5 → 9.0 (estimated). Implementation should now land Phase 8 at the targeted 9+/10 audit quality with realistic operator workload.
