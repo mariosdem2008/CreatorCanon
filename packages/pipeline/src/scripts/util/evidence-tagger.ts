@@ -139,7 +139,7 @@ function buildEvidencePrompt(input: EvidenceTaggerInput): string {
   lines.push(`NO paraphrasing. NO cleaning. NO abbreviation. Copy the EXACT characters.`);
   lines.push(``);
   lines.push('# supportingPhrase length rule');
-  lines.push('Pick a 10-25 word substring. NOT the whole segment. NOT a single word.');
+  lines.push('Pick an 8-25 word substring. NOT the whole segment. NOT a single word.');
   lines.push('The phrase should be the TIGHTEST verbatim chunk that supports the cited claim.');
   lines.push('Avoid phrases ending mid-sentence — pick complete clauses where possible.');
   lines.push('');
