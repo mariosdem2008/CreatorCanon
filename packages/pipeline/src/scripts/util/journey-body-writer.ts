@@ -42,6 +42,7 @@ import { extractJsonFromCodexOutput } from '../../agents/providers/codex-extract
 import { runCodex } from './codex-runner';
 import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
+import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
@@ -120,6 +121,7 @@ export interface PhaseBodyInput {
   creatorName: string;
   archetype: ArchetypeSlug;
   voiceFingerprint: VoiceFingerprint;
+  voiceMode?: VoiceMode;
   channelDominantTone?: string;
   channelAudience?: string;
   /** Position in the sequence. Used to gloss "first phase" vs "later". */
@@ -374,11 +376,7 @@ function buildPhaseBodyPrompt(input: PhaseBodyInput): string {
     `- DO NOT cite in the opening sentence (let the hook breathe)`,
     `- DO NOT use [<startMs>ms-<endMs>ms] ranges`,
     '',
-    `# Voice rules (HARD-FAIL otherwise)`,
-    `- First-person only. NEVER "the creator", "${creatorName}", "she/he says", "in this phase"`,
-    `- Reference anchor canons by their TITLES, not "the lesson on X"`,
-    `- Verbatim preserveTerms`,
-    `- Markdown allowed but keep it lean — this is intro copy, not a chapter`,
+    voiceRulesPrompt(input.voiceMode ?? 'first_person', input.creatorName),
     '',
     `# Output format`,
     `ONE JSON object. First char \`{\`, last char \`}\`.`,
