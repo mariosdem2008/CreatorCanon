@@ -145,29 +145,45 @@ async function main() {
   console.log('');
 
   // ── Bar 3: thinnest body paywall-worthy ─────────────────
+  // Threshold is type-aware so a 320w definition isn't flagged when its
+  // spec range is 200-500w. Mirrors canon-body-writer's minWordCount().
+  function paywallMin(type: string | undefined): number {
+    switch (type) {
+      case 'definition': case 'aha_moment': case 'quote': return 200;
+      case 'example': return 250;
+      case 'lesson': case 'pattern': case 'tactic': return 300;
+      case 'principle': case 'topic': return 350;
+      case 'framework': return 400;
+      case 'playbook': return 500;
+      default: return 300;
+    }
+  }
   console.log(`▸ Quality bar 3: thinnest body (paywall test proxy)`);
   const allBodies = standardCanon
     .map((c) => ({
       title: (c.payload as { title?: string }).title ?? '?',
+      type: (c.payload as { type?: string }).type,
       body: (c.payload as { body?: string }).body ?? '',
     }))
     .filter((x) => x.body.length > 0)
     .map((x) => ({
       title: x.title,
+      type: x.type,
       words: wordCount(x.body),
       citations: citationCount(x.body),
+      minForType: paywallMin(x.type),
     }))
-    .sort((a, b) => a.words - b.words);
+    .sort((a, b) => (a.words - a.minForType) - (b.words - b.minForType));
   if (allBodies.length === 0) {
     console.log('   (no bodies to evaluate)');
   } else {
     const thinnest = allBodies[0]!;
-    console.log(`   Thinnest:  "${thinnest.title}" → ${thinnest.words}w · ${thinnest.citations} citations`);
+    console.log(`   Thinnest:  "${thinnest.title}" [${thinnest.type}] → ${thinnest.words}w · ${thinnest.citations} citations (type min ${thinnest.minForType}w)`);
     const median = allBodies[Math.floor(allBodies.length / 2)]!;
-    console.log(`   Median:    "${median.title}" → ${median.words}w · ${median.citations} citations`);
+    console.log(`   Median:    "${median.title}" [${median.type}] → ${median.words}w · ${median.citations} citations`);
     const fattest = allBodies[allBodies.length - 1]!;
-    console.log(`   Fattest:   "${fattest.title}" → ${fattest.words}w · ${fattest.citations} citations`);
-    console.log(`   Bar test:  thinnest ≥ 350w ${thinnest.words >= 350 ? '✓' : '✗'} · ${thinnest.citations} citations ${thinnest.citations >= 4 ? '✓' : '✗'}`);
+    console.log(`   Fattest:   "${fattest.title}" [${fattest.type}] → ${fattest.words}w · ${fattest.citations} citations`);
+    console.log(`   Bar test:  thinnest ≥ ${thinnest.minForType}w ${thinnest.words >= thinnest.minForType ? '✓' : '✗'} · ${thinnest.citations} citations ${thinnest.citations >= 4 ? '✓' : '✗'}`);
   }
   console.log('');
 
