@@ -173,6 +173,36 @@ interface CanonNode_v2 {
 }
 ```
 
+### `_index_evidence_registry` (Phase 7+)
+
+Every body-bearing entity (`CanonNode_v2`, `PageBrief_v2`, and each `ReaderJourneyPhase_v2`) carries an evidence registry overlaying each inline `[<UUID>]` token in its `body` field. The registry is keyed by segment UUID and maps to a structured `EvidenceEntry`.
+
+```ts
+interface EvidenceEntry {
+  segmentId: string;
+  /** Tighter substring of segment.text — guaranteed literal substring of source. */
+  supportingPhrase: string;
+  evidenceType: 'claim' | 'framework_step' | 'example' | 'caveat'
+              | 'mistake' | 'tool' | 'story' | 'proof';
+  /** Short prose summary of what this evidence supports. */
+  supports: string;
+  relevanceScore: number;             // 0-100
+  confidence: 'high' | 'medium' | 'low';
+  /** Reasoning trace — why this evidenceType was chosen. */
+  roleEvidence: string;
+  /** Why this segment supports the claim. */
+  whyThisSegmentFits: string;
+  whyThisSegmentMayNotFit?: string;
+  /** Computed by validator (not Codex):
+   *  - 'unsupported': supportingPhrase NOT substring OR score < 40
+   *  - 'verified': substring match AND score ≥ 70 AND confidence ≠ 'low'
+   *  - 'needs_review': otherwise */
+  verificationStatus: 'verified' | 'needs_review' | 'unsupported';
+}
+```
+
+The registry sidecars the inline `[<UUID>]` tokens in the body. The body markdown is unchanged; the registry adds role/relevance/why metadata that builders use to render rich evidence chips.
+
 ### Special: synthesis nodes (`kind: 'synthesis'`)
 
 Synthesis nodes get the same v2 schema. The body field weaves the unifying thread across child canon nodes (referenced via `_index_cross_link_canon`).
@@ -274,6 +304,69 @@ interface PageBrief_v2 {
 
 ---
 
+## WorkshopStage (Phase 7+)
+
+Hub-level entity. Workshops mirror the reader journey (one stage per phase, 3-5 stages per hub) and contain 2-4 clips per stage that reference canonical segments with optional tighter time bounds.
+
+```ts
+interface WorkshopStage {
+  /** Stable ID, format: wks_<12-char hex>. */
+  id: string;
+  /** Kebab-case slug derived from title. */
+  slug: string;
+  /** Public route (e.g., "/workshop/foundation-and-roadmap"). */
+  route: string;
+  /** 1-based ordinal — mirrors the corresponding journey phase number. */
+  order: number;
+  /** Short eyebrow above the title (e.g., "Phase 1 · Foundation"). */
+  eyebrow: string;
+  /** 2-6 word title. First-person feel. */
+  title: string;
+  /** 1-sentence first-person promise. */
+  promise: string;
+  /** 50-100 word framing — what the reader does in this stage. */
+  brief: string;
+  /** 1-sentence behavioral outcome. */
+  outcome: string;
+  /** 2-4 clips. */
+  clips: WorkshopClip[];
+
+  // INDEX
+  _index_related_node_ids: string[];
+  _index_source_phase_number: number;
+}
+
+interface WorkshopClip {
+  /** Stable ID, format: wkc_<12-char hex>. */
+  id: string;
+  /** Reference to canonical segment. */
+  segmentId: string;
+  /** 2-6 word clip title. */
+  title: string;
+  /** 1-sentence first-person what-to-do. */
+  instruction: string;
+  /** 30-60 word context. */
+  brief: string;
+  /** Imperative verb-led action. */
+  action: string;
+  /** Tighter time range; defaults to segment.startMs/1000 if omitted. */
+  startSeconds?: number;
+  /** Defaults to segment.endMs/1000 if omitted. Validator caps duration at 180s. */
+  endSeconds?: number;
+
+  // INDEX
+  /** 0-100. Validator hard-fails clips with score < 80. */
+  _index_relevance_score: number;
+  _index_confidence: 'high' | 'medium';
+  /** Why this clip teaches this exact step. */
+  _index_why_this_clip_teaches_this_step: string;
+  /** 1-3 canon node IDs this clip relates to. */
+  _index_related_canon_node_ids: string[];
+}
+```
+
+---
+
 ## VIC_v2 (per-video intelligence)
 
 Per-video intelligence is now mostly **planning + indexing** — it informs the canon body writing step, but the items themselves don't render as standalone pages. The only `rendered` field is `video_summary` (used on per-video pages if the builder chooses to render them).
@@ -365,6 +458,7 @@ A single JSON object containing:
   channelProfile: ChannelProfile_v2,
   canonNodes: CanonNode_v2[],
   pageBriefs: PageBrief_v2[],
+  workshop_stages: WorkshopStage[],
   videos: Array<{ videoId: string; title: string; durationSec: number; vic: VIC_v2 }>,
   visualMoments: VisualMoment[],
   segments: Array<{ id: string; videoId: string; startMs: number; endMs: number; text: string }>,

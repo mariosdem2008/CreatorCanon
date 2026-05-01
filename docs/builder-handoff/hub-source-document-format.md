@@ -203,6 +203,40 @@ Body fields contain inline citations of the form `[<UUID>]` where `<UUID>` is a 
 
 ---
 
+## Citation rendering with evidence registry (Phase 7)
+
+Every body field's inline `[<UUID>]` token resolves against the body's `_index_evidence_registry`. Render each citation as a small role-coded pill (color by `evidenceType`); on hover/click, surface:
+
+- `supportingPhrase` as a pull-quote
+- `whyThisSegmentFits` as a short caption
+- `confidence` and `relevanceScore` as a badge
+- A YouTube link constructed from the segment's `videoId` → `videos[].youtubeId` and `startSeconds`
+
+Citations with `verificationStatus === 'unsupported'` MUST be hidden from end users by default; surface only in operator/debug mode.
+
+Reader journey phases carry their own per-phase `_index_evidence_registry` inside each phase object (NOT at the journey canon root). Look up `phase._index_evidence_registry`, not the journey's top-level field.
+
+## Workshop pages (Phase 7)
+
+`workshop_stages[]` is a top-level entity in the Hub Source Document, sibling to `canonNodes` and `pageBriefs`. Render as a top-level navigation section. Each stage gets its own page at `route` (e.g., `/workshop/foundation-and-roadmap`).
+
+Stage page composition (top-to-bottom):
+1. `eyebrow` + `title` + `promise` (above the fold)
+2. `brief` (introducing the work)
+3. `clips[]` rendered as horizontal cards. Each clip card shows:
+   - `title`
+   - Duration pill (`startSeconds` to `endSeconds`)
+   - `instruction` (bold, 1-line)
+   - `brief` (3-5 lines)
+   - `action` (imperative bullet)
+   - YouTube embed/link constructed from `segmentId` → segments[<id>].videoId → videos[].youtubeId, plus `startSeconds`
+
+Clips with `_index_relevance_score < 80` SHOULD NOT exist in the published workshop_stages array — the validator enforces this — but if you encounter one, hide from end users.
+
+The `_index_related_canon_node_ids` on each clip can drive "Read the canon" cross-links to the corresponding canon node pages.
+
+---
+
 ## Voice rules
 
 The audit pipeline writes everything in **first person**. The builder must not re-flip to third person under any condition.
