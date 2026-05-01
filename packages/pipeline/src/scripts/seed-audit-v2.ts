@@ -34,6 +34,18 @@
  *                                              [--regen-synthesis] [--regen-journey]
  *                                              [--regen-briefs] [--regen-hero]
  *                                              [--per-video-canon]
+ *
+ * Flags:
+ *   --regen-channel     Regenerate the channel profile (rebuilds creator-level voice)
+ *   --regen-vic         Regenerate per-video intelligence cards
+ *   --regen-canon       Regenerate canon shells (drops bodies, weaving, etc.)
+ *   --regen-bodies      Regenerate canon bodies only (keep shells)
+ *   --regen-synthesis   Regenerate synthesis pillar nodes
+ *   --regen-journey     Regenerate the reader journey
+ *   --regen-briefs      Regenerate page briefs
+ *   --regen-hero        Regenerate hub_title / hub_tagline / hero_candidates
+ *                       (with title-case + hero re-pass)
+ *   --per-video-canon   Per-video canon-shell sweep (more granular but slower)
  */
 
 import crypto from 'node:crypto';
@@ -70,6 +82,30 @@ import {
   type WovenItem,
 } from './util/canon-body-writer';
 import { generateHeroCandidates } from './util/hero-candidates';
+import {
+  generateSynthesisShells,
+  writeSynthesisBodiesParallel,
+  type SynthesisShell,
+  type SynthesisBodyInput,
+  type ChildCanonRef,
+} from './util/synthesis-body-writer';
+import {
+  generateReaderJourneyShell,
+  writePhaseBodiesParallel,
+  applyPhaseBodiesToShell,
+  type ReaderJourneyShell,
+  type PhaseBodyInput,
+  type CanonRefForJourney,
+} from './util/journey-body-writer';
+import {
+  generateBriefShells,
+  writeBriefBodiesParallel,
+  type PageBriefShell,
+  type BriefBodyInput,
+  type CanonRefForBrief,
+} from './util/brief-body-writer';
+import { enforceTitleCase } from './util/title-casing';
+import { refineHeroBlock } from './util/hero-rewrite';
 
 loadDefaultEnvFiles();
 
@@ -586,6 +622,9 @@ async function main() {
   const regenVic = process.argv.includes('--regen-vic');
   const regenCanon = process.argv.includes('--regen-canon');
   const regenBodies = process.argv.includes('--regen-bodies');
+  const regenSynthesis = process.argv.includes('--regen-synthesis');
+  const regenJourney = process.argv.includes('--regen-journey');
+  const regenBriefs = process.argv.includes('--regen-briefs');
   const regenHero = process.argv.includes('--regen-hero');
   const perVideo = process.argv.includes('--per-video-canon');
 
@@ -677,6 +716,15 @@ async function main() {
       if (v2Ids.length > 0) await db.delete(canonNode).where(inArray(canonNode.id, v2Ids));
     }
     canonShells = await generateCanonShellsV2(profile, vics, videos, perVideo);
+    // Title-case enforcement on canon titles (Task 6.4): Codex generators
+    // sometimes produce "pre-10k a month revenue" instead of proper case.
+    for (const shell of canonShells) {
+      const before = shell.title;
+      shell.title = enforceTitleCase(shell.title);
+      if (shell.title !== before) {
+        console.info(`[v2] title-case: "${before}" → "${shell.title}"`);
+      }
+    }
     console.info(`[v2] ${canonShells.length} canon shells generated`);
   }
 
@@ -872,6 +920,315 @@ async function main() {
   }
   console.info(`[v2] ${bodyResults.size} canon bodies persisted`);
 
+  // Reload canon nodes from DB to get the merged-in bodies for stages 6-8.
+  const allCanonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+    .from(canonNode)
+    .where(eq(canonNode.runId, runId));
+  const v2CanonRows = allCanonRows.filter(
+    (c) => (c.payload as { schemaVersion?: string }).schemaVersion === 'v2',
+  );
+  /** Canon refs available to synthesis / journey / briefs. */
+  const canonRefs = v2CanonRows.map((c) => {
+    const p = c.payload as CanonShell_v2 & { body?: string };
+    return {
+      id: c.id,
+      title: p.title,
+      type: p.type,
+      internal_summary: p._internal_summary ?? '',
+      body: typeof p.body === 'string' ? p.body : '',
+      pageWorthinessScore: p.pageWorthinessScore ?? 0,
+      sourceVideoIds: p._index_source_video_ids ?? [],
+    };
+  }).filter((r) => r.body.length > 100); // Only canon with bodies are eligible.
+
+  // ── Stage 6: Synthesis nodes (pillar pages) ────────────────
+  let synthesisIds: string[] = [];
+  const existingSynthesis = v2CanonRows.filter((c) => (c.payload as { kind?: string }).kind === 'synthesis');
+  if (regenSynthesis && existingSynthesis.length > 0) {
+    await db.delete(canonNode).where(inArray(canonNode.id, existingSynthesis.map((c) => c.id)));
+    existingSynthesis.length = 0;
+  }
+  if (existingSynthesis.length === 0 && canonRefs.length >= 6) {
+    console.info(`[v2] Stage 6: synthesis nodes (target 3 over ${canonRefs.length} canon refs)`);
+    const synthShells = await generateSynthesisShells({
+      canonNodes: canonRefs.map((r) => ({
+        id: r.id, title: r.title, type: r.type,
+        internal_summary: r.internal_summary,
+        pageWorthinessScore: r.pageWorthinessScore,
+        sourceVideoIds: r.sourceVideoIds,
+      })),
+      creatorName: profile.creatorName,
+      archetype: profile._index_archetype,
+      niche: profile._internal_niche,
+      recurringPromise: profile._internal_recurring_promise,
+      targetCount: Math.min(3, Math.max(2, Math.floor(canonRefs.length / 4))),
+    });
+    // Title-case enforce on synthesis titles.
+    for (const s of synthShells) s.title = enforceTitleCase(s.title);
+
+    // Persist shells + assign cn_xxx ids; collect inputs for body writer.
+    const synthInputs: SynthesisBodyInput[] = [];
+    for (const shell of synthShells) {
+      const id = `cn_${crypto.randomUUID().slice(0, 12)}`;
+      synthesisIds.push(id);
+      shell.confidenceScore = normalizeScore(shell.confidenceScore);
+      shell.pageWorthinessScore = normalizeScore(shell.pageWorthinessScore);
+      shell.specificityScore = normalizeScore(shell.specificityScore);
+      shell.creatorUniquenessScore = normalizeScore(shell.creatorUniquenessScore);
+      await db.insert(canonNode).values({
+        id,
+        workspaceId: run.workspaceId,
+        runId,
+        type: shell.type as any,
+        payload: shell as unknown as Record<string, unknown>,
+        evidenceSegmentIds: [],
+        sourceVideoIds: shell._index_source_video_ids,
+        evidenceQuality: shell.evidenceQuality,
+        origin: shell.origin as any,
+        confidenceScore: shell.confidenceScore,
+        pageWorthinessScore: shell.pageWorthinessScore,
+        specificityScore: shell.specificityScore,
+        creatorUniquenessScore: shell.creatorUniquenessScore,
+        citationCount: 0,
+        sourceCoverage: shell._index_source_video_ids.length,
+      });
+      const children: ChildCanonRef[] = shell._index_cross_link_canon
+        .map((cid) => canonRefs.find((r) => r.id === cid))
+        .filter((r): r is typeof canonRefs[number] => r !== undefined)
+        .map((r) => ({
+          id: r.id, title: r.title, type: r.type,
+          body: r.body, internal_summary: r.internal_summary,
+        }));
+      synthInputs.push({
+        id, shell, children,
+        creatorName: profile.creatorName,
+        archetype: profile._index_archetype,
+        voiceFingerprint: {
+          profanityAllowed: profile._index_archetype === 'operator-coach',
+          tonePreset: profile._internal_dominant_tone,
+          preserveTerms: profile._index_creator_terminology.slice(0, 12),
+        },
+        channelDominantTone: profile._internal_dominant_tone,
+        channelAudience: profile._internal_audience,
+      });
+    }
+
+    if (synthInputs.length > 0) {
+      const synthBodies = await writeSynthesisBodiesParallel(synthInputs, { concurrency: 2 });
+      // Persist bodies onto the synthesis canon nodes.
+      for (const input of synthInputs) {
+        const res = synthBodies.get(input.id);
+        if (!res || res.body.length === 0) continue;
+        const updated = {
+          ...input.shell,
+          body: res.body,
+          _index_evidence_segments: res.cited_segment_ids,
+        };
+        await db.update(canonNode)
+          .set({
+            payload: updated as unknown as Record<string, unknown>,
+            evidenceSegmentIds: res.cited_segment_ids.slice(0, 50),
+            citationCount: res.cited_segment_ids.length,
+          })
+          .where(eq(canonNode.id, input.id));
+      }
+      console.info(`[v2] ${synthInputs.length} synthesis nodes persisted (${[...synthBodies.values()].filter((r) => r.body.length > 0).length} with bodies)`);
+    }
+  } else if (existingSynthesis.length > 0) {
+    synthesisIds = existingSynthesis.map((c) => c.id);
+    console.info(`[v2] Stage 6: synthesis resumed (${synthesisIds.length})`);
+  } else {
+    console.info(`[v2] Stage 6: skipped — only ${canonRefs.length} canon refs (need ≥6 for synthesis)`);
+  }
+
+  // ── Stage 7: Reader journey ────────────────────────────────
+  let journeyId: string | null = null;
+  const existingJourney = v2CanonRows.find((c) => (c.payload as { kind?: string }).kind === 'reader_journey');
+  if (regenJourney && existingJourney) {
+    await db.delete(canonNode).where(eq(canonNode.id, existingJourney.id));
+  }
+  if ((!existingJourney || regenJourney) && canonRefs.length >= 4) {
+    console.info(`[v2] Stage 7: reader journey (over ${canonRefs.length} canon refs)`);
+    const journeyShell = await generateReaderJourneyShell({
+      canonNodes: canonRefs.map((r) => ({
+        id: r.id, title: r.title, type: r.type,
+        internal_summary: r.internal_summary,
+        body: r.body,
+        pageWorthinessScore: r.pageWorthinessScore,
+      } satisfies CanonRefForJourney)),
+      creatorName: profile.creatorName,
+      archetype: profile._index_archetype,
+      niche: profile._internal_niche,
+      audience: profile._internal_audience,
+      recurringPromise: profile._internal_recurring_promise,
+      targetPhaseCount: Math.min(5, Math.max(3, Math.ceil(canonRefs.length / 3))),
+    });
+    if (journeyShell && journeyShell._index_phases.length >= 2) {
+      // Title-case enforcement on journey + phase titles.
+      journeyShell.title = enforceTitleCase(journeyShell.title);
+      for (const p of journeyShell._index_phases) p.title = enforceTitleCase(p.title);
+
+      // Build phase body inputs.
+      const phaseInputs: PhaseBodyInput[] = journeyShell._index_phases.map((phase) => {
+        const primaryCanons: CanonRefForJourney[] = phase._index_primary_canon_node_ids
+          .map((cid) => canonRefs.find((r) => r.id === cid))
+          .filter((r): r is typeof canonRefs[number] => r !== undefined)
+          .map((r) => ({
+            id: r.id, title: r.title, type: r.type,
+            internal_summary: r.internal_summary,
+            body: r.body,
+            pageWorthinessScore: r.pageWorthinessScore,
+          }));
+        return {
+          phase,
+          primaryCanons,
+          creatorName: profile.creatorName,
+          archetype: profile._index_archetype,
+          voiceFingerprint: {
+            profanityAllowed: profile._index_archetype === 'operator-coach',
+            tonePreset: profile._internal_dominant_tone,
+            preserveTerms: profile._index_creator_terminology.slice(0, 12),
+          },
+          channelDominantTone: profile._internal_dominant_tone,
+          channelAudience: profile._internal_audience,
+          phaseNumber: phase._index_phase_number,
+          totalPhases: journeyShell._index_phases.length,
+        };
+      });
+
+      const phaseBodies = await writePhaseBodiesParallel(phaseInputs, { concurrency: 2 });
+      const { canonBody, allCitedIds } = applyPhaseBodiesToShell(journeyShell, phaseBodies);
+
+      journeyId = `cn_${crypto.randomUUID().slice(0, 12)}`;
+      const fullJourney = { ...journeyShell, body: canonBody };
+      await db.insert(canonNode).values({
+        id: journeyId,
+        workspaceId: run.workspaceId,
+        runId,
+        type: journeyShell.type as any,
+        payload: fullJourney as unknown as Record<string, unknown>,
+        evidenceSegmentIds: allCitedIds.slice(0, 50),
+        sourceVideoIds: journeyShell._index_source_video_ids,
+        evidenceQuality: journeyShell.evidenceQuality,
+        origin: journeyShell.origin as any,
+        confidenceScore: 0,
+        pageWorthinessScore: 0,
+        specificityScore: 0,
+        creatorUniquenessScore: 0,
+        citationCount: allCitedIds.length,
+        sourceCoverage: journeyShell._index_source_video_ids.length,
+      });
+      const phasesPersisted = journeyShell._index_phases.filter((p) => p.body.length > 0).length;
+      console.info(`[v2] reader journey persisted: ${journeyShell._index_phases.length} phases, ${phasesPersisted} with bodies`);
+    } else {
+      console.info(`[v2] Stage 7: skipped — Codex couldn't produce a usable journey`);
+    }
+  } else if (existingJourney) {
+    journeyId = existingJourney.id;
+    console.info(`[v2] Stage 7: reader journey resumed`);
+  } else {
+    console.info(`[v2] Stage 7: skipped — only ${canonRefs.length} canon refs (need ≥4 for journey)`);
+  }
+
+  // ── Stage 8: Page briefs ───────────────────────────────────
+  // Reload to include synthesis nodes (they're pillar candidates).
+  const refreshedCanonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+    .from(canonNode)
+    .where(eq(canonNode.runId, runId));
+  const v2RefreshedRows = refreshedCanonRows.filter(
+    (c) => (c.payload as { schemaVersion?: string }).schemaVersion === 'v2',
+  );
+  const briefCanonRefs: CanonRefForBrief[] = v2RefreshedRows.map((c) => {
+    const p = c.payload as CanonShell_v2 & { body?: string };
+    return {
+      id: c.id,
+      title: p.title,
+      type: p.type,
+      body: typeof p.body === 'string' ? p.body : '',
+      internal_summary: p._internal_summary ?? '',
+      pageWorthinessScore: p.pageWorthinessScore ?? 0,
+    };
+  }).filter((r) => r.body.length > 100);
+
+  const pillarCanonIds = v2RefreshedRows
+    .filter((c) => (c.payload as { kind?: string }).kind === 'synthesis')
+    .map((c) => c.id);
+
+  const existingBriefs = await db.select({ id: pageBrief.id, payload: pageBrief.payload })
+    .from(pageBrief)
+    .where(eq(pageBrief.runId, runId));
+  const v2Briefs = existingBriefs.filter(
+    (b) => (b.payload as { schemaVersion?: string }).schemaVersion === 'v2',
+  );
+  if (regenBriefs && v2Briefs.length > 0) {
+    await db.delete(pageBrief).where(inArray(pageBrief.id, v2Briefs.map((b) => b.id)));
+    v2Briefs.length = 0;
+  }
+  if (v2Briefs.length === 0 && briefCanonRefs.length >= 3) {
+    console.info(`[v2] Stage 8: page briefs (over ${briefCanonRefs.length} canon refs, ${pillarCanonIds.length} pillars)`);
+    // Target one brief per canon (pillars + spokes), capped at 12.
+    const targetCount = Math.min(12, briefCanonRefs.length);
+    const briefShells = await generateBriefShells({
+      canonNodes: briefCanonRefs,
+      pillarCanonIds,
+      creatorName: profile.creatorName,
+      archetype: profile._index_archetype,
+      niche: profile._internal_niche,
+      audience: profile._internal_audience,
+      recurringPromise: profile._internal_recurring_promise,
+      preserveTerms: profile._index_creator_terminology,
+      defaultVoiceFingerprint: {
+        profanityAllowed: profile._index_archetype === 'operator-coach',
+        tonePreset: profile._internal_dominant_tone,
+        preserveTerms: profile._index_creator_terminology.slice(0, 12),
+      },
+      targetCount,
+    });
+    // Title-case enforcement on brief titles.
+    for (const b of briefShells) b.pageTitle = enforceTitleCase(b.pageTitle);
+
+    // Build body inputs.
+    const briefBodyInputs: BriefBodyInput[] = briefShells.map((b) => {
+      const primaryCanons = b._index_primary_canon_node_ids
+        .map((cid) => briefCanonRefs.find((r) => r.id === cid))
+        .filter((r): r is CanonRefForBrief => r !== undefined);
+      return {
+        brief: b,
+        primaryCanons,
+        creatorName: profile.creatorName,
+        archetype: profile._index_archetype,
+        voiceFingerprint: b._index_voice_fingerprint,
+        channelDominantTone: profile._internal_dominant_tone,
+        channelAudience: profile._internal_audience,
+      };
+    });
+
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, { concurrency: 3 });
+
+    // Persist briefs (with bodies merged in).
+    for (const shell of briefShells) {
+      const result = briefBodies.get(shell.pageId);
+      const finalShell = {
+        ...shell,
+        body: result?.body ?? '',
+      };
+      await db.insert(pageBrief).values({
+        id: `pb_${crypto.randomUUID().slice(0, 12)}`,
+        workspaceId: run.workspaceId,
+        runId,
+        payload: finalShell as unknown as Record<string, unknown>,
+        pageWorthinessScore: finalShell._internal_page_worthiness_score,
+        position: finalShell._index_position,
+      });
+    }
+    const withBodies = [...briefBodies.values()].filter((r) => r.body.length > 0).length;
+    console.info(`[v2] ${briefShells.length} briefs persisted (${withBodies} with bodies, ${pillarCanonIds.length} pillar tier)`);
+  } else if (v2Briefs.length > 0) {
+    console.info(`[v2] Stage 8: page briefs resumed (${v2Briefs.length})`);
+  } else {
+    console.info(`[v2] Stage 8: skipped — only ${briefCanonRefs.length} canon refs (need ≥3 for briefs)`);
+  }
+
   // ── Stage 9: Hero candidates ───────────────────────────────
   if (regenHero || profile.hero_candidates.length === 0 || profile.hero_candidates[0] === 'placeholder') {
     console.info(`[v2] Stage 9: hero candidates + hub_title + hub_tagline`);
@@ -897,21 +1254,31 @@ async function main() {
       },
     });
 
-    profile.hub_title = heroResult.hub_title;
-    profile.hub_tagline = heroResult.hub_tagline;
-    profile.hero_candidates = heroResult.hero_candidates;
+    // Title-case + hero re-pass on the raw output (Task 6.4).
+    const refined = await refineHeroBlock(heroResult, {
+      creatorName: profile.creatorName,
+      niche: profile._internal_niche,
+      audience: profile._internal_audience,
+      recurringPromise: profile._internal_recurring_promise,
+      preserveTerms: profile._index_creator_terminology,
+      voiceFingerprint: {
+        profanityAllowed: profile._index_archetype === 'operator-coach',
+        tonePreset: profile._internal_dominant_tone,
+      },
+    });
+
+    profile.hub_title = refined.hub_title;
+    profile.hub_tagline = refined.hub_tagline;
+    profile.hero_candidates = refined.hero_candidates;
 
     await db.update(channelProfile)
       .set({ payload: profile as unknown as Record<string, unknown> })
       .where(eq(channelProfile.runId, runId));
-    console.info(`[v2] hero candidates persisted: "${profile.hub_title}" / ${profile.hero_candidates.length} candidates`);
+    console.info(`[v2] hero candidates persisted: "${profile.hub_title}" / ${profile.hero_candidates.length} candidates (${refined.rewriteCount} rewritten)`);
   }
 
-  // Synthesis + reader journey + briefs are deferred — those are big enough
-  // to live in their own follow-up commit (Task 5.11 part 2 / 3).
-
   await db.update(generationRun).set({ status: 'audit_ready' }).where(eq(generationRun.id, runId));
-  console.info(`[v2] DONE — schemaVersion=v2, canon=${canonShells.length}, bodies=${bodyResults.size}`);
+  console.info(`[v2] DONE — schemaVersion=v2, canon=${canonShells.length}, bodies=${bodyResults.size}, synthesis=${synthesisIds.length}, journey=${journeyId ? 1 : 0}`);
   console.info(`[v2] Audit URL: http://localhost:3001/app/projects/${run.projectId}/runs/${runId}/audit`);
 
   await closeDb();
