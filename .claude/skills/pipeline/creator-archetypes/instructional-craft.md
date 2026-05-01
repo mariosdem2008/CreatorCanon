@@ -92,6 +92,53 @@ Weissman/Ragusea/Bon-Appétit-style. Each one threads multiple technique or reci
 - Pantry Basics
 - Fermentation / Long-Process Crafts
 
+## HUB_SOURCE_VOICE
+
+When writing canon node bodies, brief bodies, synthesis bodies, hero candidates, and any other rendered field for an instructional-craft creator, follow these rules.
+
+### Sentence rhythm
+- 2nd-person heavy: "you'll notice", "you want", "you'll feel it pull back". The reader is doing the work right now.
+- Demonstrative phrasing: "look at how", "watch what happens", "see how the dough relaxes here".
+- Short imperative steps interleaved with explanatory asides ("now fold — gently, you don't want to deflate it").
+- Sentence length varies — short instruction, longer encouragement, short instruction.
+
+### Vocabulary signature
+- Hands-on verbs: "knead", "fold", "rotate", "press", "deglaze", "temper", "score", "shape".
+- Gear and tool names verbatim — brand and model when the creator named them.
+- Sensory descriptors: "smells nutty", "sounds crisp", "feels tacky but not sticky", "until the surface looks glossy".
+- Example phrases used verbatim: "you'll notice", "what you're looking for is", "the move here is", "this is the part where", "don't worry if", "here's what's happening".
+
+### Body structure (recommended)
+- Warm intro (1-2 sentences — what we're making and why it matters).
+- Tool and ingredient list — specific brands and quantities where they matter.
+- Technique walkthrough, step by step, each step paired with a sensory cue.
+- Common screwup with the fix ("if your butter breaks, here's what happened, here's how to bring it back").
+- Expert-level variation — the move once you've nailed the basic.
+- Close with encouragement: it's okay if the first one isn't perfect, and here's why it'll still taste great.
+
+### Citation discipline
+- Cite specific moments where the creator demonstrates the technique on camera.
+- Cite specific tool/ingredient ratios verbatim — Diamond Crystal vs Morton's salt, 70% hydration vs 65%, gram measurements when the creator uses them.
+- Cite gear by brand and model when named.
+
+### Forbidden patterns
+- Detached lecture tone — the reader is doing this with you, not listening to a talk.
+- Mechanism-first when demo-first works ("the Maillard reaction" can come later; "you want it deeply browned" comes first).
+- Refusing to address the reader directly — "one might consider" instead of "you'll want to" breaks the voice.
+- Stripping sensory cues into binary instructions ("cook for 5 minutes" without the visual or aromatic anchor).
+- Apologizing for the technique being hard. Acknowledge it; don't apologize.
+
+### Example body excerpts (3, ~80 words each)
+
+#### Excerpt 1 — defining a concept
+The autolyse is the rest you give your dough right after you mix the flour and water — no salt, no yeast, just flour and water sitting together for twenty to forty minutes [a1a6709f-a2a7-48f4-839b-82687165fbdd]. What you're looking for is the dough relaxing into itself. You'll notice it goes from shaggy to smoother without you doing anything. That's the gluten organizing on its own. This is the move that gets you better extensibility before you ever start kneading [b2b4818e-c3d6-49e5-840c-93798276cefe].
+
+#### Excerpt 2 — walking through mechanism / steps
+Now you're going to laminate the butter. Take your butter block — cold, not frozen, you want it pliable — and place it in the center of the dough square [c3c5929f-d4e7-46f6-851d-a4809387dgff]. Fold the dough corners over the butter like an envelope. Press the seams. Now rotate ninety degrees and roll out long. You'll feel the butter resist a little. Don't fight it — if it's resisting too much, the butter's too cold; rest it ten minutes. This is the part where patience pays you back.
+
+#### Excerpt 3 — closing with practical "what to do now"
+So here's what to do tonight. Mix your dough — flour, water, salt, starter — and just let it sit on the counter, covered, for twelve hours [d4d6a3af-e5f8-47g7-862e-b591a498ehgg]. That's it. No folds, no fuss. In the morning, you'll see it doubled, jiggly, alive. Shape it once, proof it ninety minutes, score it, and bake. If the first one's flat, don't sweat it — you'll dial in the proof time within three loaves. What you're looking for is the rhythm.
+
 ## ANTI_PATTERNS
 
 - **Don't apply this archetype to abstract or conceptual content.** A philosophy or business channel does not become instructional-craft just because it contains "tutorials".

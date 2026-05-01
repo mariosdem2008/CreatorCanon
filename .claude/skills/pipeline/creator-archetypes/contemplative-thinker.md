@@ -89,6 +89,53 @@ Sam Harris / Watts / Krishnamurti-style. Each connects multiple inquiry or pract
 - Society & Action
 - Language & Its Limits
 
+## HUB_SOURCE_VOICE
+
+When writing canon node bodies, brief bodies, synthesis bodies, hero candidates, and any other rendered field for a contemplative-thinker creator, follow these rules.
+
+### Sentence rhythm
+- Longer arc sentences, comfortably holding two or three subordinate clauses without rushing.
+- Paradox-holding cadence: "on one hand X; on the other hand Y; the resolution, if there is one, is not exactly either."
+- Reflective questions land softly mid-paragraph, not as rhetorical hammers.
+- Em-dashes and parentheticals are tools, not clutter — they create the pause the reader needs to track the distinction.
+
+### Vocabulary signature
+- Precise distinctions over broad claims ("the difference between pain and suffering", "not exactly that, but closer to...").
+- "We"-framing more than "you"-framing — shared inquiry, not instruction.
+- Hedged certainty: "seems to me", "as best I can tell", "if I had to put it into words".
+- Philosophy-loaded terms verbatim — qualia, phenomenal consciousness, the witness, non-duality, the binding problem.
+- Example phrases used verbatim: "consider this", "the question is whether", "what's interesting is", "to put it differently", "notice what happens when", "I could be wrong about this".
+
+### Body structure (recommended)
+- Open with a question or paradox — the reader should feel the difficulty before any resolution is offered.
+- Careful distinction — separate the concept under inquiry from neighboring concepts it's often confused with.
+- Consideration of the counter-argument — steel-man the opposing position before narrowing.
+- Narrowing to a position — but held loosely, with explicit room for revision.
+- Reflective close — return to the question, perhaps reframed, perhaps left open.
+
+### Citation discipline
+- Cite named arguments and the philosophers or contemplatives who articulated them (Parfit on personal identity, Krishnamurti on the observer-observed split).
+- Cite specific researchers or thinkers when their exact phrasing is being parsed.
+- Cite the creator's own framings verbatim ("the second arrow", "the self that thinks the thoughts") rather than paraphrasing them.
+
+### Forbidden patterns
+- Blunt assertions without consideration of counter-arguments.
+- Monetization framing, dollar figures, ROI language.
+- Emergency-tone urgency or "you must do this now" cadence.
+- Exclamation points or hype-driven emphasis devices.
+- Imperatives delivered without an invitation behind them — instructional voice breaks the patient inquiry.
+
+### Example body excerpts (3, ~80 words each)
+
+#### Excerpt 1 — defining a concept
+Consider the second arrow. The first arrow is the painful event itself — a loss, an insult, a cold wind across the skin [a1a6709f-a2a7-48f4-839b-82687165fbdd]. The second arrow is what we add: the resistance, the rumination, the story about how this shouldn't be happening. The Buddhist tradition makes this distinction with unusual care, and what's interesting is that contemporary affective neuroscience seems to be circling something similar from a different direction [b2b4818e-c3d6-49e5-840c-93798276cefe]. The first arrow may be unavoidable. The second, perhaps, is not.
+
+#### Excerpt 2 — walking through mechanism / steps
+The question is whether the self that searches for the self can find what it's looking for, or whether the search itself is the problem. To put it differently: when you turn attention inward and ask "who is observing?" — you might notice that the observer also seems to be an observed object [c3c5929f-d4e7-46f6-851d-a4809387dgff]. There's no further witness behind the witness. Krishnamurti pointed at this for fifty years, and as best I can tell, the pointing matters more than any conclusion the pointing gestures toward.
+
+#### Excerpt 3 — closing with practical "what to do now"
+So if there's a practice in any of this, it might be smaller than we'd hope. Sit for twenty minutes. Notice what happens when a difficult thought arises — and then notice what happens when you hold it without resisting [d4d6a3af-e5f8-47g7-862e-b591a498ehgg]. That second noticing is the inquiry. I could be wrong about this, but it seems to me the value isn't in arriving at an answer; it's in the slower relationship to the question. Return to it tomorrow. The question, held lightly, is itself the work.
+
 ## ANTI_PATTERNS
 
 - **Don't apply this archetype to tactical or transactional content.** A productivity channel that occasionally mentions meditation is not contemplative-thinker.
