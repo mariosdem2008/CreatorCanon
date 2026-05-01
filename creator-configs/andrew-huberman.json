@@ -1,0 +1,22 @@
+{
+  "creator": "Andrew Huberman",
+  "workspaceId": "e1ad6446-d463-4ee9-9451-7be5ac76f187",
+  "userId": "89c2bff3-797a-4922-81e3-a1a4696c7f53",
+  "channelId": "ch_uploads_e1ad6446-d463-4ee9-9451-7be5ac76f187",
+  "projectTitle": "Andrew Huberman — Sleep Series with Matt Walker",
+  "projectConfig": {
+    "audience": "Operators",
+    "tone": "evidence-based",
+    "length_preset": "standard"
+  },
+  "videos": [
+    {
+      "filename": "Dr. Matt Walker_ The Biology of Sleep & Your Unique Sleep Needs _ Huberman Lab Guest Series.mp4",
+      "title": "Dr. Matt Walker: The Biology of Sleep & Your Unique Sleep Needs"
+    },
+    {
+      "filename": "Dr. Matt Walker_ Protocols to Improve Your Sleep _ Huberman Lab Guest Series (2).mp4",
+      "title": "Dr. Matt Walker: Protocols to Improve Your Sleep"
+    }
+  ]
+}
