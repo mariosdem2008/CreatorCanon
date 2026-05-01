@@ -2,6 +2,12 @@ import type { ArchetypeSlug } from '../../agents/skills/archetype-detector';
 
 export type VoiceMode = 'first_person' | 'third_person_editorial' | 'hybrid';
 
+/** Type guard: is the input a valid VoiceMode? Used when reading from
+ *  untrusted sources (DB JSONB payloads, CLI flags, hand-edited profiles). */
+export function isVoiceMode(v: unknown): v is VoiceMode {
+  return v === 'first_person' || v === 'third_person_editorial' || v === 'hybrid';
+}
+
 /** Archetype → voice mode default. Operator can override via --voice-mode flag. */
 export function defaultVoiceMode(archetype: ArchetypeSlug | string): VoiceMode {
   switch (archetype) {
@@ -100,5 +106,12 @@ export function voiceRulesPrompt(voiceMode: VoiceMode, creatorName: string): str
         '✓ The blockquoted aphorisms are the ONLY first-person sentences in the body.',
         '✗ DO NOT put first-person voice in the editorial framing paragraphs. Those stay third-person.',
       ].join('\n');
+    default: {
+      // Defensive: should never reach here because callers validate via isVoiceMode.
+      // If we do, render the safest mode (first_person) rather than returning undefined
+      // (which would inject literal "undefined" into the prompt).
+      console.warn(`[voice-mode] voiceRulesPrompt got unknown mode "${voiceMode as string}"; using first_person`);
+      return voiceRulesPrompt('first_person', creatorName);
+    }
   }
 }

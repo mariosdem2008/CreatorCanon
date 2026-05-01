@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { defaultVoiceMode, hasFirstPersonMarkers, hasThirdPersonAttribution } from './voice-mode';
+import { defaultVoiceMode, hasFirstPersonMarkers, hasThirdPersonAttribution, isVoiceMode } from './voice-mode';
 
 describe('defaultVoiceMode', () => {
   test('operator-coach defaults to first_person', () => {
@@ -68,5 +68,21 @@ describe('hasThirdPersonAttribution', () => {
   test('does not match plain editorial third-person', () => {
     assert.equal(hasThirdPersonAttribution('Sleep is structured', 'Walker'), false);
     assert.equal(hasThirdPersonAttribution('REM activates threat-detection circuits', 'Walker'), false);
+  });
+});
+
+describe('isVoiceMode', () => {
+  test('accepts the three valid values', () => {
+    assert.equal(isVoiceMode('first_person'), true);
+    assert.equal(isVoiceMode('third_person_editorial'), true);
+    assert.equal(isVoiceMode('hybrid'), true);
+  });
+  test('rejects invalid strings, undefined, null, numbers, objects', () => {
+    assert.equal(isVoiceMode('auto'), false);
+    assert.equal(isVoiceMode(''), false);
+    assert.equal(isVoiceMode(undefined), false);
+    assert.equal(isVoiceMode(null), false);
+    assert.equal(isVoiceMode(42), false);
+    assert.equal(isVoiceMode({}), false);
   });
 });

@@ -124,7 +124,7 @@ import {
 import { enforceTitleCase } from './util/title-casing';
 import { refineHeroBlock } from './util/hero-rewrite';
 import { tagAllEntities, type EvidenceTaggerInput } from './util/evidence-tagger';
-import { type VoiceMode, defaultVoiceMode } from './util/voice-mode';
+import { type VoiceMode, defaultVoiceMode, isVoiceMode } from './util/voice-mode';
 
 loadDefaultEnvFiles();
 
@@ -715,10 +715,13 @@ async function main() {
     console.info(`[v2] channel profile written: ${profile.creatorName} / ${profile._index_archetype}`);
   }
 
+  const storedRaw = (profile as unknown as Record<string, unknown>)._index_voice_mode;
+  const storedVoiceMode = isVoiceMode(storedRaw) ? storedRaw : undefined;
+  if (storedRaw !== undefined && storedRaw !== null && storedVoiceMode === undefined) {
+    console.warn(`[v2] _index_voice_mode has invalid value "${String(storedRaw)}"; falling back to archetype default`);
+  }
   const resolvedVoiceMode: VoiceMode =
-    voiceModeFlag ??
-    ((profile as unknown as Record<string, unknown>)._index_voice_mode as VoiceMode | undefined) ??
-    defaultVoiceMode(profile._index_archetype);
+    voiceModeFlag ?? storedVoiceMode ?? defaultVoiceMode(profile._index_archetype);
 
   // Persist if missing on profile (additive; doesn't overwrite existing)
   if (!(profile as unknown as Record<string, unknown>)._index_voice_mode) {
