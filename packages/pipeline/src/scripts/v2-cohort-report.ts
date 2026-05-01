@@ -6,6 +6,11 @@
 
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// ESM equivalent of __dirname — required because the package is "type": "module"
+// and __dirname is not defined for ESM scripts.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface PerCreatorStatus {
   runId: string;
