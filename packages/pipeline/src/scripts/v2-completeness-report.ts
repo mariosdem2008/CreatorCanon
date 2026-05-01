@@ -27,6 +27,7 @@ import {
   channelProfile,
   pageBrief,
   videoIntelligenceCard,
+  workshopStage,
 } from '@creatorcanon/db/schema';
 
 import { loadDefaultEnvFiles } from '../env-files';
@@ -106,6 +107,10 @@ async function main() {
     .from(videoIntelligenceCard).where(eq(videoIntelligenceCard.runId, runId));
   const v2Vics = vicRows.filter((v) => (v.payload as { schemaVersion?: string }).schemaVersion === 'v2');
 
+  // Workshop stages.
+  const workshopRows = await db.select({ payload: workshopStage.payload })
+    .from(workshopStage).where(eq(workshopStage.runId, runId));
+
   // ── Print report ──────────────────────────────────────────
   console.log('');
   console.log(`════════════════════════════════════════════════════════════`);
@@ -121,8 +126,88 @@ async function main() {
     return;
   }
 
+  // ── Compute evidence layer status ──────────────────────────
+  let totalCitations = 0;
+  let totalEntries = 0;
+  let verifiedCount = 0;
+  let needsReviewCount = 0;
+  let unsupportedCount = 0;
+
+  function processEntity(body: string, registry: Record<string, any> | undefined): void {
+    if (typeof body !== 'string') return;
+    const cited = new Set<string>();
+    for (const m of body.matchAll(UUID_RE)) cited.add(m[1]!);
+    totalCitations += cited.size;
+    if (registry && typeof registry === 'object') {
+      totalEntries += Object.keys(registry).length;
+      for (const entry of Object.values(registry)) {
+        const e = entry as { verificationStatus?: string };
+        if (e.verificationStatus === 'verified') verifiedCount++;
+        else if (e.verificationStatus === 'needs_review') needsReviewCount++;
+        else if (e.verificationStatus === 'unsupported') unsupportedCount++;
+      }
+    }
+  }
+
+  // Iterate v2 canon bodies (excluding journey)
+  for (const c of v2Canon) {
+    const p = c.payload as { kind?: string; body?: string; _index_evidence_registry?: Record<string, any> };
+    if (p.kind === 'reader_journey') continue;
+    processEntity(p.body ?? '', p._index_evidence_registry);
+  }
+
+  // Iterate journey phases
+  const journeyPayload = journey?.payload as { _index_phases?: any[] } | undefined;
+  for (const phase of (journeyPayload?._index_phases ?? [])) {
+    processEntity(phase.body ?? '', phase._index_evidence_registry);
+  }
+
+  // Iterate briefs
+  for (const b of v2Briefs) {
+    const p = b.payload as { body?: string; _index_evidence_registry?: Record<string, any> };
+    processEntity(p.body ?? '', p._index_evidence_registry);
+  }
+
+  const verificationRate = totalCitations > 0 ? verifiedCount / totalCitations : 0;
+  const evidenceLayerOk = totalCitations > 0 && totalEntries === totalCitations && verificationRate >= 0.9;
+
+  // ── Compute workshop layer status ───────────────────────────
+  const workshopClipCounts = workshopRows.map((w) => {
+    const p = w.payload as { clips?: any[] };
+    return (p.clips ?? []).length;
+  });
+  const totalWorkshopClips = workshopClipCounts.reduce((a, b) => a + b, 0);
+  const avgClipsPerStage = workshopRows.length > 0 ? totalWorkshopClips / workshopRows.length : 0;
+  const workshopOk = workshopRows.length >= 3 && workshopClipCounts.every((c) => c >= 2);
+
+  // Avg clip relevance
+  let totalRelevance = 0;
+  let totalClipsForAvg = 0;
+  let totalDuration = 0;
+  let durationOutsideWindow = 0;  // count of clips outside [30, 180]s
+
+  for (const w of workshopRows) {
+    const p = w.payload as { clips?: any[] };
+    for (const clip of (p.clips ?? [])) {
+      const score = Number(clip._index_relevance_score ?? 0);
+      if (Number.isFinite(score)) {
+        totalRelevance += score;
+        totalClipsForAvg++;
+      }
+      const start = Number(clip.startSeconds ?? 0);
+      const end = Number(clip.endSeconds ?? 0);
+      const duration = end - start;
+      if (Number.isFinite(duration) && duration > 0) {
+        totalDuration += duration;
+        if (duration < 30 || duration > 180) durationOutsideWindow++;
+      }
+    }
+  }
+  const avgRelevance = totalClipsForAvg > 0 ? totalRelevance / totalClipsForAvg : 0;
+  const avgDuration = totalClipsForAvg > 0 ? totalDuration / totalClipsForAvg : 0;
+
   // ── Bar 4: Completeness layers ───────────────────────────
-  console.log(`▸ Quality bar 4: completeness (5 layers)`);
+  console.log(`▸ Quality bar 4: completeness (7 layers)`);
   const standardWithBody = standardCanon.filter((c) => wordCount((c.payload as { body?: string }).body) >= 100).length;
   const synthesisWithBody = synthesis.filter((c) => wordCount((c.payload as { body?: string }).body) >= 200).length;
   const journeyPhases = journey ? ((journey.payload as { _index_phases?: unknown[] })._index_phases ?? []) as Array<{ body?: string }> : [];
@@ -142,6 +227,38 @@ async function main() {
     journey ? `${journeyPhasesWithBody}/${journeyPhases.length} phases with body` : 'missing'));
   console.log(layerLine('Page briefs', v2Briefs.length > 0 && briefsWithBody === v2Briefs.length,
     `${briefsWithBody}/${v2Briefs.length} with body ≥ 100w`));
+  console.log(layerLine('Evidence registry', evidenceLayerOk,
+    totalCitations === 0
+      ? 'no citations'
+      : `${verifiedCount}/${totalCitations} verified (${Math.round(verificationRate*100)}%)`));
+  console.log(layerLine('Workshops', workshopOk,
+    workshopRows.length === 0
+      ? 'Run --regen-workshops'
+      : `${workshopRows.length} stages, avg ${avgClipsPerStage.toFixed(1)} clips`));
+  console.log('');
+
+  // ── Bar 5: evidence verification rate ────────────────────
+  console.log(`▸ Quality bar 5: evidence verification rate ≥ 90%`);
+  const bar5Ok = totalCitations === 0 || verificationRate >= 0.9;
+  console.log(`   ${bar5Ok ? '✓' : '✗'} ${Math.round(verificationRate*100)}% verified across ${totalCitations} citations (verified: ${verifiedCount}, needs_review: ${needsReviewCount}, unsupported: ${unsupportedCount})`);
+  console.log('');
+
+  // ── Bar 6: workshop avg clip relevance ───────────────────
+  console.log(`▸ Quality bar 6: workshop avg clip relevance ≥ 90`);
+  const bar6Ok = totalClipsForAvg === 0 || avgRelevance >= 90;
+  console.log(`   ${bar6Ok ? '✓' : '✗'} avg relevance ${avgRelevance.toFixed(1)} across ${totalClipsForAvg} clips`);
+  console.log('');
+
+  // ── Bar 7: workshop clip durations in [30, 180]s ─────────
+  console.log(`▸ Quality bar 7: workshop clip durations in [30, 180]s`);
+  const bar7Ok = totalClipsForAvg === 0 || durationOutsideWindow === 0;
+  console.log(`   ${bar7Ok ? '✓' : '✗'} ${totalClipsForAvg - durationOutsideWindow}/${totalClipsForAvg} in window (avg duration ${avgDuration.toFixed(1)}s)`);
+  console.log('');
+
+  // ── Bar 8: workshop completeness ────────────────────────
+  console.log(`▸ Quality bar 8: workshop completeness`);
+  const bar8Ok = workshopRows.length >= 3 && workshopClipCounts.every((c) => c >= 2);
+  console.log(`   ${bar8Ok ? '✓' : '✗'} ${workshopRows.length} stages (target ≥3), every stage ≥2 clips: ${workshopClipCounts.every((c) => c >= 2) ? 'yes' : 'no'}`);
   console.log('');
 
   // ── Bar 3: thinnest body paywall-worthy ─────────────────
