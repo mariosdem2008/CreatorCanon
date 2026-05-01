@@ -218,7 +218,7 @@ export const editorialAtlasManifestSchema = z.object({
 });
 export type EditorialAtlasManifest = z.infer<typeof editorialAtlasManifestSchema>;
 
-export const hubManifestSchema = z.discriminatedUnion('schemaVersion', [
+export const hubManifestSchema = z.union([
   editorialAtlasManifestSchema,
   creatorManualManifestSchema,
 ]);

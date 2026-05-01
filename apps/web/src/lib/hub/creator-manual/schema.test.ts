@@ -16,25 +16,40 @@ test('creator manual schema parses a minimal valid manifest', () => {
     generatedAt: '2026-05-01T00:00:00.000Z',
     title: 'Manual',
     tagline: 'A useful field manual.',
-    creator: { name: 'Creator', handle: '@creator', bio: 'Bio', avatarUrl: '' },
+    creator: {
+      name: 'Creator',
+      handle: '@creator',
+      canonicalUrl: 'https://example.com/creator',
+      tagline: 'A creator tagline.',
+      thesis: 'A clear thesis for the creator manual.',
+      about: 'A short public biography.',
+      voiceSummary: 'Direct, concrete, and evidence-led.',
+    },
     brand: {
       name: 'Brand',
       tone: 'practical',
       tokens: {
-        background: '#ffffff',
-        foreground: '#000000',
-        surface: '#f7f7f7',
-        elevated: '#ffffff',
-        border: '#dddddd',
-        muted: '#666666',
-        accent: '#111111',
-        accentForeground: '#ffffff',
-        warning: '#f97316',
-        success: '#16a34a',
+        colors: {
+          background: '#ffffff',
+          foreground: '#000000',
+          surface: '#f7f7f7',
+          elevated: '#ffffff',
+          border: '#dddddd',
+          muted: '#666666',
+          accent: '#111111',
+          accentForeground: '#ffffff',
+          warning: '#f97316',
+          success: '#16a34a',
+          typeMap: { framework: '#1d4ed8' },
+        },
+        typography: {
+          headingFamily: 'Georgia, serif',
+          bodyFamily: 'Arial, sans-serif',
+        },
         radius: '8px',
-        headingFamily: 'Georgia, serif',
-        bodyFamily: 'Arial, sans-serif',
+        shadow: '6px 6px 0 #000000',
       },
+      style: { mode: 'custom' },
       labels: {},
     },
     navigation: { primary: [], secondary: [] },
@@ -52,6 +67,35 @@ test('creator manual schema parses a minimal valid manifest', () => {
   });
 
   assert.equal(result.success, true);
+});
+
+test('creator manual schema accepts unknown future node tags', () => {
+  const manifest = structuredClone(sampleCreatorManualManifest);
+  manifest.nodes[0]!.type = 'future_framework';
+
+  const result = creatorManualManifestSchema.safeParse(manifest);
+
+  assert.equal(result.success, true);
+});
+
+test('creator manual schema rejects unsafe public asset URLs', () => {
+  const manifest = structuredClone(sampleCreatorManualManifest);
+  manifest.brand.assets = {
+    heroImageUrl: 'javascript:alert(1)',
+  };
+
+  const result = creatorManualManifestSchema.safeParse(manifest);
+
+  assert.equal(result.success, false);
+});
+
+test('creator manual schema rejects public UUID and internal review language leaks', () => {
+  const manifest = structuredClone(sampleCreatorManualManifest);
+  manifest.home.summary = 'Needs review before publishing 123e4567-e89b-12d3-a456-426614174000.';
+
+  const result = creatorManualManifestSchema.safeParse(manifest);
+
+  assert.equal(result.success, false);
 });
 
 test('creator manual schema rejects invalid schema version', () => {

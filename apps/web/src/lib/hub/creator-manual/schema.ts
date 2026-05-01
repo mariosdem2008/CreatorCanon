@@ -1,8 +1,36 @@
 import { z } from 'zod';
 
+import { findCreatorManualManifestPublicTextIssues } from './sanitize';
+
 const slugSchema = z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const idSchema = z.string().min(1);
-const optionalUrlSchema = z.string().url().optional();
+const tokenValueSchema = z.string().trim().min(1);
+
+const isSafePublicUrl = (value: string) => {
+  const trimmed = value.trim();
+
+  if (trimmed.startsWith('/')) {
+    return /^\/(?!\/)[^\s"'()<>\\]*$/.test(trimmed);
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const publicUrlSchema = z.string().trim().min(1).refine(isSafePublicUrl, {
+  message: 'Expected an http(s) URL or root-relative path.',
+});
+
+const optionalUrlSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  publicUrlSchema.optional(),
+);
+
+const recordTagSchema = z.string().trim().min(1).regex(/^[a-z][a-z0-9_-]*$/);
 
 export const creatorManualEvidenceRefSchema = z.object({
   sourceId: idSchema,
@@ -33,7 +61,7 @@ export type CreatorManualNavItem = z.infer<typeof creatorManualNavItemSchema>;
 export const creatorManualNodeSchema = z.object({
   id: idSchema,
   slug: slugSchema,
-  type: z.enum(['principle', 'playbook', 'example', 'checklist', 'warning', 'metric']),
+  type: recordTagSchema,
   title: z.string().min(1),
   summary: z.string().min(1),
   body: z.string().min(1),
@@ -164,32 +192,46 @@ export const creatorManualManifestSchema = z.object({
   creator: z.object({
     name: z.string().min(1),
     handle: z.string().min(1),
-    bio: z.string().min(1),
-    avatarUrl: z.string(),
+    avatarUrl: optionalUrlSchema,
+    portraitUrl: optionalUrlSchema,
+    canonicalUrl: publicUrlSchema,
+    tagline: z.string().min(1),
+    thesis: z.string().min(1),
+    about: z.string().min(1),
+    voiceSummary: z.string().min(1),
   }),
   brand: z.object({
     name: z.string().min(1),
     tone: z.string().min(1),
     tokens: z.object({
-      background: z.string().min(1),
-      foreground: z.string().min(1),
-      surface: z.string().min(1),
-      elevated: z.string().min(1),
-      border: z.string().min(1),
-      muted: z.string().min(1),
-      accent: z.string().min(1),
-      accentForeground: z.string().min(1),
-      warning: z.string().min(1),
-      success: z.string().min(1),
-      radius: z.string().min(1),
-      headingFamily: z.string().min(1),
-      bodyFamily: z.string().min(1),
+      colors: z.object({
+        background: tokenValueSchema,
+        foreground: tokenValueSchema,
+        surface: tokenValueSchema,
+        elevated: tokenValueSchema,
+        border: tokenValueSchema,
+        muted: tokenValueSchema,
+        accent: tokenValueSchema,
+        accentForeground: tokenValueSchema,
+        warning: tokenValueSchema,
+        success: tokenValueSchema,
+        typeMap: z.record(recordTagSchema, tokenValueSchema).optional(),
+      }),
+      typography: z.object({
+        headingFamily: tokenValueSchema,
+        bodyFamily: tokenValueSchema,
+      }),
+      radius: tokenValueSchema,
+      shadow: tokenValueSchema,
     }),
     assets: z.object({
-      logoUrl: z.string().optional(),
-      heroImageUrl: z.string().optional(),
-      patternImageUrl: z.string().optional(),
+      logoUrl: optionalUrlSchema,
+      heroImageUrl: optionalUrlSchema,
+      patternImageUrl: optionalUrlSchema,
     }).optional(),
+    style: z.object({
+      mode: z.enum(['light', 'dark', 'system', 'custom']),
+    }),
     labels: z.object({
       evidence: z.string().min(1).optional(),
       workshop: z.string().min(1).optional(),
@@ -224,5 +266,15 @@ export const creatorManualManifestSchema = z.object({
   themes: z.array(creatorManualThemeSchema),
   workshop: z.array(creatorManualWorkshopStageSchema),
   search: z.array(creatorManualSearchDocSchema),
+}).superRefine((manifest, ctx) => {
+  const issues = findCreatorManualManifestPublicTextIssues(manifest);
+
+  for (const issue of issues) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: issue.path,
+      message: `Unsafe public text (${issue.kind}): ${issue.match}`,
+    });
+  }
 });
 export type CreatorManualManifest = z.infer<typeof creatorManualManifestSchema>;

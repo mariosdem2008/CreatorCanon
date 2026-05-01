@@ -21,6 +21,7 @@ export function CreatorManualHome({ manifest, index }: CreatorManualHomeProps) {
   const featuredNodes = getNodesByIds(index, manifest.home.featuredNodeIds);
   const featuredPillars = getPillarsByIds(index, manifest.home.featuredPillarIds);
   const firstEvidence = [...featuredNodes.flatMap((node) => node.evidence), ...featuredPillars.flatMap((pillar) => pillar.evidence)].slice(0, 4);
+  const heroImageUrl = manifest.brand.assets?.heroImageUrl ?? manifest.creator.portraitUrl;
 
   return (
     <>
@@ -36,6 +37,7 @@ export function CreatorManualHome({ manifest, index }: CreatorManualHomeProps) {
             <Link href={getCreatorManualSourcesRoute(manifest.hubSlug)} className={styles.secondaryButton}>
               Inspect sources
             </Link>
+            <span className={styles.tag}>{manifest.creator.tagline}</span>
           </div>
           <dl className={styles.stats}>
             {[
@@ -55,7 +57,7 @@ export function CreatorManualHome({ manifest, index }: CreatorManualHomeProps) {
         </div>
         <div
           className={styles.heroMedia}
-          style={manifest.brand.assets?.heroImageUrl ? { backgroundImage: `url("${manifest.brand.assets.heroImageUrl}")` } : undefined}
+          style={heroImageUrl ? { backgroundImage: `url("${heroImageUrl}")` } : undefined}
           aria-hidden="true"
         />
       </section>

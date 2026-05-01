@@ -10,6 +10,7 @@
   --cm-warning: #b7791f;
   --cm-success: #27764d;
   --cm-radius: 4px;
+  --cm-shadow: 8px 8px 0 var(--cm-border);
   --cm-heading: Georgia, serif;
   --cm-body: ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
@@ -178,7 +179,7 @@
   border: 2px solid var(--cm-border);
   border-radius: var(--cm-radius);
   background: var(--cm-surface);
-  box-shadow: 8px 8px 0 var(--cm-border);
+  box-shadow: var(--cm-shadow);
   padding: 8px;
 }
 
@@ -304,7 +305,7 @@
 }
 
 .recordCard:hover {
-  box-shadow: 5px 5px 0 var(--cm-border);
+  box-shadow: var(--cm-shadow);
   transform: translate(-2px, -2px);
 }
 
@@ -491,7 +492,7 @@
   width: min(520px, calc(100vw - 24px));
   max-height: min(720px, calc(100vh - 24px));
   overflow: auto;
-  box-shadow: 8px 8px 0 var(--cm-border);
+  box-shadow: var(--cm-shadow);
   padding: 18px;
 }
 

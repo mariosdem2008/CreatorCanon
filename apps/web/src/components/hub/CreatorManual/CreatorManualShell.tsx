@@ -52,21 +52,26 @@ const routeFor = (hubSlug: string, key: RouteKey) => {
   }
 };
 
-const themeStyle = (manifest: CreatorManualManifest): ManualStyle => ({
-  '--cm-bg': manifest.brand.tokens.background,
-  '--cm-fg': manifest.brand.tokens.foreground,
-  '--cm-surface': manifest.brand.tokens.surface,
-  '--cm-elevated': manifest.brand.tokens.elevated,
-  '--cm-border': manifest.brand.tokens.border,
-  '--cm-muted': manifest.brand.tokens.muted,
-  '--cm-accent': manifest.brand.tokens.accent,
-  '--cm-accent-fg': manifest.brand.tokens.accentForeground,
-  '--cm-warning': manifest.brand.tokens.warning,
-  '--cm-success': manifest.brand.tokens.success,
-  '--cm-radius': manifest.brand.tokens.radius,
-  '--cm-heading': manifest.brand.tokens.headingFamily,
-  '--cm-body': manifest.brand.tokens.bodyFamily,
-});
+const themeStyle = (manifest: CreatorManualManifest): ManualStyle => {
+  const { colors, typography } = manifest.brand.tokens;
+
+  return {
+    '--cm-bg': colors.background,
+    '--cm-fg': colors.foreground,
+    '--cm-surface': colors.surface,
+    '--cm-elevated': colors.elevated,
+    '--cm-border': colors.border,
+    '--cm-muted': colors.muted,
+    '--cm-accent': colors.accent,
+    '--cm-accent-fg': colors.accentForeground,
+    '--cm-warning': colors.warning,
+    '--cm-success': colors.success,
+    '--cm-radius': manifest.brand.tokens.radius,
+    '--cm-shadow': manifest.brand.tokens.shadow,
+    '--cm-heading': typography.headingFamily,
+    '--cm-body': typography.bodyFamily,
+  };
+};
 
 function NavLinks({
   items,
@@ -104,7 +109,7 @@ export function CreatorManualShell({ manifest, activeRouteKey, children }: Creat
   const mark = manifest.creator.name.trim().slice(0, 1).toUpperCase() || 'C';
 
   return (
-    <div className={styles.manual} style={themeStyle(manifest)}>
+    <div className={styles.manual} style={themeStyle(manifest)} data-mode={manifest.brand.style.mode}>
       <div className={styles.shell}>
         <header className={styles.topbar}>
           <div className={styles.topbarInner}>
