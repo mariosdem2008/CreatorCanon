@@ -300,7 +300,7 @@ export async function generateBriefShells(
     let slug = typeof item._index_slug === 'string' && item._index_slug.length > 0
       ? item._index_slug.replace(/^\/+|\/+$/g, '')
       : item.pageTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    let baseSlug = slug;
+    const baseSlug = slug;
     let n = 2;
     while (usedSlugs.has(slug)) {
       slug = `${baseSlug}-${n}`;
@@ -452,7 +452,7 @@ export async function writeBriefBody(
   const json = extractJsonFromCodexOutput(raw);
   const parsed = JSON.parse(json) as { body?: string };
   const body = typeof parsed.body === 'string' ? parsed.body : '';
-  const cited = (body.match(UUID_REGEX) ?? []).map((m) => m.replace(/[\[\]]/g, ''));
+  const cited = (body.match(UUID_REGEX) ?? []).map((m) => m.replace(/[[\]]/g, ''));
   const wordCount = body.split(/\s+/).filter(Boolean).length;
 
   // Quality gates — throw to trigger retry-on-failure.

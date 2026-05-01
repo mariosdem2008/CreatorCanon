@@ -399,7 +399,7 @@ export async function writePhaseBody(
   const json = extractJsonFromCodexOutput(raw);
   const parsed = JSON.parse(json) as { body?: string };
   const body = typeof parsed.body === 'string' ? parsed.body : '';
-  const cited = (body.match(UUID_REGEX) ?? []).map((m) => m.replace(/[\[\]]/g, ''));
+  const cited = (body.match(UUID_REGEX) ?? []).map((m) => m.replace(/[[\]]/g, ''));
   const wordCount = body.split(/\s+/).filter(Boolean).length;
 
   // Quality gates — throw to trigger retry-on-failure.

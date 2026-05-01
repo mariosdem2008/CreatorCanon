@@ -600,6 +600,7 @@ async function mapWithConcurrency<T, U>(
   const results: U[] = new Array(items.length);
   let cursor = 0;
   async function worker(): Promise<void> {
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const i = cursor;
       cursor += 1;
@@ -1160,7 +1161,7 @@ async function main() {
         .where(eq(project.id, run.projectId))
         .limit(1);
       const t = proj[0]?.title ?? '';
-      const m = t.match(/^([^—–\-]+?)(?:\s*[—–\-]\s+|$)/);
+      const m = t.match(/^([^—–-]+?)(?:\s*[—–-]\s+|$)/);
       if (m && m[1]) creatorHint = m[1].trim();
     }
     profilePayload = await generateChannelProfile(runId, videos, creatorHint);

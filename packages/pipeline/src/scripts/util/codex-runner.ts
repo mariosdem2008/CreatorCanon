@@ -51,7 +51,7 @@ export async function runCodex(prompt: string, options: RunCodexOptions = {}): P
     });
 
     const timer = setTimeout(() => {
-      try { proc.kill('SIGKILL'); } catch {}
+      try { proc.kill('SIGKILL'); } catch { /* best-effort kill — process may already be dead */ }
       settle(() => reject(new Error(`[${label}] codex timed out after ${timeoutMs}ms`)));
     }, timeoutMs);
 

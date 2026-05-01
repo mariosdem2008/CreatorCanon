@@ -40,7 +40,7 @@ export async function validateMermaid(src: string): Promise<MermaidValidation> {
     }
   }
   // Rough node-count cap to catch runaway output.
-  const nodeMatches = src.match(/\b[A-Za-z][A-Za-z0-9_]*\s*[\[(\{]/g) ?? [];
+  const nodeMatches = src.match(/\b[A-Za-z][A-Za-z0-9_]*\s*[[({]/g) ?? [];
   if (nodeMatches.length > MAX_NODES) {
     return { ok: false, error: `too many nodes: ${nodeMatches.length} > ${MAX_NODES}` };
   }

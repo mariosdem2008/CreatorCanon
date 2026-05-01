@@ -663,7 +663,7 @@ async function main() {
   console.info(`[v2] Run ${runId} status=${run.status}`);
 
   const projectTitle = run.projectId ? await loadProjectTitle(run.projectId) : null;
-  const creatorHint = projectTitle ? (projectTitle.match(/^([^—–\-]+?)(?:\s*[—–\-]\s+|$)/)?.[1]?.trim() ?? null) : null;
+  const creatorHint = projectTitle ? (projectTitle.match(/^([^—–-]+?)(?:\s*[—–-]\s+|$)/)?.[1]?.trim() ?? null) : null;
 
   const videos = await loadVideos(run.videoSetId);
   if (videos.length === 0) throw new Error('Run has no videos');

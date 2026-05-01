@@ -187,6 +187,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentSummary> {
   let toolCallCount = 0;
 
   try {
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (stop.shouldWarn() && !warnedSoftCap) {
       const snap = stop.snapshot();
