@@ -7,13 +7,13 @@ import { Breadcrumb } from '@/components/hub/EditorialAtlas/blocks/Breadcrumb';
 import { PageCard } from '@/components/hub/EditorialAtlas/blocks/PageCard';
 import { PageTable } from '@/components/hub/EditorialAtlas/blocks/PageTable';
 import { TopicCard } from '@/components/hub/EditorialAtlas/blocks/TopicCard';
-import { loadHubManifest } from '../../manifest';
+import { loadEditorialAtlasManifest } from '../../manifest';
 import { getTopicRoute, getTopicsRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string; topicSlug: string } }): Promise<Metadata> {
-  const { manifest } = await loadHubManifest(params.hubSlug);
+  const { manifest } = await loadEditorialAtlasManifest(params.hubSlug);
   const topic = manifest.topics.find((t) => t.slug === params.topicSlug);
   if (!topic) return { title: 'Topic not found' };
   return {
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: { params: { hubSlug: string; 
 }
 
 export default async function TopicDetail({ params }: { params: { hubSlug: string; topicSlug: string } }) {
-  const { manifest: m } = await loadHubManifest(params.hubSlug);
+  const { manifest: m } = await loadEditorialAtlasManifest(params.hubSlug);
   const topic = m.topics.find((t) => t.slug === params.topicSlug);
   if (!topic) notFound();
 

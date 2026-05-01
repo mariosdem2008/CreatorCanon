@@ -4,6 +4,10 @@
 // This is the contract every route handler MUST validate against before render.
 
 import { z } from 'zod';
+import {
+  creatorManualManifestSchema,
+  type CreatorManualManifest,
+} from '../creator-manual/schema';
 
 // Discriminated-union for page sections. Every variant accepts an optional
 // citationIds[] referencing the page's de-duplicated citations array.
@@ -213,3 +217,19 @@ export const editorialAtlasManifestSchema = z.object({
   highlights: z.array(highlightSchema).optional(),
 });
 export type EditorialAtlasManifest = z.infer<typeof editorialAtlasManifestSchema>;
+
+export const hubManifestSchema = z.discriminatedUnion('schemaVersion', [
+  editorialAtlasManifestSchema,
+  creatorManualManifestSchema,
+]);
+
+export type HubManifest = EditorialAtlasManifest | CreatorManualManifest;
+export type { CreatorManualManifest };
+
+export function isEditorialAtlasManifest(manifest: HubManifest): manifest is EditorialAtlasManifest {
+  return manifest.schemaVersion === 'editorial_atlas_v1';
+}
+
+export function isCreatorManualManifest(manifest: HubManifest): manifest is CreatorManualManifest {
+  return manifest.schemaVersion === 'creator_manual_v1';
+}

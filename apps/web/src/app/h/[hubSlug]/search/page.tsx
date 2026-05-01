@@ -1,18 +1,24 @@
-// apps/web/src/app/h/[hubSlug]/search/page.tsx
 import type { Metadata } from 'next';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { PageRow } from '@/components/hub/EditorialAtlas/blocks/PageRow';
 import { TopicCard } from '@/components/hub/EditorialAtlas/blocks/TopicCard';
 import { SourceRow } from '@/components/hub/EditorialAtlas/blocks/SourceRow';
+import { CreatorManualSearch, CreatorManualShell } from '@/components/hub/CreatorManual';
 import { loadHubManifest } from '../manifest';
+import { buildCreatorManualIndex } from '@/lib/hub/creator-manual/content';
+import { getCreatorManualSearchRoute } from '@/lib/hub/creator-manual/routes';
+import { isCreatorManualManifest } from '@/lib/hub/manifest/schema';
 import { getSearchRoute } from '@/lib/hub/routes';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
   const { manifest } = await loadHubManifest(params.hubSlug);
-  return { title: `Search — ${manifest.title}` };
+  if (isCreatorManualManifest(manifest)) {
+    return { title: `Search - ${manifest.title}`, alternates: { canonical: getCreatorManualSearchRoute(params.hubSlug) } };
+  }
+  return { title: `Search - ${manifest.title}`, alternates: { canonical: getSearchRoute(params.hubSlug) } };
 }
 
 export default async function SearchPage({
@@ -23,6 +29,17 @@ export default async function SearchPage({
   searchParams: { q?: string };
 }) {
   const { manifest: m } = await loadHubManifest(params.hubSlug);
+
+  if (isCreatorManualManifest(m)) {
+    const index = buildCreatorManualIndex(m);
+    const q = (searchParams.q ?? '').trim();
+    return (
+      <CreatorManualShell manifest={m} activeRouteKey="search">
+        <CreatorManualSearch manifest={m} index={index} query={q} />
+      </CreatorManualShell>
+    );
+  }
+
   const q = (searchParams.q ?? '').trim().toLowerCase();
   const topicAccentBySlug = Object.fromEntries(m.topics.map((t) => [t.slug, t.accentColor]));
 
@@ -43,7 +60,10 @@ export default async function SearchPage({
 
       <form action={getSearchRoute(params.hubSlug)} method="get" className="mt-6 flex items-center gap-2 rounded-[12px] border border-[#E5DECF] bg-white p-2 pl-4">
         <input
-          type="search" name="q" defaultValue={q} placeholder="Search this hub…"
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="Search this hub..."
           className="flex-1 bg-transparent text-[13px] text-[#1A1612] placeholder:text-[#9A8E7C] focus:outline-none"
         />
         <button type="submit" className="inline-flex h-9 items-center rounded-[8px] bg-[#1A1612] px-3 text-[12px] font-semibold text-[#F8F4EC] hover:opacity-90">

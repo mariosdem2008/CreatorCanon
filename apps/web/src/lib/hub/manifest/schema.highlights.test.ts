@@ -4,7 +4,7 @@ import { editorialAtlasManifestSchema } from './schema';
 import { mockManifest } from './mockManifest';
 
 function clone() {
-  return JSON.parse(JSON.stringify(mockManifest)) as Record<string, any>;
+  return JSON.parse(JSON.stringify(mockManifest)) as Record<string, unknown>;
 }
 
 describe('manifest.highlights', () => {

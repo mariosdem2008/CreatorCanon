@@ -95,8 +95,8 @@ export const createR2Client = (env: ServerEnv): R2Client => {
         const target = safeLocalPath(root, parsed.key);
         await fs.mkdir(path.dirname(target), { recursive: true });
         const body = typeof parsed.body === 'string'
-          ? Buffer.from(parsed.body)
-          : Buffer.from(parsed.body);
+          ? new TextEncoder().encode(parsed.body)
+          : new Uint8Array(parsed.body);
         await fs.writeFile(target, body);
         if (parsed.contentType || parsed.metadata || parsed.cacheControl) {
           await fs.writeFile(`${target}.meta.json`, JSON.stringify({
@@ -111,11 +111,12 @@ export const createR2Client = (env: ServerEnv): R2Client => {
       async getObject(key) {
         nonEmpty.parse(key);
         const target = safeLocalPath(root, key);
-        const [body, stats, metaRaw] = await Promise.all([
+        const [bodyBuffer, stats, metaRaw] = await Promise.all([
           fs.readFile(target),
           fs.stat(target),
           fs.readFile(`${target}.meta.json`, 'utf8').catch(() => undefined),
         ]);
+        const body = new Uint8Array(bodyBuffer);
         const meta = metaRaw ? JSON.parse(metaRaw) as {
           contentType?: string;
           metadata?: Record<string, string>;

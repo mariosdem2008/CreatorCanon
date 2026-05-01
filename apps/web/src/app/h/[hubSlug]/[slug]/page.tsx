@@ -13,14 +13,18 @@
 // shadowing. If a conflict surfaces (it shouldn't), delete this file and
 // note the reason in the implementation PR.
 
-import { permanentRedirect } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 
+import { isCreatorManualManifest } from '@/lib/hub/manifest/schema';
 import { getPageRoute } from '@/lib/hub/routes';
+import { loadHubManifest } from '../manifest';
 
-export default function LegacyDetailRedirect({
+export default async function LegacyDetailRedirect({
   params,
 }: {
   params: { hubSlug: string; slug: string };
 }) {
+  const { manifest } = await loadHubManifest(params.hubSlug);
+  if (isCreatorManualManifest(manifest)) notFound();
   permanentRedirect(getPageRoute(params.hubSlug, params.slug));
 }

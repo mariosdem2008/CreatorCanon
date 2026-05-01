@@ -7,15 +7,15 @@ import { NextResponse } from 'next/server';
 
 import { askRequestSchema } from '@/lib/hub/chat/schema';
 import { lookupMockAnswer } from '@/lib/hub/chat/mockAnswers';
-import { loadHubManifest } from '../../manifest';
+import { loadEditorialAtlasManifest } from '../../manifest';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request, { params }: { params: { hubSlug: string } }) {
-  // loadHubManifest calls notFound() internally if the hub doesn't exist in R2.
+  // loadEditorialAtlasManifest calls notFound() internally if the hub doesn't exist in R2.
   // We still need to return a proper 404 JSON response here since this is an API route.
   try {
-    await loadHubManifest(params.hubSlug);
+    await loadEditorialAtlasManifest(params.hubSlug);
   } catch {
     return NextResponse.json({ error: 'Hub not found' }, { status: 404 });
   }

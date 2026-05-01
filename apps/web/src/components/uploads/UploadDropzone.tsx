@@ -5,7 +5,6 @@ import { useCallback, useRef, useState } from 'react';
 import {
   isAllowedContentType,
   isAllowedFileSize,
-  MAX_FILE_BYTES,
 } from '@/lib/uploads/contentTypes';
 
 export interface Props {

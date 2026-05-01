@@ -4,9 +4,11 @@ import { strict as assert } from 'node:assert';
 
 import {
   editorialAtlasManifestSchema,
+  hubManifestSchema,
   pageSectionSchema,
   citationSchema,
 } from './schema';
+import { sampleCreatorManualManifest } from '../creator-manual/sampleManifest';
 
 test('citation schema: minimal valid', () => {
   const result = citationSchema.safeParse({
@@ -65,4 +67,9 @@ test('top-level manifest: schemaVersion is fixed', () => {
     trust: { methodologySummary: '', qualityPrinciples: [], creationProcess: [], faq: [] },
   });
   assert.equal(result.success, false);
+});
+
+test('hub manifest: parses creator manual manifests', () => {
+  const result = hubManifestSchema.safeParse(sampleCreatorManualManifest);
+  assert.equal(result.success, true);
 });

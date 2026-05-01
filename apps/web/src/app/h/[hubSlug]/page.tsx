@@ -4,13 +4,16 @@ import Link from 'next/link';
 
 import { ArtifactCard, PathCard, QuickWinCard, SourceMomentCard } from '@/components/hub/EditorialAtlas/blocks/WorkbenchCards';
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
+import { CreatorManualHome, CreatorManualShell } from '@/components/hub/CreatorManual';
 import { loadHubManifest } from './manifest';
+import { buildCreatorManualIndex } from '@/lib/hub/creator-manual/content';
 import {
   getAskRoute,
   getHubRoute,
   getPagesRoute,
   getStartRoute,
 } from '@/lib/hub/routes';
+import { isCreatorManualManifest } from '@/lib/hub/manifest/schema';
 import { deriveHubWorkbench } from '@/lib/hub/workbench';
 
 export const revalidate = 60;
@@ -19,13 +22,23 @@ export async function generateMetadata({ params }: { params: { hubSlug: string }
   const { manifest } = await loadHubManifest(params.hubSlug);
   return {
     title: manifest.title,
-    description: manifest.tagline,
+    description: isCreatorManualManifest(manifest) ? manifest.home.summary : manifest.tagline,
     alternates: { canonical: getHubRoute(params.hubSlug) },
   };
 }
 
 export default async function HubHomePage({ params }: { params: { hubSlug: string } }) {
   const { manifest: m } = await loadHubManifest(params.hubSlug);
+
+  if (isCreatorManualManifest(m)) {
+    const index = buildCreatorManualIndex(m);
+    return (
+      <CreatorManualShell manifest={m} activeRouteKey="home">
+        <CreatorManualHome manifest={m} index={index} />
+      </CreatorManualShell>
+    );
+  }
+
   const workbench = deriveHubWorkbench(m);
 
   return (

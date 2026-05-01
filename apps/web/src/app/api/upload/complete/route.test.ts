@@ -23,9 +23,6 @@ describe('POST /api/upload/complete — enqueue-failure logic', () => {
   it('when tasks.trigger throws, the handler should return 502 and mark both uploadStatus=failed and transcribeStatus=failed', () => {
     // Simulate the handler's catch block without importing the route
     // (avoids Next.js / auth / R2 bootstrap in the test environment).
-    const videoId = 'mu_enqueue_fail_test';
-    const workspaceId = 'ws_enqueue_fail_test';
-
     let capturedUploadStatus: string | null = null;
     let capturedTranscribeStatus: string | null = null;
     const mockDb = {
@@ -42,7 +39,7 @@ describe('POST /api/upload/complete — enqueue-failure logic', () => {
     const simulateEnqueueFailure = async () => {
       try {
         throw new Error('Trigger.dev unavailable');
-      } catch (err) {
+      } catch {
         // Mirror the handler's catch block (Fix I3: also rolls back uploadStatus)
         await mockDb.update().set({ uploadStatus: 'failed', transcribeStatus: 'failed' }).where();
         return { status: 502, body: { error: 'Failed to schedule transcription' } };
@@ -263,8 +260,6 @@ describe(
       // Create a fresh uploading video fixture for this sub-test
       const seed = Math.random().toString(36).slice(2, 8);
       const testVideoId = `mu_cl_${seed}`;
-      const { channel } = await import('@creatorcanon/db/schema');
-
       await getDb().insert(videoTable).values({
         id: testVideoId,
         workspaceId,

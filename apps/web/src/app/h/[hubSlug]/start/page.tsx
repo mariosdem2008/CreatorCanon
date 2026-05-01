@@ -3,19 +3,19 @@ import type { Metadata } from 'next';
 
 import { ArtifactCard, PathCard, SourceMomentCard } from '@/components/hub/EditorialAtlas/blocks/WorkbenchCards';
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
-import { loadHubManifest } from '../manifest';
+import { loadEditorialAtlasManifest } from '../manifest';
 import { getStartRoute } from '@/lib/hub/routes';
 import { deriveHubWorkbench } from '@/lib/hub/workbench';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  const { manifest } = await loadHubManifest(params.hubSlug);
+  const { manifest } = await loadEditorialAtlasManifest(params.hubSlug);
   return { title: `Start here — ${manifest.title}`, alternates: { canonical: getStartRoute(params.hubSlug) } };
 }
 
 export default async function StartHere({ params }: { params: { hubSlug: string } }) {
-  const { manifest: m } = await loadHubManifest(params.hubSlug);
+  const { manifest: m } = await loadEditorialAtlasManifest(params.hubSlug);
   const workbench = deriveHubWorkbench(m);
 
   return (

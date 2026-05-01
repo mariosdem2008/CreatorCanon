@@ -11,12 +11,12 @@ import { ArtifactCard, QuickWinCard } from '@/components/hub/EditorialAtlas/bloc
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { getPageRoute, getPagesRoute, getTopicRoute } from '@/lib/hub/routes';
 import { deriveWorkbenchPageView } from '@/lib/hub/workbench';
-import { loadHubManifest } from '../../manifest';
+import { loadEditorialAtlasManifest } from '../../manifest';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string; pageSlug: string } }): Promise<Metadata> {
-  const { manifest } = await loadHubManifest(params.hubSlug);
+  const { manifest } = await loadEditorialAtlasManifest(params.hubSlug);
   const page = manifest.pages.find((p) => p.slug === params.pageSlug && p.status === 'published');
   if (!page) return { title: 'Page not found' };
   return {
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: { params: { hubSlug: string; 
 }
 
 export default async function HubPageDetail({ params }: { params: { hubSlug: string; pageSlug: string } }) {
-  const { manifest: m } = await loadHubManifest(params.hubSlug);
+  const { manifest: m } = await loadEditorialAtlasManifest(params.hubSlug);
   const page = m.pages.find((p) => p.slug === params.pageSlug && p.status === 'published');
   if (!page) notFound();
 

@@ -3,13 +3,13 @@ import type { Metadata } from 'next';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { PageTable } from '@/components/hub/EditorialAtlas/blocks/PageTable';
-import { loadHubManifest } from '../manifest';
+import { loadEditorialAtlasManifest } from '../manifest';
 import { getPagesRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  const { manifest } = await loadHubManifest(params.hubSlug);
+  const { manifest } = await loadEditorialAtlasManifest(params.hubSlug);
   return {
     title: `All pages — ${manifest.title}`,
     description: `${manifest.pages.length} source-grounded pages across the ${manifest.title}.`,
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: { hubSlug: string }
 }
 
 export default async function AllPagesIndex({ params }: { params: { hubSlug: string } }) {
-  const { manifest: m } = await loadHubManifest(params.hubSlug);
+  const { manifest: m } = await loadEditorialAtlasManifest(params.hubSlug);
   const topicAccentBySlug = Object.fromEntries(m.topics.map((t) => [t.slug, t.accentColor]));
   const published = m.pages.filter((p) => p.status === 'published');
 

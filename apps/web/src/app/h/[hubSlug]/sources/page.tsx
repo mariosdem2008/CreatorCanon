@@ -1,20 +1,36 @@
-// apps/web/src/app/h/[hubSlug]/sources/page.tsx
 import type { Metadata } from 'next';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { SourceTable } from '@/components/hub/EditorialAtlas/blocks/SourceTable';
+import { CreatorManualShell, CreatorManualSources } from '@/components/hub/CreatorManual';
 import { loadHubManifest } from '../manifest';
+import { buildCreatorManualIndex } from '@/lib/hub/creator-manual/content';
+import { getCreatorManualSourcesRoute } from '@/lib/hub/creator-manual/routes';
+import { isCreatorManualManifest } from '@/lib/hub/manifest/schema';
 import { getSourcesRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
   const { manifest } = await loadHubManifest(params.hubSlug);
-  return { title: `Sources — ${manifest.title}`, alternates: { canonical: getSourcesRoute(params.hubSlug) } };
+  if (isCreatorManualManifest(manifest)) {
+    return { title: `Sources - ${manifest.title}`, alternates: { canonical: getCreatorManualSourcesRoute(params.hubSlug) } };
+  }
+  return { title: `Sources - ${manifest.title}`, alternates: { canonical: getSourcesRoute(params.hubSlug) } };
 }
 
 export default async function SourcesLibrary({ params }: { params: { hubSlug: string } }) {
   const { manifest: m } = await loadHubManifest(params.hubSlug);
+
+  if (isCreatorManualManifest(m)) {
+    const index = buildCreatorManualIndex(m);
+    return (
+      <CreatorManualShell manifest={m} activeRouteKey="sources">
+        <CreatorManualSources manifest={m} index={index} />
+      </CreatorManualShell>
+    );
+  }
+
   return (
     <HubShell manifest={m} activePathname={getSourcesRoute(params.hubSlug)}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A8E7C]">Sources</p>

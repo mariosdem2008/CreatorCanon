@@ -3,18 +3,18 @@ import type { Metadata } from 'next';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { LineIllustration } from '@/components/hub/EditorialAtlas/illustrations';
-import { loadHubManifest } from '../manifest';
+import { loadEditorialAtlasManifest } from '../manifest';
 import { getMethodologyRoute } from '@/lib/hub/routes';
 
 export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  const { manifest } = await loadHubManifest(params.hubSlug);
+  const { manifest } = await loadEditorialAtlasManifest(params.hubSlug);
   return { title: `Methodology — ${manifest.title}`, alternates: { canonical: getMethodologyRoute(params.hubSlug) } };
 }
 
 export default async function MethodologyPage({ params }: { params: { hubSlug: string } }) {
-  const { manifest: m } = await loadHubManifest(params.hubSlug);
+  const { manifest: m } = await loadEditorialAtlasManifest(params.hubSlug);
   return (
     <HubShell manifest={m} activePathname={getMethodologyRoute(params.hubSlug)}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A8E7C]">Methodology</p>

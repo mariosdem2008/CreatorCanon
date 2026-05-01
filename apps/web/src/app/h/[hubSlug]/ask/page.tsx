@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 
 import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { MOCK_ANSWER_QUESTIONS } from '@/lib/hub/chat/mockAnswers';
-import { loadHubManifest } from '../manifest';
+import { loadEditorialAtlasManifest } from '../manifest';
 import { getAskRoute } from '@/lib/hub/routes';
 
 import { AskHubClient } from './AskHubClient';
@@ -11,7 +11,7 @@ import { AskHubClient } from './AskHubClient';
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: { hubSlug: string } }): Promise<Metadata> {
-  const { manifest } = await loadHubManifest(params.hubSlug);
+  const { manifest } = await loadEditorialAtlasManifest(params.hubSlug);
   return { title: `Ask — ${manifest.title}` };
 }
 
@@ -22,7 +22,7 @@ export default async function AskPage({
   params: { hubSlug: string };
   searchParams: { q?: string };
 }) {
-  const { manifest: m } = await loadHubManifest(params.hubSlug);
+  const { manifest: m } = await loadEditorialAtlasManifest(params.hubSlug);
   const firstName = m.creator.name.split(' ')[0];
   return (
     <HubShell manifest={m} activePathname={getAskRoute(params.hubSlug)}>

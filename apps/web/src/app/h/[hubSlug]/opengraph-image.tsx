@@ -55,11 +55,15 @@ export default async function Image({
   try {
     const { hub, manifest } = await loadHubManifest(params.hubSlug);
     title = manifest.title;
-    const overviewPage =
-      manifest.pages.find((p) => p.slug === 'overview') ?? manifest.pages[0];
-    description =
-      overviewPage?.summary ??
-      `A source-linked knowledge hub generated from the ${manifest.title} creator archive.`;
+    if (manifest.schemaVersion === 'editorial_atlas_v1') {
+      const overviewPage =
+        manifest.pages.find((p) => p.slug === 'overview') ?? manifest.pages[0];
+      description =
+        overviewPage?.summary ??
+        `A source-linked knowledge hub generated from the ${manifest.title} creator archive.`;
+    } else {
+      description = manifest.home.summary || manifest.tagline;
+    }
     theme = normalizeHubTemplateId(hub.theme) as ThemeKey;
   } catch {
     // Fall back to generic card — never throw from an OG image route.
