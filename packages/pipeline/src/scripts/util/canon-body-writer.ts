@@ -116,14 +116,17 @@ function loadArchetypeVoice(archetype: ArchetypeSlug): string {
   return section.trim();
 }
 
-/** Format a segment ref for the prompt. */
+/** Format a segment ref for the prompt. The full UUID is the citation token. */
 function formatSegment(s: SegmentRef): string {
   return `[${s.segmentId}] (${s.timestamp}) "${s.text.replace(/"/g, '\\"').slice(0, 600)}"`;
 }
 
+/** Format a woven item — content for body, ID hidden from inline citation duty.
+ *  Internal label («ex_xxx») uses non-bracket delimiters so Codex won't be tempted
+ *  to use it as a citation token. */
 function formatWoven(item: WovenItem): string {
   const extra = item.correction ? `; correction: ${item.correction}` : '';
-  return `- (id=${item.id}) "${item.text.replace(/"/g, '\\"').slice(0, 400)}"${extra}`;
+  return `- «${item.id}» "${item.text.replace(/"/g, '\\"').slice(0, 400)}"${extra}`;
 }
 
 /** Length budget in words by canon type. Longer for procedural, shorter for definitions. */
@@ -212,11 +215,18 @@ function buildBodyPrompt(input: CanonBodyInput): string {
   lines.push(`6. Close with the practical "what to do now"`);
   lines.push('');
   lines.push(`# Citation rules (CRITICAL)`);
+  lines.push(`- ONLY transcript segment UUIDs go in [...] citation brackets in body.`);
+  lines.push(`  Format: [<full-uuid>] like [a1a6709f-a2a7-48f4-839b-82687165fbdd]`);
   lines.push(`- Weave 8-15 inline [<segmentId>] tokens through the body`);
   lines.push(`- Place after concrete claims, numbers, named entities, examples`);
   lines.push(`- DO NOT cite in opening hook (that's a teaser); cite once you start teaching`);
   lines.push(`- DO NOT use [<startMs>ms-<endMs>ms] ranges — those can't linkify`);
   lines.push(`- DO NOT spam (3+ citations in one sentence)`);
+  lines.push(`- DO NOT put woven-item internal labels (ex_xxx, st_xxx, mst_xxx, take_xxx,`);
+  lines.push(`  shown as «label» in the source material above) in [...] brackets.`);
+  lines.push(`  Those are NOT citation tokens. They are tracking labels only — reference`);
+  lines.push(`  woven items by their CONTENT in your prose (e.g., "the dentist example"),`);
+  lines.push(`  then echo back which «labels» you used in the used_*_ids output fields.`);
   lines.push('');
   lines.push(`# Voice rules (HARD-FAIL otherwise)`);
   lines.push(`- First-person only. NEVER "the creator", "${input.creatorName}", "she/he says", "the speaker"`);
@@ -225,8 +235,10 @@ function buildBodyPrompt(input: CanonBodyInput): string {
   lines.push(`- Markdown allowed: ## subheadings, **bold**, lists, blockquotes`);
   lines.push('');
   lines.push(`# Weaving requirement`);
-  lines.push(`The woven items above MUST appear in your body — paraphrased or directly. The`);
-  lines.push(`audit pipeline checks that woven IDs you echo back in used_*_ids actually appear.`);
+  lines.push(`The woven items above MUST appear in your body — paraphrased or directly. Reference`);
+  lines.push(`them BY CONTENT in your prose (e.g., "the dentist value-ladder example", "the £5,000`);
+  lines.push(`debt cold-call story"). DO NOT put their internal «labels» in citation brackets.`);
+  lines.push(`Echo back which «labels» you used in used_*_ids output fields (without the « »).`);
   lines.push('');
   lines.push(`# Output format`);
   lines.push(`ONE JSON object. No code fences. No preamble. First char \`{\`, last char \`}\`.`);
@@ -242,6 +254,19 @@ function buildBodyPrompt(input: CanonBodyInput): string {
   return lines.join('\n');
 }
 
+/** Minimum word count by canon type. Body writer retries on under-length output. */
+function minWordCount(type: string): number {
+  switch (type) {
+    case 'definition': case 'aha_moment': case 'quote': return 200;
+    case 'example': return 250;
+    case 'lesson': case 'pattern': case 'tactic': return 350;
+    case 'principle': case 'topic': return 400;
+    case 'framework': return 500;
+    case 'playbook': return 600;
+    default: return 350;
+  }
+}
+
 export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs?: number } = {}): Promise<CanonBodyResult> {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
   const prompt = buildBodyPrompt(input);
@@ -250,6 +275,17 @@ export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs
   const parsed = JSON.parse(json) as Partial<CanonBodyResult>;
   const body = typeof parsed.body === 'string' ? parsed.body : '';
   const cited = (body.match(UUID_REGEX) ?? []).map((m) => m.replace(/[\[\]]/g, ''));
+  const wordCount = body.split(/\s+/).filter(Boolean).length;
+
+  // Quality gates — throw to trigger retry-on-failure in the orchestrator.
+  const minWords = minWordCount(input.type);
+  if (wordCount < minWords) {
+    throw new Error(`body too short: ${wordCount} words < ${minWords} min for ${input.type}`);
+  }
+  if (input.segments.length >= 3 && cited.length === 0) {
+    throw new Error(`body has 0 [<segmentId>] citations despite ${input.segments.length} source segments available`);
+  }
+
   return {
     body,
     cited_segment_ids: [...new Set(cited)],

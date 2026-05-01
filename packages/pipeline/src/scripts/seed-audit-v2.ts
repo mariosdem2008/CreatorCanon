@@ -185,6 +185,14 @@ function formatTs(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/** Codex sometimes returns scores as 0-1 fractions instead of 0-100 integers.
+ *  Normalize to integer 0-100. */
+function normalizeScore(x: unknown): number {
+  if (typeof x !== 'number' || !Number.isFinite(x)) return 0;
+  const scaled = x > 0 && x <= 1 ? Math.round(x * 100) : Math.round(x);
+  return Math.max(0, Math.min(100, scaled));
+}
+
 // ── v2 schema types ────────────────────────────────────────────────────────
 
 interface ChannelProfile_v2 {
@@ -524,8 +532,10 @@ async function generateCanonShellsV2(
   videos: Array<{ videoId: string; title: string; durationSec: number }>,
   perVideo: boolean,
 ): Promise<CanonShell_v2[]> {
-  const TARGET = perVideo ? 6 * videos.length : 18;
-  const MAX_ITERATIONS = perVideo ? 4 * videos.length : 12;
+  const TARGET = perVideo ? Math.max(8, 6 * videos.length) : 18;
+  // Codex CLI's "single best" tendency means each iter often returns 1.
+  // Allow 2x iterations so we still hit TARGET when output is degenerate.
+  const MAX_ITERATIONS = perVideo ? Math.max(12, 8 * videos.length) : 18;
   const accumulated: CanonShell_v2[] = [];
   const seenTitles = new Set<string>();
 
@@ -676,6 +686,11 @@ async function main() {
     for (const shell of canonShells) {
       const id = `cn_${crypto.randomUUID().slice(0, 12)}`;
       canonShellIds.set(shell.title, id);
+      // Normalize scores in case Codex returned fractions.
+      shell.confidenceScore = normalizeScore(shell.confidenceScore);
+      shell.pageWorthinessScore = normalizeScore(shell.pageWorthinessScore);
+      shell.specificityScore = normalizeScore(shell.specificityScore);
+      shell.creatorUniquenessScore = normalizeScore(shell.creatorUniquenessScore);
       await db.insert(canonNode).values({
         id,
         workspaceId: run.workspaceId,
@@ -742,9 +757,30 @@ async function main() {
     const id = canonShellIds.get(shell.title) ?? `cn_temp_${i}`;
     const sel = selections.get(id) ?? { example_ids: [], story_ids: [], mistake_ids: [], contrarian_take_ids: [] };
 
-    // Build segment refs from the shell's _index_evidence_segments.
+    // Build segment refs. Source = shell's _index_evidence_segments PLUS
+    // segments from the woven items' source segments. Wider pool means
+    // the body has more concrete evidence to cite.
+    const segIdsForBody = new Set<string>(shell._index_evidence_segments);
+    for (const eid of sel.example_ids) {
+      const vicItem = vics
+        .flatMap((v) => v._index_examples)
+        .find((i) => i.id === eid);
+      vicItem?.segments.forEach((sid) => segIdsForBody.add(sid));
+    }
+    for (const sid of sel.story_ids) {
+      const vicItem = vics.flatMap((v) => v._index_stories).find((i) => i.id === sid);
+      vicItem?.segments.forEach((s) => segIdsForBody.add(s));
+    }
+    for (const mid of sel.mistake_ids) {
+      const vicItem = vics.flatMap((v) => v._index_mistakes_to_avoid).find((i) => i.id === mid);
+      vicItem?.segments.forEach((s) => segIdsForBody.add(s));
+    }
+    for (const tid of sel.contrarian_take_ids) {
+      const vicItem = vics.flatMap((v) => v._index_contrarian_takes).find((i) => i.id === tid);
+      vicItem?.segments.forEach((s) => segIdsForBody.add(s));
+    }
     const segments: SegmentRef[] = [];
-    for (const segId of shell._index_evidence_segments.slice(0, 12)) {
+    for (const segId of [...segIdsForBody].slice(0, 18)) {
       const s = segById.get(segId);
       if (s) segments.push({ segmentId: s.segmentId, timestamp: formatTs(s.startMs), text: s.text });
     }
