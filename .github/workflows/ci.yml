@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: SaaS
+        working-directory: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: SaaS/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -63,7 +63,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: SaaS
+        working-directory: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: SaaS/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -88,16 +88,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            SaaS/apps/web/.next/cache
-          key: ${{ runner.os }}-next-${{ hashFiles('SaaS/pnpm-lock.yaml') }}-${{ hashFiles('SaaS/apps/web/**/*.[jt]s', 'SaaS/apps/web/**/*.[jt]sx') }}
+            apps/web/.next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.[jt]s', 'apps/web/**/*.[jt]sx') }}
           restore-keys: |
-            ${{ runner.os }}-next-${{ hashFiles('SaaS/pnpm-lock.yaml') }}-
+            ${{ runner.os }}-next-${{ hashFiles('pnpm-lock.yaml') }}-
             ${{ runner.os }}-next-
 
       - name: Cache Turbo
         uses: actions/cache@v4
         with:
-          path: SaaS/.turbo
+          path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
@@ -112,7 +112,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: SaaS
+        working-directory: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -128,7 +128,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: SaaS/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -153,5 +153,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
-          path: SaaS/apps/web/test-results/
+          path: apps/web/test-results/
           retention-days: 7
