@@ -11,6 +11,7 @@ import { ConfigureSubmitButton } from './ConfigureButtons';
 type Tone = 'conversational' | 'professional' | 'academic';
 type Depth = 'short' | 'standard' | 'deep';
 type TemplateId = 'paper' | 'midnight' | 'field';
+type VoiceMode = 'reader_second_person' | 'creator_first_person';
 
 const TONE_OPTIONS: Array<[Tone, string, string]> = [
   ['conversational', 'Conversational', 'Clear, direct, creator-led'],
@@ -22,6 +23,19 @@ const DEPTH_OPTIONS: Array<[Depth, string, string]> = [
   ['short', 'Concise', 'Key ideas only'],
   ['standard', 'Standard', 'Balanced depth'],
   ['deep', 'Deep', 'Full coverage'],
+];
+
+const VOICE_OPTIONS: Array<[VoiceMode, string, string]> = [
+  [
+    'reader_second_person',
+    'Direct (you-pronoun)',
+    '“If you want to win retainers, embed Phase 2 hooks in your Phase 1 proposal.”',
+  ],
+  [
+    'creator_first_person',
+    "Creator's voice (first-person)",
+    '“I built the proposal generator after losing too many deals to slow turnaround.”',
+  ],
 ];
 
 export function ConfigureClient({
@@ -43,6 +57,7 @@ export function ConfigureClient({
   const [depth, setDepth] = useState<Depth>('standard');
   const [template, setTemplate] = useState<TemplateId>('paper');
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>('reader_second_person');
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,460px)]">
@@ -95,6 +110,22 @@ export function ConfigureClient({
               value={depth}
               onChange={setDepth}
             />
+            <div>
+              <p className="text-[11px] leading-[1.5] text-[var(--cc-ink-3)]">
+                Direct (you-pronoun) reads as a how-to. Creator&apos;s voice (first-person)
+                reads as the creator&apos;s own commentary. Choose direct unless this hub is
+                primarily personal essays.
+              </p>
+              <div className="mt-2">
+                <ChoiceGroup
+                  label="Voice"
+                  name="voiceMode"
+                  options={VOICE_OPTIONS}
+                  value={voiceMode}
+                  onChange={setVoiceMode}
+                />
+              </div>
+            </div>
           </div>
         </Panel>
 

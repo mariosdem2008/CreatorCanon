@@ -149,6 +149,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 Complete payment →
               </LinkButton>
             ) : null}
+            {run?.status === 'audit_ready' ? (
+              <Link
+                href={`/app/projects/${params.id}/runs/${run.id}/audit`}
+                className="inline-flex h-9 items-center rounded-[8px] bg-[var(--cc-accent)] px-3 text-[12px] font-semibold text-white hover:bg-[var(--cc-accent-strong)]"
+              >
+                Audit ready — review the plan →
+              </Link>
+            ) : null}
             {draftPagesReady ? (
               <Link
                 href={`/app/projects/${params.id}/pages`}
@@ -215,6 +223,15 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                   href={`/app/checkout?projectId=${params.id}`}
                   cta="Complete payment"
                   tone="warn"
+                />
+              ) : null}
+              {run?.status === 'audit_ready' ? (
+                <ActionCard
+                  title="Audit ready for review"
+                  body="We analyzed your videos and produced a build plan. Review it before we author the pages."
+                  href={`/app/projects/${params.id}/runs/${run.id}/audit`}
+                  cta="Review the plan"
+                  tone="success"
                 />
               ) : null}
               {run?.status === 'failed' ? (
@@ -338,6 +355,8 @@ function projectBrief(
     return 'This hub is live. Future edits move through a deliberate review and republish cycle.';
   if (status === 'failed')
     return 'The run failed and needs operator attention before the creator can continue.';
+  if (status === 'audit_ready')
+    return 'The audit is ready. Review the plan and click Generate Hub when you’re happy with it.';
   if (status === 'queued' || status === 'running')
     return 'Generation is in progress. The timeline shows each stage as the worker advances.';
   if (draftPagesReady)
@@ -351,13 +370,15 @@ function RunBadge({ status }: { status: string }) {
   const tone =
     status === 'published'
       ? 'success'
-      : status === 'awaiting_review'
+      : status === 'audit_ready'
         ? 'warn'
-        : status === 'failed'
-          ? 'danger'
-          : status === 'running' || status === 'queued' || status === 'awaiting_payment'
-            ? 'info'
-            : 'neutral';
+        : status === 'awaiting_review'
+          ? 'warn'
+          : status === 'failed'
+            ? 'danger'
+            : status === 'running' || status === 'queued' || status === 'awaiting_payment'
+              ? 'info'
+              : 'neutral';
   return (
     <StatusPill tone={tone as 'success' | 'warn' | 'danger' | 'info' | 'neutral'}>
       {status.replaceAll('_', ' ')}

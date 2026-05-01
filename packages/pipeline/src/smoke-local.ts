@@ -12,7 +12,7 @@ import { parseServerEnv, PIPELINE_VERSION } from '@creatorcanon/core';
 
 import { closeDb } from '@creatorcanon/db/client';
 import { runGenerationPipeline } from './run-generation-pipeline';
-import { publishRunAsHub } from './publish-run-as-hub';
+import { assertEditorialAtlasManifest, publishRunAsHub } from './publish-run-as-hub';
 import { loadDefaultEnvFiles } from './env-files';
 import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
 
@@ -144,10 +144,7 @@ async function run() {
   const manifest = JSON.parse(
     new TextDecoder().decode(manifestObject.body),
   ) as EditorialAtlasManifest;
-  assert(
-    manifest.schemaVersion === 'editorial_atlas_v1',
-    `Expected editorial_atlas_v1 manifest, got ${manifest.schemaVersion}.`,
-  );
+  assertEditorialAtlasManifest(manifest);
   const citationCount = manifest.pages?.reduce(
     (sum, p) => sum + (p.citations?.length ?? 0),
     0,

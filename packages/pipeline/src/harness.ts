@@ -133,7 +133,7 @@ export async function runStage<TInput, TOutput>(
 /** Transition a generation_run to a new status. */
 export async function transitionRun(
   runId: string,
-  status: 'running' | 'awaiting_review' | 'failed' | 'canceled',
+  status: 'running' | 'audit_ready' | 'awaiting_review' | 'failed' | 'canceled',
   extra?: { startedAt?: Date; completedAt?: Date },
 ): Promise<void> {
   const db = getDb();

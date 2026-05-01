@@ -115,17 +115,18 @@ export async function getOrCreateHub(input: {
   return rows[0]!;
 }
 
-/** Minimal runtime validation that the adapt-stage produced a v1 manifest. */
-function assertEditorialAtlasV1(value: unknown): asserts value is EditorialAtlasManifest {
+/** Minimal runtime validation that the adapt-stage produced an Editorial Atlas manifest. */
+export function assertEditorialAtlasManifest(value: unknown): asserts value is EditorialAtlasManifest {
+  const schemaVersion = (value as { schemaVersion?: unknown } | null)?.schemaVersion;
   if (
     typeof value !== 'object' ||
     value === null ||
-    (value as { schemaVersion?: unknown }).schemaVersion !== 'editorial_atlas_v1'
+    (schemaVersion !== 'editorial_atlas_v1' && schemaVersion !== 'editorial_atlas_v2')
   ) {
     throw new Error(
       `publish: adapt-stage manifest has unexpected schemaVersion='${
-        (value as { schemaVersion?: unknown } | null)?.schemaVersion ?? 'missing'
-      }'. Expected 'editorial_atlas_v1'.`,
+        schemaVersion ?? 'missing'
+      }'. Expected 'editorial_atlas_v1' or 'editorial_atlas_v2'.`,
     );
   }
 }
@@ -171,7 +172,7 @@ export async function publishRunAsHub(
     theme,
   });
 
-  // 1. Read the editorial_atlas_v1 manifest written by the adapt stage.
+  // 1. Read the Editorial Atlas manifest written by the adapt stage.
   const r2 = createR2Client(parseServerEnv(process.env));
   const adaptManifestKey = artifactKey({
     workspaceId: input.workspaceId,
@@ -183,7 +184,7 @@ export async function publishRunAsHub(
   const manifestObject = await r2.getObject(adaptManifestKey);
   const rawManifest: unknown = JSON.parse(new TextDecoder().decode(manifestObject.body));
   // Validate schema version before doing anything irreversible.
-  assertEditorialAtlasV1(rawManifest);
+  assertEditorialAtlasManifest(rawManifest);
   const adaptManifest: EditorialAtlasManifest = rawManifest;
 
   // 2. Idempotency: if there is already a live release for this exact run, return it.

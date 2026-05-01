@@ -26,7 +26,15 @@ function makeCapturingR2() {
   };
 }
 
-describe('runAgent — error paths', () => {
+// This suite requires a live Postgres connection (it seeds + tears down
+// real rows). When DATABASE_URL is absent — typical for default GitHub
+// Actions runs — the seedTestRun call hangs and the test runner cancels
+// the suite. Skip cleanly in that case.
+const dbSkipReason = !process.env.DATABASE_URL
+  ? 'requires DATABASE_URL (seedTestRun talks to live Postgres)'
+  : false;
+
+describe('runAgent — error paths', { skip: dbSkipReason }, () => {
   let seed: SeedResult;
 
   before(async () => {

@@ -11,6 +11,7 @@ import { projectNavigation } from './project-navigation';
 import { projectTrust } from './project-trust';
 import { projectHighlights } from './project-highlights';
 import { buildPageCitations } from './project-citations';
+import { projectWorkbench, projectWorkbenchPageFields } from './project-workbench';
 
 export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, releaseId }) => {
   const db = getDb();
@@ -88,9 +89,17 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
     segments: segmentRows,
     videos: citationVideoRows,
   });
-  const pages = pagesWithInternal.map(({ _internal: _dropped, ...rest }) => ({
+  const pagesWithCitations = pagesWithInternal.map((page) => ({
+    ...page,
+    citations: (citationsByPage.get(page.id) ?? []) as EditorialAtlasManifest['pages'][number]['citations'],
+  }));
+  const workbench = projectWorkbench({ pages: pagesWithCitations });
+  const pagesWithWorkbenchFields = projectWorkbenchPageFields({
+    pages: pagesWithCitations,
+    sourceMoments: workbench.sourceMoments,
+  });
+  const pages = pagesWithWorkbenchFields.map(({ _internal: _dropped, ...rest }) => ({
     ...rest,
-    citations: (citationsByPage.get(rest.id) ?? []) as EditorialAtlasManifest['pages'][number]['citations'],
   }));
 
   const stats = await projectStats({
@@ -107,7 +116,7 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
     hubRow.accessMode === 'public' ? 'public' : 'unlisted';
 
   const manifest: EditorialAtlasManifest = {
-    schemaVersion: 'editorial_atlas_v1',
+    schemaVersion: 'editorial_atlas_v2',
     templateKey: 'editorial_atlas',
     hubId,
     releaseId,
@@ -128,6 +137,7 @@ export const adaptArchiveToEditorialAtlas: AdapterFn = async ({ runId, hubId, re
     navigation,
     trust,
     highlights: highlights.length > 0 ? highlights : undefined,
+    workbench: workbench.guidedPaths.length > 0 ? workbench : undefined,
   };
 
   return manifest;

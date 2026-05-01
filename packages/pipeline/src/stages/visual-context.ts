@@ -11,6 +11,7 @@ import { analyzeFrameWithGemini } from '../visual/gemini-vision';
 import { persistVisualMoment } from '../visual/persist-visual-moment';
 import { VISUAL_LIMITS } from '../canon-limits';
 import { VISUAL_FRAME_ANALYST_PROMPT } from '../agents/specialists/prompts';
+import { sanitizeTranscriptText, DEFAULT_SUBSTITUTIONS } from '../transcript/sanitize';
 import type { StageContext } from '../harness';
 
 export interface VisualContextStageInput {
@@ -89,7 +90,7 @@ export async function runVisualContextStage(
       }
       out.videosWithMp4Source += 1;
 
-      const cueSegments = await db
+      const rawCueSegments = await db
         .select({
           id: segment.id,
           startMs: segment.startMs,
@@ -99,6 +100,10 @@ export async function runVisualContextStage(
         .from(segment)
         .where(and(eq(segment.runId, input.runId), eq(segment.videoId, videoId)))
         .orderBy(segment.startMs);
+      const cueSegments = rawCueSegments.map((s) => ({
+        ...s,
+        text: sanitizeTranscriptText(s.text, DEFAULT_SUBSTITUTIONS),
+      }));
 
       const timestamps = pickFrameTimestamps(cueSegments, { maxFrames });
       out.framesSampled += timestamps.length;

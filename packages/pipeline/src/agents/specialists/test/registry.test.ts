@@ -8,8 +8,15 @@ const EXPECTED_AGENTS = [
 ] as const;
 
 describe('SPECIALISTS registry', () => {
-  it('has exactly 8 specialists', () => {
-    assert.equal(Object.keys(SPECIALISTS).length, 8);
+  it('registers at least the 8 originally-expected specialists', () => {
+    // The registry has grown beyond the original 8 (currently ~20). The
+    // EXPECTED_AGENTS list below is the v1 baseline that must still be
+    // present; newer specialists added on top are exercised by their own
+    // tests.
+    assert.ok(
+      Object.keys(SPECIALISTS).length >= EXPECTED_AGENTS.length,
+      `expected at least ${EXPECTED_AGENTS.length} specialists, got ${Object.keys(SPECIALISTS).length}`,
+    );
   });
 
   it('every expected agent is registered with non-empty prompt + tools', () => {

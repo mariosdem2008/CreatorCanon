@@ -2,16 +2,16 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { Breadcrumb } from '@/components/hub/EditorialAtlas/blocks/Breadcrumb';
-import { MetaTagPill } from '@/components/hub/EditorialAtlas/blocks/MetaTagPill';
 import { EvidenceQualityBadge } from '@/components/hub/EditorialAtlas/blocks/EvidenceQualityBadge';
-import { LineIllustration } from '@/components/hub/EditorialAtlas/illustrations';
+import { MetaTagPill } from '@/components/hub/EditorialAtlas/blocks/MetaTagPill';
 import { SectionRenderer } from '@/components/hub/EditorialAtlas/blocks/SectionRenderer';
-import { RelatedPages } from '@/components/hub/EditorialAtlas/blocks/RelatedPages';
 import { SourceRail } from '@/components/hub/EditorialAtlas/blocks/SourceRail';
-import { loadHubManifest } from '../../manifest';
+import { ArtifactCard, QuickWinCard } from '@/components/hub/EditorialAtlas/blocks/WorkbenchCards';
+import { HubShell } from '@/components/hub/EditorialAtlas/shell';
 import { getPageRoute, getPagesRoute, getTopicRoute } from '@/lib/hub/routes';
+import { deriveWorkbenchPageView } from '@/lib/hub/workbench';
+import { loadHubManifest } from '../../manifest';
 
 export const revalidate = 60;
 
@@ -31,11 +31,10 @@ export default async function HubPageDetail({ params }: { params: { hubSlug: str
   const page = m.pages.find((p) => p.slug === params.pageSlug && p.status === 'published');
   if (!page) notFound();
 
-  const topicAccentBySlug = Object.fromEntries(m.topics.map((t) => [t.slug, t.accentColor]));
   const sourcesById = Object.fromEntries(m.sources.map((s) => [s.id, s]));
   const citationsById = Object.fromEntries(page.citations.map((c) => [c.id, c]));
-  const related = m.pages.filter((p) => page.relatedPageIds.includes(p.id) && p.status === 'published');
   const primaryTopic = m.topics.find((t) => t.slug === page.topicSlugs[0]);
+  const pageView = deriveWorkbenchPageView(m, page);
 
   return (
     <HubShell
@@ -49,38 +48,57 @@ export default async function HubPageDetail({ params }: { params: { hubSlug: str
         { label: page.title },
       ]} />
 
-      <div className="mt-3 flex items-center gap-2">
-        <MetaTagPill accent={primaryTopic?.accentColor}>{page.type}</MetaTagPill>
-        <EvidenceQualityBadge quality={page.evidenceQuality} />
-      </div>
-
-      <div className="mt-4 flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-[640px]">
-          <h1 className="text-[36px] font-semibold leading-[1.08] tracking-[-0.02em] text-[#1A1612]">{page.title}</h1>
-          <p className="mt-3 text-[15px] leading-[1.55] text-[#3D352A]">{page.summary}</p>
+      <section className="mt-4 space-y-5">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <MetaTagPill accent={primaryTopic?.accentColor}>{page.type}</MetaTagPill>
+            <EvidenceQualityBadge quality={page.evidenceQuality} />
+            <span className="rounded-full bg-[#F2EBDA] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6B5F50]">{pageView.intent}</span>
+          </div>
+          <h1 className="mt-4 max-w-[780px] text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1612]">{page.title}</h1>
+          <p className="mt-4 max-w-[700px] text-[16px] leading-[1.6] text-[#3D352A]">{page.summary}</p>
           <p className="mt-3 text-[11px] text-[#9A8E7C]">
-            {page.estimatedReadMinutes} min read · {page.citationCount} citations · Updated {new Date(page.updatedAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
-            {page.reviewedBy ? ` · Reviewed by ${page.reviewedBy}` : ''}
+            {page.estimatedReadMinutes} min read &middot; {page.citationCount} citations &middot; Updated {new Date(page.updatedAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {page.reviewedBy ? <> &middot; Reviewed by {page.reviewedBy}</> : null}
           </p>
         </div>
-        {page.hero?.illustrationKey && (
-          <div className="text-[#3D352A]">
-            <LineIllustration illustrationKey={page.hero.illustrationKey} className="h-[140px] w-[200px]" />
-          </div>
-        )}
-      </div>
+        <aside className="max-w-[760px] rounded-[12px] border border-[#D8D0C0] bg-white p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9A8E7C]">Outcome</p>
+          <p className="mt-2 text-[14px] font-medium leading-[1.45] text-[#1A1612]">{pageView.outcome}</p>
+          <ul className="mt-4 space-y-2">
+            {pageView.useWhen.map((item) => (
+              <li key={item} className="flex gap-2 text-[12px] leading-[1.45] text-[#6B5F50]">
+                <span aria-hidden className="mt-1 size-1.5 rounded-full bg-[#3C8A5F]" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </section>
 
-      <div className="mt-10 space-y-10">
+      {pageView.primaryArtifact ? (
+        <section className="mt-10">
+          <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-[#1A1612]">Use this first</h2>
+          <div className="mt-3 max-w-[760px]">
+            <ArtifactCard artifact={pageView.primaryArtifact} hubSlug={params.hubSlug} />
+          </div>
+        </section>
+      ) : null}
+
+      <div className="mt-10 max-w-[760px] space-y-8">
         {page.sections.map((s, i) => (
           <SectionRenderer key={i} section={s} citationsById={citationsById} sourcesById={sourcesById} />
         ))}
       </div>
 
-      {related.length > 0 && (
-        <div className="mt-16 border-t border-[#E5DECF] pt-10">
-          <RelatedPages pages={related} hubSlug={params.hubSlug} topicAccentBySlug={topicAccentBySlug} />
-        </div>
-      )}
+      {pageView.nextPages.length > 0 ? (
+        <section className="mt-14 border-t border-[#E5DECF] pt-8">
+          <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-[#1A1612]">Next best steps</h2>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {pageView.nextPages.map((nextPage) => <QuickWinCard key={nextPage.id} page={nextPage} hubSlug={params.hubSlug} />)}
+          </div>
+        </section>
+      ) : null}
     </HubShell>
   );
 }

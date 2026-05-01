@@ -65,6 +65,12 @@ playwright/.cache/
 .local/
 *.local
 
-# Claude Code + Superpowers session state
-.claude/
+# Claude Code + Superpowers session state — ignore everything EXCEPT skills.
+# The skills under .claude/skills/pipeline/ are the editorial source of truth
+# and must be versioned. Git's pattern semantics require unignoring the parent
+# directory (`.claude/*`) before child re-include rules can take effect.
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 .superpowers/
+.worktrees/

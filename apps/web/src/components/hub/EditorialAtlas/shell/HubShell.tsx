@@ -38,13 +38,13 @@ export function HubShell({ manifest, activePathname, rightRail, children }: Prop
           <main
             className={
               rightRail
-                ? 'mx-auto flex w-full max-w-[1080px] flex-1 gap-8 px-8 py-7 lg:flex-row'
-                : 'mx-auto w-full max-w-[1080px] flex-1 px-8 py-7'
+                ? 'mx-auto flex w-full max-w-[1240px] flex-1 flex-col gap-8 px-6 py-6 sm:px-8 xl:flex-row xl:items-start'
+                : 'mx-auto w-full max-w-[1120px] flex-1 px-6 py-6 sm:px-8'
             }
           >
             <div className="min-w-0 flex-1">{children}</div>
             {rightRail ? (
-              <aside aria-label="Evidence and related" className="w-[304px] shrink-0">
+              <aside aria-label="Evidence and related" className="w-full shrink-0 xl:w-[320px]">
                 {rightRail}
               </aside>
             ) : null}

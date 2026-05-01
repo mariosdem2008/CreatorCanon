@@ -277,3 +277,210 @@ export async function runGenerationPipeline(
     throw err;
   }
 }
+
+/**
+ * Run the audit phase of canon_v1: ingest + channel_profile + visual_context
+ * + video_intelligence + canon + page_briefs. Transitions the run to
+ * 'audit_ready' so the user can review and click "Generate Hub" before the
+ * expensive page-composition stage runs.
+ *
+ * Idempotent: each stage is gated by runStage's materialization check, so
+ * re-running the audit phase after a partial completion only re-executes
+ * stages whose downstream rows are missing.
+ */
+export async function runAuditPipeline(
+  payload: RunGenerationPipelinePayload,
+): Promise<{
+  runId: string;
+  videoCount: number;
+  transcriptsFetched: number;
+  transcriptsSkipped: number;
+  segmentsCreated: number;
+  canonNodeCount: number;
+  pageBriefCount: number;
+}> {
+  const ctx = {
+    runId: payload.runId,
+    workspaceId: payload.workspaceId,
+    pipelineVersion: payload.pipelineVersion,
+  };
+  await transitionRun(payload.runId, 'running', { startedAt: new Date() });
+
+  try {
+    // Phase 0: shared ingestion stages.
+    const snapshot = await runStage({
+      ctx,
+      stage: 'import_selection_snapshot',
+      input: {
+        runId: payload.runId,
+        workspaceId: payload.workspaceId,
+        videoSetId: payload.videoSetId,
+      },
+      run: importSelectionSnapshot,
+    });
+
+    const transcriptsResult = await runStage({
+      ctx,
+      stage: 'ensure_transcripts',
+      input: {
+        runId: payload.runId,
+        workspaceId: payload.workspaceId,
+        videos: snapshot.videos,
+      },
+      run: ensureTranscripts,
+    });
+
+    const normalizedResult = await runStage({
+      ctx,
+      stage: 'normalize_transcripts',
+      input: {
+        runId: payload.runId,
+        workspaceId: payload.workspaceId,
+        transcripts: transcriptsResult.transcripts,
+      },
+      run: normalizeTranscripts,
+    });
+
+    const segmentResult = await runStage({
+      ctx,
+      stage: 'segment_transcripts',
+      input: {
+        runId: payload.runId,
+        workspaceId: payload.workspaceId,
+        normalizedTranscripts: normalizedResult.normalizedTranscripts,
+      },
+      run: segmentTranscripts,
+    });
+
+    // canon_v1 audit stages.
+    await assertWithinRunBudget(payload.runId);
+    await runStage({
+      ctx,
+      stage: 'channel_profile',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runChannelProfileStage(i),
+      validateMaterializedOutput: validateChannelProfileMaterialization,
+    });
+
+    await assertWithinRunBudget(payload.runId);
+    await runStage({
+      ctx,
+      stage: 'visual_context',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runVisualContextStage(i),
+      validateMaterializedOutput: validateVisualContextMaterialization,
+    });
+
+    await assertWithinRunBudget(payload.runId);
+    await runStage({
+      ctx,
+      stage: 'video_intelligence',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runVideoIntelligenceStage(i),
+      validateMaterializedOutput: validateVideoIntelligenceMaterialization,
+    });
+
+    await assertWithinRunBudget(payload.runId);
+    const canon = await runStage({
+      ctx,
+      stage: 'canon',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runCanonStage(i),
+      validateMaterializedOutput: validateCanonMaterialization,
+    });
+
+    await assertWithinRunBudget(payload.runId);
+    const briefs = await runStage({
+      ctx,
+      stage: 'page_briefs',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runPageBriefsStage(i),
+      validateMaterializedOutput: validatePageBriefsMaterialization,
+    });
+
+    await transitionRun(payload.runId, 'audit_ready');
+
+    return {
+      runId: payload.runId,
+      videoCount: snapshot.videoCount,
+      transcriptsFetched: transcriptsResult.fetchedCount,
+      transcriptsSkipped: transcriptsResult.skippedCount,
+      segmentsCreated: segmentResult.totalSegments,
+      canonNodeCount: canon.nodeCount,
+      pageBriefCount: briefs.briefCount,
+    };
+  } catch (err) {
+    await transitionRun(payload.runId, 'failed');
+    throw err;
+  }
+}
+
+/**
+ * Run the hub-build phase of canon_v1: page_composition + page_quality + adapt.
+ * Requires the audit phase to have completed (run is in 'audit_ready' or
+ * 'queued' with audit-stage rows already cached). Transitions the run to
+ * 'awaiting_review' on success.
+ */
+export async function runHubBuildPipeline(
+  payload: RunGenerationPipelinePayload,
+): Promise<{ runId: string; pageCount: number; manifestR2Key: string }> {
+  const ctx = {
+    runId: payload.runId,
+    workspaceId: payload.workspaceId,
+    pipelineVersion: payload.pipelineVersion,
+  };
+
+  const db = getDb();
+  const hubRow = await db
+    .select({ id: hub.id })
+    .from(hub)
+    .where(eq(hub.projectId, payload.projectId))
+    .limit(1)
+    .then((rows) => rows[0]);
+  if (!hubRow) {
+    throw new Error(
+      `Editorial Atlas pipeline requires a hub row for projectId='${payload.projectId}'`,
+    );
+  }
+
+  await transitionRun(payload.runId, 'running');
+
+  try {
+    await assertWithinRunBudget(payload.runId);
+    const composition = await runStage({
+      ctx,
+      stage: 'page_composition',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runPageCompositionStage(i),
+      validateMaterializedOutput: validatePageCompositionMaterialization,
+    });
+
+    await assertWithinRunBudget(payload.runId);
+    await runStage({
+      ctx,
+      stage: 'page_quality',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId },
+      run: async (i) => runPageQualityStage(i),
+      validateMaterializedOutput: validatePageQualityMaterialization,
+    });
+
+    await assertWithinRunBudget(payload.runId);
+    const adapt = await runStage({
+      ctx,
+      stage: 'adapt',
+      input: { runId: payload.runId, workspaceId: payload.workspaceId, hubId: hubRow.id },
+      run: async (i) => runAdaptStage(i),
+    });
+
+    await transitionRun(payload.runId, 'awaiting_review', { completedAt: new Date() });
+
+    return {
+      runId: payload.runId,
+      pageCount: composition.pageCount,
+      manifestR2Key: adapt.manifestR2Key,
+    };
+  } catch (err) {
+    await transitionRun(payload.runId, 'failed');
+    throw err;
+  }
+}
