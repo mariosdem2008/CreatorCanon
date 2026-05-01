@@ -11,6 +11,7 @@
  */
 
 import type { ChannelProfileView, CanonNodeView, PageBriefView } from '@/lib/audit/types';
+import { type EvidenceEntry, renderBodyWithChips } from '@/components/audit/EvidenceChip';
 
 interface ChannelProfileV2 {
   schemaVersion?: 'v2';
@@ -50,6 +51,8 @@ interface CanonV2 {
   _index_supporting_stories?: string[];
   _index_supporting_mistakes?: string[];
   _index_cross_link_canon?: string[];
+  /** Per-segment evidence registry — keyed by segment UUID. Added in Phase 7. */
+  _index_evidence_registry?: Record<string, EvidenceEntry> | null;
   /** Populated only on reader_journey canon nodes. */
   _index_phases?: Array<{
     title?: string;
@@ -59,6 +62,8 @@ interface CanonV2 {
     _internal_next_step_when?: string;
     _index_phase_number?: number;
     _index_primary_canon_node_ids?: string[];
+    /** Per-phase evidence registry — keyed by segment UUID. Added in Phase 7. */
+    _index_evidence_registry?: Record<string, EvidenceEntry> | null;
   }>;
 }
 
@@ -80,6 +85,8 @@ interface BriefV2 {
   _index_supporting_canon_node_ids?: string[];
   _index_cluster_role?: { tier?: string; parent_topic?: string | null; sibling_slugs?: string[] };
   _index_voice_fingerprint?: { tonePreset?: string; preserveTerms?: string[]; profanityAllowed?: boolean };
+  /** Per-segment evidence registry — keyed by segment UUID. Added in Phase 7. */
+  _index_evidence_registry?: Record<string, EvidenceEntry> | null;
 }
 
 export function HubSourceV2View({
@@ -87,11 +94,15 @@ export function HubSourceV2View({
   canonNodes,
   pageBriefs,
   debug,
+  segmentById,
+  youtubeIdByVideoId,
 }: {
   channelProfile: ChannelProfileView | null;
   canonNodes: CanonNodeView[];
   pageBriefs: PageBriefView[];
   debug: boolean;
+  segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
+  youtubeIdByVideoId: Record<string, string | null>;
 }) {
   const cp = channelProfile?.payload as ChannelProfileV2 | null;
   if (!cp) return null;
@@ -209,14 +220,14 @@ export function HubSourceV2View({
           </p>
           <div className="mt-3 space-y-4">
             {synthesisNodes.map((n) => (
-              <CanonNodeCard key={n.id} node={n} debug={debug} />
+              <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
             ))}
           </div>
         </section>
       ) : null}
 
       {/* READER JOURNEY (timeline) */}
-      {journeyNode ? <ReaderJourneyTimeline node={journeyNode} debug={debug} /> : null}
+      {journeyNode ? <ReaderJourneyTimeline node={journeyNode} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} /> : null}
 
       {/* CANON NODES (the body teaching content) — grouped under their pillars */}
       {standardNodes.length > 0 ? (
@@ -244,7 +255,7 @@ export function HubSourceV2View({
                   </p>
                   <div className="mt-3 space-y-3">
                     {spokes.map((n) => (
-                      <CanonNodeCard key={n.id} node={n} debug={debug} />
+                      <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
                     ))}
                   </div>
                 </div>
@@ -259,7 +270,7 @@ export function HubSourceV2View({
                 ) : null}
                 <div className="space-y-3">
                   {unanchoredNodes.map((n) => (
-                    <CanonNodeCard key={n.id} node={n} debug={debug} />
+                    <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
                   ))}
                 </div>
               </div>
@@ -279,7 +290,7 @@ export function HubSourceV2View({
           </p>
           <div className="mt-3 space-y-4">
             {v2Briefs.map((b, i) => (
-              <BriefCard key={i} brief={b} debug={debug} />
+              <BriefCard key={i} brief={b} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
             ))}
           </div>
         </section>
@@ -291,7 +302,17 @@ export function HubSourceV2View({
   );
 }
 
-function CanonNodeCard({ node, debug }: { node: CanonNodeView; debug: boolean }) {
+function CanonNodeCard({
+  node,
+  debug,
+  segmentById,
+  youtubeIdByVideoId,
+}: {
+  node: CanonNodeView;
+  debug: boolean;
+  segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
+  youtubeIdByVideoId: Record<string, string | null>;
+}) {
   const p = node.payload as CanonV2;
   return (
     <article className="rounded-[12px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] p-5 shadow-[var(--cc-shadow-1)]">
@@ -311,7 +332,13 @@ function CanonNodeCard({ node, debug }: { node: CanonNodeView; debug: boolean })
       </header>
       {p.body ? (
         <div className="prose prose-sm mt-4 max-w-none text-[14px] leading-[1.65] text-[var(--cc-ink-2)] whitespace-pre-wrap">
-          {p.body}
+          {renderBodyWithChips({
+            body: p.body,
+            registry: p._index_evidence_registry ?? undefined,
+            segmentById,
+            youtubeIdByVideoId,
+            debug,
+          })}
         </div>
       ) : (
         <p className="mt-3 text-[12px] italic text-[var(--cc-ink-4)]">
@@ -344,7 +371,17 @@ function CanonNodeDebug({ node }: { node: CanonV2 }) {
   );
 }
 
-function BriefCard({ brief, debug }: { brief: PageBriefView; debug: boolean }) {
+function BriefCard({
+  brief,
+  debug,
+  segmentById,
+  youtubeIdByVideoId,
+}: {
+  brief: PageBriefView;
+  debug: boolean;
+  segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
+  youtubeIdByVideoId: Record<string, string | null>;
+}) {
   const p = brief.payload as BriefV2;
   return (
     <article className="rounded-[12px] border border-[var(--cc-rule)] bg-[var(--cc-surface)] p-5 shadow-[var(--cc-shadow-1)]">
@@ -365,7 +402,15 @@ function BriefCard({ brief, debug }: { brief: PageBriefView; debug: boolean }) {
         ) : null}
       </header>
       {p.body ? (
-        <p className="mt-3 text-[13px] leading-[1.65] text-[var(--cc-ink-2)] whitespace-pre-wrap">{p.body}</p>
+        <div className="mt-3 text-[13px] leading-[1.65] text-[var(--cc-ink-2)] whitespace-pre-wrap">
+          {renderBodyWithChips({
+            body: p.body,
+            registry: p._index_evidence_registry ?? undefined,
+            segmentById,
+            youtubeIdByVideoId,
+            debug,
+          })}
+        </div>
       ) : null}
       {p.cta ? (
         <div className="mt-4 flex flex-wrap gap-2">
@@ -500,7 +545,17 @@ function CompletenessBanner({
   );
 }
 
-function ReaderJourneyTimeline({ node, debug }: { node: CanonNodeView; debug: boolean }) {
+function ReaderJourneyTimeline({
+  node,
+  debug,
+  segmentById,
+  youtubeIdByVideoId,
+}: {
+  node: CanonNodeView;
+  debug: boolean;
+  segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
+  youtubeIdByVideoId: Record<string, string | null>;
+}) {
   const p = node.payload as CanonV2;
   const phases = (p._index_phases ?? []).slice().sort((a, b) =>
     (a._index_phase_number ?? 0) - (b._index_phase_number ?? 0),
@@ -534,9 +589,15 @@ function ReaderJourneyTimeline({ node, debug }: { node: CanonNodeView; debug: bo
                 </p>
               ) : null}
               {phase.body ? (
-                <p className="mt-2 text-[12px] leading-[1.6] text-[var(--cc-ink-2)] line-clamp-6 whitespace-pre-wrap">
-                  {phase.body}
-                </p>
+                <div className="mt-2 text-[12px] leading-[1.6] text-[var(--cc-ink-2)] line-clamp-6 whitespace-pre-wrap">
+                  {renderBodyWithChips({
+                    body: phase.body,
+                    registry: phase._index_evidence_registry ?? undefined,
+                    segmentById,
+                    youtubeIdByVideoId,
+                    debug,
+                  })}
+                </div>
               ) : (
                 <p className="mt-2 text-[11px] italic text-[var(--cc-ink-4)]">No phase body yet.</p>
               )}
