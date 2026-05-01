@@ -45,7 +45,9 @@ export function extractJsonFromCodexOutput(raw: string): string {
     if (tryParse(candidate)) return candidate;
   }
 
-  // 3. First balanced {…} substring that parses
+  // 3. First balanced [...] OR {...} substring that parses.
+  // Order matters: if the first bracket is '[', extract the array (it likely
+  // contains objects whose '{' would otherwise be picked up as a sub-object).
   const balanced = findBalancedJson(raw);
   if (balanced && tryParse(balanced)) return balanced;
 
@@ -65,13 +67,39 @@ function tryParse(s: string): boolean {
 }
 
 /**
- * Walk the string from the first '{' and find the matching '}' that closes
- * the same depth. Tolerates strings (which may contain unbalanced braces)
- * and escaped quotes inside strings.
+ * Walk the string from the first '{' or '[' and find the matching closer.
+ * If '[' comes before '{' (or '{' is missing), extract the entire array — its
+ * inner objects' braces would otherwise be picked up as sub-objects, leaving
+ * the caller with only the first array element.
+ *
+ * Tolerates strings (which may contain unbalanced braces) and escaped quotes.
  */
 function findBalancedJson(raw: string): string | null {
-  const start = raw.indexOf('{');
-  if (start < 0) return null;
+  const firstObj = raw.indexOf('{');
+  const firstArr = raw.indexOf('[');
+
+  // Decide which delimiter starts the JSON value. -1 means "not present".
+  let start: number;
+  let openCh: '{' | '[';
+  let closeCh: '}' | ']';
+  if (firstObj < 0 && firstArr < 0) return null;
+  if (firstObj < 0) {
+    start = firstArr;
+    openCh = '[';
+    closeCh = ']';
+  } else if (firstArr < 0) {
+    start = firstObj;
+    openCh = '{';
+    closeCh = '}';
+  } else if (firstArr < firstObj) {
+    start = firstArr;
+    openCh = '[';
+    closeCh = ']';
+  } else {
+    start = firstObj;
+    openCh = '{';
+    closeCh = '}';
+  }
 
   let depth = 0;
   let inString = false;
@@ -92,8 +120,8 @@ function findBalancedJson(raw: string): string | null {
       continue;
     }
     if (inString) continue;
-    if (ch === '{') depth += 1;
-    else if (ch === '}') {
+    if (ch === openCh) depth += 1;
+    else if (ch === closeCh) {
       depth -= 1;
       if (depth === 0) return raw.slice(start, i + 1);
     }
