@@ -59,19 +59,43 @@ interface BriefScore {
   overallScore: number; // 0-100, average of dimensions
 }
 
+/** Brief prose for tone scoring. v2 has more rendered fields (hook, lede,
+ *  body, cta) than v1 (openingHook only) — uses them when the payload is v2. */
 function buildBriefProse(p: {
+  schemaVersion?: string;
+  // v1 fields
   pageTitle?: string;
   openingHook?: string;
   audienceQuestion?: string;
   outline?: Array<{ sectionTitle?: string; intent?: string }>;
+  // v2 fields
+  hook?: string;
+  lede?: string;
+  body?: string;
+  cta?: { primary?: string; secondary?: string };
+  _internal_audience_question?: string;
+  _index_outline?: Array<{ section_title?: string; intent?: string }>;
 }): string {
   const parts: string[] = [];
+  const isV2 = p.schemaVersion === 'v2';
   if (p.pageTitle) parts.push(p.pageTitle);
-  if (p.openingHook) parts.push(p.openingHook);
-  if (p.audienceQuestion) parts.push(p.audienceQuestion);
-  for (const s of p.outline ?? []) {
-    if (s.sectionTitle) parts.push(s.sectionTitle);
-    if (s.intent) parts.push(s.intent);
+  if (isV2) {
+    if (p.hook) parts.push(p.hook);
+    if (p.lede) parts.push(p.lede);
+    if (p.body) parts.push(p.body);
+    if (p.cta?.primary) parts.push(p.cta.primary);
+    if (p.cta?.secondary) parts.push(p.cta.secondary);
+    for (const s of p._index_outline ?? []) {
+      if (s.section_title) parts.push(s.section_title);
+      if (s.intent) parts.push(s.intent);
+    }
+  } else {
+    if (p.openingHook) parts.push(p.openingHook);
+    if (p.audienceQuestion) parts.push(p.audienceQuestion);
+    for (const s of p.outline ?? []) {
+      if (s.sectionTitle) parts.push(s.sectionTitle);
+      if (s.intent) parts.push(s.intent);
+    }
   }
   return parts.join(' ').toLowerCase();
 }
@@ -189,14 +213,26 @@ async function main() {
   const scores: BriefScore[] = [];
   for (const b of briefs) {
     const p = b.payload as {
+      schemaVersion?: string;
+      // v1
       slug?: string;
       pageTitle?: string;
       openingHook?: string;
       audienceQuestion?: string;
       outline?: Array<{ sectionTitle?: string; intent?: string }>;
       editorialStrategy?: { voiceFingerprint?: VoiceFingerprint };
+      // v2
+      hook?: string;
+      lede?: string;
+      body?: string;
+      cta?: { primary?: string; secondary?: string };
+      _index_slug?: string;
+      _index_outline?: Array<{ section_title?: string; intent?: string }>;
+      _index_voice_fingerprint?: VoiceFingerprint;
     };
-    const fingerprint = p.editorialStrategy?.voiceFingerprint ?? {};
+    const isV2 = p.schemaVersion === 'v2';
+    const fingerprint =
+      (isV2 ? p._index_voice_fingerprint : p.editorialStrategy?.voiceFingerprint) ?? {};
     const prose = buildBriefProse(p);
 
     const { hits, missing } = scorePreserveTerms(prose, fingerprint.preserveTerms ?? []);
@@ -214,7 +250,7 @@ async function main() {
     overall = overall / parts;
 
     scores.push({
-      slug: p.slug ?? '?',
+      slug: (isV2 ? p._index_slug : p.slug) ?? '?',
       title: p.pageTitle ?? '?',
       fingerprint,
       preserveTermsHits: hits,

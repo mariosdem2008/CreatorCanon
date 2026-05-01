@@ -166,12 +166,26 @@ async function main() {
   }
 
   // ── Canon validation ────────────────────────────────────
+  // v2 synthesis nodes use _index_cross_link_canon; v1 used childCanonNodeIds.
   const canonReports: CanonReport[] = [];
   for (const n of canonRows) {
     const j = JSON.stringify(n.payload);
     const segmentRefs = countSegmentRefs(j, segIds);
-    const p = n.payload as { kind?: string; title?: string; childCanonNodeIds?: string[] };
-    const childRefs = Array.isArray(p?.childCanonNodeIds) ? p.childCanonNodeIds : [];
+    const p = n.payload as {
+      schemaVersion?: string;
+      kind?: string;
+      title?: string;
+      childCanonNodeIds?: string[];
+      _index_cross_link_canon?: string[];
+    };
+    const childRefs =
+      p.schemaVersion === 'v2'
+        ? Array.isArray(p._index_cross_link_canon)
+          ? p._index_cross_link_canon
+          : []
+        : Array.isArray(p.childCanonNodeIds)
+          ? p.childCanonNodeIds
+          : [];
     const childCanonRefs = countCanonRefs(childRefs, canonIds);
     canonReports.push({
       id: n.id,
@@ -188,30 +202,51 @@ async function main() {
     .from(pageBrief)
     .where(eq(pageBrief.runId, runId));
 
+  // v2 briefs use _index_slug; v1 used slug.
   const briefSlugs = new Set<string>();
   for (const b of briefs) {
-    const slug = (b.payload as { slug?: string }).slug;
+    const p = b.payload as { schemaVersion?: string; slug?: string; _index_slug?: string };
+    const slug = p.schemaVersion === 'v2' ? p._index_slug : p.slug;
     if (slug) briefSlugs.add(slug);
   }
 
   const briefReports: BriefReport[] = [];
   for (const b of briefs) {
     const p = b.payload as {
+      schemaVersion?: string;
+      // v1 fields
       slug?: string;
       pageTitle?: string;
       primaryCanonNodeIds?: string[];
       supportingCanonNodeIds?: string[];
       outline?: Array<{ canonNodeIds?: string[] }>;
       editorialStrategy?: { clusterRole?: { parentTopic?: string | null; siblingSlugs?: string[] } };
+      // v2 fields
+      _index_slug?: string;
+      _index_primary_canon_node_ids?: string[];
+      _index_supporting_canon_node_ids?: string[];
+      _index_outline?: Array<{ canon_node_ids?: string[] }>;
+      _index_cluster_role?: { parent_topic?: string | null; sibling_slugs?: string[] };
     };
 
-    const primaryRefs = Array.isArray(p.primaryCanonNodeIds) ? p.primaryCanonNodeIds : [];
-    const supportingRefs = Array.isArray(p.supportingCanonNodeIds) ? p.supportingCanonNodeIds : [];
-    const outlineRefs = (p.outline ?? []).flatMap((s) => (Array.isArray(s.canonNodeIds) ? s.canonNodeIds : []));
+    const isV2 = p.schemaVersion === 'v2';
+    const slug = (isV2 ? p._index_slug : p.slug) ?? '?';
+    const primaryRefs = isV2
+      ? (Array.isArray(p._index_primary_canon_node_ids) ? p._index_primary_canon_node_ids : [])
+      : (Array.isArray(p.primaryCanonNodeIds) ? p.primaryCanonNodeIds : []);
+    const supportingRefs = isV2
+      ? (Array.isArray(p._index_supporting_canon_node_ids) ? p._index_supporting_canon_node_ids : [])
+      : (Array.isArray(p.supportingCanonNodeIds) ? p.supportingCanonNodeIds : []);
+    const outlineRefs = isV2
+      ? (p._index_outline ?? []).flatMap((s) => (Array.isArray(s.canon_node_ids) ? s.canon_node_ids : []))
+      : (p.outline ?? []).flatMap((s) => (Array.isArray(s.canonNodeIds) ? s.canonNodeIds : []));
 
-    const cr = p.editorialStrategy?.clusterRole;
-    const parentTopic = cr?.parentTopic ?? null;
-    const siblings = Array.isArray(cr?.siblingSlugs) ? cr!.siblingSlugs : [];
+    const parentTopic = isV2
+      ? (p._index_cluster_role?.parent_topic ?? null)
+      : (p.editorialStrategy?.clusterRole?.parentTopic ?? null);
+    const siblings = isV2
+      ? (Array.isArray(p._index_cluster_role?.sibling_slugs) ? p._index_cluster_role!.sibling_slugs : [])
+      : (Array.isArray(p.editorialStrategy?.clusterRole?.siblingSlugs) ? p.editorialStrategy!.clusterRole!.siblingSlugs! : []);
 
     let parentResolved: boolean | null;
     if (parentTopic == null) parentResolved = null; // pillar — no parent expected
@@ -225,7 +260,7 @@ async function main() {
     }
 
     briefReports.push({
-      slug: p.slug ?? '?',
+      slug,
       title: p.pageTitle ?? '?',
       primaryCanonRefs: countCanonRefs(primaryRefs, canonIds),
       supportingCanonRefs: countCanonRefs(supportingRefs, canonIds),
