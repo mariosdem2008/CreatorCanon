@@ -55,6 +55,8 @@
  *                       existing v2 entities without regenerating; Stage 4 weaving
  *                       is skipped).
  *   --per-video-canon   Per-video canon-shell sweep (more granular but slower)
+ *   --voice-mode <mode>  Override voice register: first_person | third_person_editorial | hybrid
+ *                        (defaults from archetype if omitted)
  */
 
 import crypto from 'node:crypto';
@@ -122,6 +124,7 @@ import {
 import { enforceTitleCase } from './util/title-casing';
 import { refineHeroBlock } from './util/hero-rewrite';
 import { tagAllEntities, type EvidenceTaggerInput } from './util/evidence-tagger';
+import { type VoiceMode, defaultVoiceMode } from './util/voice-mode';
 
 loadDefaultEnvFiles();
 
@@ -646,6 +649,17 @@ async function main() {
   const regenWorkshops = process.argv.includes('--regen-workshops');
   const perVideo = process.argv.includes('--per-video-canon');
 
+  const voiceModeFlag = (() => {
+    const idx = process.argv.indexOf('--voice-mode');
+    if (idx < 0) return null;
+    const val = process.argv[idx + 1];
+    if (val === 'first_person' || val === 'third_person_editorial' || val === 'hybrid') {
+      return val as VoiceMode;
+    }
+    console.warn(`[v2] --voice-mode: invalid value "${val}", ignoring`);
+    return null;
+  })();
+
   // Late-stages-only fast path: if the operator runs ONLY --regen-evidence
   // and/or --regen-workshops (no other regen flags), the existing v2 entities
   // from Stages 1-9 are reused as-is. The flag below short-circuits the
@@ -700,6 +714,21 @@ async function main() {
     });
     console.info(`[v2] channel profile written: ${profile.creatorName} / ${profile._index_archetype}`);
   }
+
+  const resolvedVoiceMode: VoiceMode =
+    voiceModeFlag ??
+    ((profile as unknown as Record<string, unknown>)._index_voice_mode as VoiceMode | undefined) ??
+    defaultVoiceMode(profile._index_archetype);
+
+  // Persist if missing on profile (additive; doesn't overwrite existing)
+  if (!(profile as unknown as Record<string, unknown>)._index_voice_mode) {
+    (profile as unknown as Record<string, unknown>)._index_voice_mode = resolvedVoiceMode;
+    await db.update(channelProfile)
+      .set({ payload: profile as unknown as Record<string, unknown> })
+      .where(eq(channelProfile.runId, runId));
+  }
+
+  console.info(`[v2] voiceMode: ${resolvedVoiceMode} (archetype=${profile._index_archetype})`);
 
   // ── Stage 2: VICs ─────────────────────────────────────────
   const existingVics = await db
@@ -915,6 +944,7 @@ async function main() {
       voiceFingerprint,
       channelDominantTone: profile._internal_dominant_tone,
       channelAudience: profile._internal_audience,
+      voiceMode: resolvedVoiceMode,
     };
   });
 
@@ -1046,6 +1076,7 @@ async function main() {
         },
         channelDominantTone: profile._internal_dominant_tone,
         channelAudience: profile._internal_audience,
+        voiceMode: resolvedVoiceMode,
       });
     }
 
@@ -1129,6 +1160,7 @@ async function main() {
           channelAudience: profile._internal_audience,
           phaseNumber: phase._index_phase_number,
           totalPhases: journeyShell._index_phases.length,
+          voiceMode: resolvedVoiceMode,
         };
       });
 
@@ -1236,6 +1268,7 @@ async function main() {
         voiceFingerprint: b._index_voice_fingerprint,
         channelDominantTone: profile._internal_dominant_tone,
         channelAudience: profile._internal_audience,
+        voiceMode: resolvedVoiceMode,
       };
     });
 
