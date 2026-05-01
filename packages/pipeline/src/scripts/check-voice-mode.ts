@@ -154,6 +154,10 @@ async function main() {
   console.info(`[voice-mode]   violations: ${violations.length}`);
   console.info(`[voice-mode] report: ${reportPath}`);
 
+  // Machine-readable METRIC lines for v2-cohort-report stable parsing.
+  console.info(`[voice-mode] METRIC voice_mode=${voiceMode}`);
+  console.info(`[voice-mode] METRIC voice_mode_violations=${violations.length}`);
+
   await closeDb();
   if (violations.length > 0) process.exit(2);
 }

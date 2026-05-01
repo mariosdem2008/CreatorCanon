@@ -256,6 +256,10 @@ async function main() {
   console.info(`[workshops]   soft-warn count: ${softWarns.length}`);
   console.info(`[workshops] report written: ${outPath}`);
 
+  // Machine-readable METRIC lines for v2-cohort-report stable parsing.
+  console.info(`[workshops] METRIC workshop_avg_relevance=${avgRelevanceScore.toFixed(1)}`);
+  console.info(`[workshops] METRIC workshop_hard_fails=${hardFails.length}`);
+
   await closeDb();
   if (hardFails.length > 0) process.exit(2);
 }
