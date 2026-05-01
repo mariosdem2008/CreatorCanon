@@ -7,15 +7,17 @@
  * into canon bodies.
  *
  * Pipeline order:
- *   1. Channel profile (v2: _internal_* + _index_* + hero_candidates)
- *   2. VICs (each per-video item gets a stable ID for the weaver)
- *   3. Canon SHELLS (title/lede/_internal/_index/scores — NO body yet)
- *   4. Per-video weaver: maps intel items to canon shells
- *   5. Canon body writer: parallel body generation, uses weaving output
- *   6. Synthesis shells then bodies
- *   7. Reader journey shells then phase bodies
- *   8. Brief shells then bodies
- *   9. Hero candidates / hub_title / hub_tagline (final, given full canon graph)
+ *   1.  Channel profile (v2: _internal_* + _index_* + hero_candidates)
+ *   2.  VICs (each per-video item gets a stable ID for the weaver)
+ *   3.  Canon SHELLS (title/lede/_internal/_index/scores — NO body yet)
+ *   4.  Per-video weaver: maps intel items to canon shells
+ *   5.  Canon body writer: parallel body generation, uses weaving output
+ *   6.  Synthesis shells then bodies
+ *   7.  Reader journey shells then phase bodies
+ *   8.  Brief shells then bodies
+ *   9.  Hero candidates / hub_title / hub_tagline (final, given full canon graph)
+ *   10. Evidence registry tagger (per-entity inline citation tagging)
+ *   11. Workshop stages (one per reader-journey phase, uses evidence registries)
  *
  * Differences from v1 (seed-audit-via-codex.ts):
  *   - schemaVersion: 'v2' on every payload
@@ -33,6 +35,7 @@
  *                                              [--regen-canon] [--regen-bodies]
  *                                              [--regen-synthesis] [--regen-journey]
  *                                              [--regen-briefs] [--regen-hero]
+ *                                              [--regen-evidence] [--regen-workshops]
  *                                              [--per-video-canon]
  *
  * Flags:
@@ -45,6 +48,12 @@
  *   --regen-briefs      Regenerate page briefs
  *   --regen-hero        Regenerate hub_title / hub_tagline / hero_candidates
  *                       (with title-case + hero re-pass)
+ *   --regen-evidence    Re-tag evidence registries on all entities (Stage 10)
+ *   --regen-workshops   Regenerate workshop stages (Stage 11)
+ *                       Using --regen-evidence and/or --regen-workshops alone
+ *                       activates the late-stages-only fast path (Stages 1-9 load
+ *                       existing v2 entities without regenerating; Stage 4 weaving
+ *                       is skipped).
  *   --per-video-canon   Per-video canon-shell sweep (more granular but slower)
  */
 
@@ -62,7 +71,13 @@ import {
   videoIntelligenceCard,
   videoSetItem,
   visualMoment,
+  workshopStage,
 } from '@creatorcanon/db/schema';
+import {
+  filterCandidates,
+  buildAllWorkshopStages,
+  type WorkshopStageInput,
+} from './util/workshop-builder';
 
 import { detectArchetype, type ArchetypeSlug } from '../agents/skills/archetype-detector';
 import { extractJsonFromCodexOutput } from '../agents/providers/codex-extract-json';
@@ -628,7 +643,20 @@ async function main() {
   const regenBriefs = process.argv.includes('--regen-briefs');
   const regenHero = process.argv.includes('--regen-hero');
   const regenEvidence = process.argv.includes('--regen-evidence');
+  const regenWorkshops = process.argv.includes('--regen-workshops');
   const perVideo = process.argv.includes('--per-video-canon');
+
+  // Late-stages-only fast path: if the operator runs ONLY --regen-evidence
+  // and/or --regen-workshops (no other regen flags), the existing v2 entities
+  // from Stages 1-9 are reused as-is. The flag below short-circuits the
+  // stage-1-through-9 work without disturbing it.
+  const onlyLateStages =
+    (regenEvidence || regenWorkshops) &&
+    !regenChannel && !regenVic && !regenCanon && !regenBodies &&
+    !regenSynthesis && !regenJourney && !regenBriefs && !regenHero;
+  if (onlyLateStages) {
+    console.info('[v2] late-stages-only mode: Stages 1-9 will load existing v2 entities without regenerating.');
+  }
 
   const run = await loadRun(runId);
   if (!run.videoSetId) throw new Error('Run has no video_set_id');
@@ -788,8 +816,14 @@ async function main() {
     sourceVideoIds: s._index_source_video_ids,
   }));
 
-  const rawSelections = await weavePerVideoIntel(weaverInputs, intelBundle, { concurrency: 3 });
-  const selections = validateSelections(rawSelections, intelBundle);
+  let selections: Map<string, WovenSelection>;
+  if (!onlyLateStages) {
+    const rawSelections = await weavePerVideoIntel(weaverInputs, intelBundle, { concurrency: 3 });
+    selections = validateSelections(rawSelections, intelBundle);
+  } else {
+    console.info(`[v2] Stage 4: skipped (late-stages-only mode)`);
+    selections = new Map();
+  }
 
   // ── Stage 5: Canon body writing ────────────────────────────
   console.info(`[v2] Stage 5: canon body writing (${canonShells.length} bodies, parallel concurrency 3)`);
@@ -1429,8 +1463,124 @@ async function main() {
     console.info(`[v2] Stage 10: ${evidenceJobs.length} entities tagged`);
   }
 
+  // ── Stage 11: Workshop stages ─────────────────────────────────────────────
+  let workshopsCount = 0;
+
+  // Re-fetch canon rows so Stage 11 sees the latest payloads (Stage 10 updated them with registries).
+  const stage11CanonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+    .from(canonNode).where(eq(canonNode.runId, runId));
+
+  const journeyForWorkshop = stage11CanonRows.find((c) => {
+    const p = c.payload as { schemaVersion?: string; kind?: string };
+    return p.schemaVersion === 'v2' && p.kind === 'reader_journey';
+  });
+
+  if (!journeyForWorkshop) {
+    console.info(`[v2] Stage 11: skipped — no reader journey exists`);
+  } else {
+    // Fetch existing workshop_stage rows
+    const existingWorkshops = await db.select({ id: workshopStage.id, payload: workshopStage.payload })
+      .from(workshopStage).where(eq(workshopStage.runId, runId));
+
+    if (regenWorkshops && existingWorkshops.length > 0) {
+      await db.delete(workshopStage).where(eq(workshopStage.runId, runId));
+      existingWorkshops.length = 0;
+    }
+
+    if (existingWorkshops.length === 0) {
+      console.info(`[v2] Stage 11: workshop stages`);
+
+      // Build canon-by-id map (from re-fetched stage11CanonRows, with v2 filter).
+      // The journey-phase entries inside reader_journey canon were updated in Stage 10
+      // with _index_evidence_registry per phase. We need canon nodes' registries too.
+      const canonByCanonId = new Map<string, any>();
+      for (const c of stage11CanonRows) {
+        const p = c.payload as { schemaVersion?: string; kind?: string };
+        if (p.schemaVersion !== 'v2') continue;
+        if (p.kind === 'reader_journey') continue;
+        canonByCanonId.set(c.id, { ...(c.payload as Record<string, unknown>), _row_id: c.id });
+      }
+
+      // Build segment map (full row data with videoId/startMs/endMs).
+      const fullSegRows = await db.select({
+        id: segment.id,
+        videoId: segment.videoId,
+        startMs: segment.startMs,
+        endMs: segment.endMs,
+        text: segment.text,
+      }).from(segment).where(eq(segment.runId, runId));
+      const segmentById = new Map<string, { id: string; videoId: string; startMs: number; endMs: number; text: string }>();
+      for (const s of fullSegRows) segmentById.set(s.id, s);
+
+      // Build WorkshopStageInputs from journey phases.
+      const journeyPayload = journeyForWorkshop.payload as { _index_phases?: any[] };
+      const phases = journeyPayload._index_phases ?? [];
+      const totalPhases = phases.length;
+
+      const workshopInputs: WorkshopStageInput[] = [];
+      for (const phase of phases) {
+        const candidates = filterCandidates(phase, canonByCanonId, segmentById);
+        if (candidates.length < 2) {
+          console.info(`[v2] Stage 11: phase ${phase._index_phase_number} (${phase.title}) — only ${candidates.length} candidates, skipping`);
+          continue;
+        }
+        workshopInputs.push({
+          phaseNumber: phase._index_phase_number,
+          phaseTitle: phase.title ?? `Phase ${phase._index_phase_number}`,
+          phaseHook: phase.hook ?? '',
+          phaseReaderState: phase._internal_reader_state ?? '',
+          phaseNextStepWhen: phase._internal_next_step_when ?? '',
+          primaryCanonNodeIds: phase._index_primary_canon_node_ids ?? [],
+          candidates,
+          creatorName: profile.creatorName,
+          archetype: profile._index_archetype,
+          voiceFingerprint: {
+            profanityAllowed: profile._index_archetype === 'operator-coach',
+            tonePreset: profile._internal_dominant_tone,
+            preserveTerms: profile._index_creator_terminology.slice(0, 12),
+          },
+          totalPhases,
+        });
+      }
+
+      if (workshopInputs.length === 0) {
+        console.info(`[v2] Stage 11: skipped — no phases yielded enough verified candidates`);
+      } else {
+        const workshopResults = await buildAllWorkshopStages(workshopInputs, { concurrency: 2 });
+
+        // Persist results.
+        for (const [phaseNumber, stage] of workshopResults) {
+          // Compute slug + route at persist time (for cleanliness).
+          const slug = (stage.title || `phase-${phaseNumber}`)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            || `phase-${phaseNumber}`;
+          const finalStage = {
+            ...stage,
+            slug,
+            route: `/workshop/${slug}`,
+            order: phaseNumber,
+          };
+          await db.insert(workshopStage).values({
+            id: finalStage.id,
+            workspaceId: run.workspaceId,
+            runId,
+            payload: finalStage as unknown as Record<string, unknown>,
+            position: phaseNumber,
+          });
+        }
+        workshopsCount = workshopResults.size;
+        console.info(`[v2] Stage 11: ${workshopsCount} workshop stages persisted (${workshopInputs.length - workshopsCount} skipped)`);
+      }
+    } else {
+      workshopsCount = existingWorkshops.length;
+      console.info(`[v2] Stage 11: workshops resumed (${existingWorkshops.length})`);
+    }
+  }
+
   await db.update(generationRun).set({ status: 'audit_ready' }).where(eq(generationRun.id, runId));
-  console.info(`[v2] DONE — schemaVersion=v2, canon=${canonShells.length}, bodies=${bodyResults.size}, synthesis=${synthesisIds.length}, journey=${journeyId ? 1 : 0}, evidence=${evidenceJobsCount}`);
+  console.info(`[v2] DONE — schemaVersion=v2, canon=${canonShells.length}, bodies=${bodyResults.size}, synthesis=${synthesisIds.length}, journey=${journeyId ? 1 : 0}, evidence=${evidenceJobsCount}, workshops=${workshopsCount}`);
   console.info(`[v2] Audit URL: http://localhost:3001/app/projects/${run.projectId}/runs/${runId}/audit`);
 
   await closeDb();
