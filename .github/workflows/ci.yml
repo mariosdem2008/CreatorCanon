@@ -17,6 +17,14 @@ env:
   PNPM_VERSION: '9.12.0'
   TURBO_TELEMETRY_DISABLED: '1'
 
+# Workflow-level defaults inherited by every job. The `globstar` shell option
+# lets bash expand `src/**/*.test.ts` patterns — without it, package.json's
+# test scripts pass the literal `**` to `node --test` and Node 20 reports
+# "Could not find 'src/**/*.test.ts'".
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail -O globstar {0}
+
 jobs:
   checks:
     name: typecheck / lint / test
