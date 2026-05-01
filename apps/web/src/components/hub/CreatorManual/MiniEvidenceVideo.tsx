@@ -12,7 +12,8 @@ type MiniEvidenceVideoProps = {
 };
 
 const youtubePoster = (source: CreatorManualSource) =>
-  source.thumbnailUrl ?? (source.youtubeId ? `https://i.ytimg.com/vi/${source.youtubeId}/hqdefault.jpg` : null);
+  source.thumbnailUrl ??
+  (source.youtubeId ? `https://i.ytimg.com/vi/${source.youtubeId}/hqdefault.jpg` : null);
 
 export function MiniEvidenceVideo({ source, timestampStart = 0 }: MiniEvidenceVideoProps) {
   const [loaded, setLoaded] = useState(false);
@@ -21,6 +22,9 @@ export function MiniEvidenceVideo({ source, timestampStart = 0 }: MiniEvidenceVi
   const embedUrl = source.youtubeId
     ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(source.youtubeId)}?start=${start}&autoplay=1`
     : null;
+  const sourceUrl = source.youtubeId
+    ? `https://www.youtube.com/watch?v=${encodeURIComponent(source.youtubeId)}${start > 0 ? `&t=${start}s` : ''}`
+    : source.url;
 
   return (
     <div className={styles.videoShell}>
@@ -28,6 +32,7 @@ export function MiniEvidenceVideo({ source, timestampStart = 0 }: MiniEvidenceVi
         <iframe
           src={embedUrl}
           title={source.title}
+          loading="lazy"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
         />
@@ -46,6 +51,17 @@ export function MiniEvidenceVideo({ source, timestampStart = 0 }: MiniEvidenceVi
               <span className={styles.playBadge}>Source file</span>
             </div>
           )}
+          {sourceUrl ? (
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={styles.videoOpenLink}
+              aria-label={`Open ${source.title} source in a new tab`}
+            >
+              Watch
+            </a>
+          ) : null}
         </>
       )}
     </div>
