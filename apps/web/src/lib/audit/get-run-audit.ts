@@ -83,9 +83,12 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
       hubUse: visualMoment.hubUse,
       usefulnessScore: visualMoment.usefulnessScore,
       extractedText: visualMoment.extractedText,
+      frameR2Key: visualMoment.frameR2Key,
+      thumbnailR2Key: visualMoment.thumbnailR2Key,
     })
     .from(visualMoment)
     .where(eq(visualMoment.runId, runId));
+  const r2PublicBaseUrl = process.env.R2_PUBLIC_BASE_URL ?? '';
   const visualMomentsView: VisualMomentView[] = vmRows.map((m) => ({
     id: m.id,
     videoId: m.videoId,
@@ -96,6 +99,8 @@ export async function getRunAudit(runId: string): Promise<RunAuditView | null> {
     hubUse: m.hubUse ?? null,
     usefulnessScore: m.usefulnessScore ?? null,
     extractedText: m.extractedText ?? null,
+    frameUrl: buildR2PublicUrl(r2PublicBaseUrl, m.frameR2Key),
+    thumbnailUrl: buildR2PublicUrl(r2PublicBaseUrl, m.thumbnailR2Key),
   }));
 
   const vicRows = await db
@@ -246,6 +251,11 @@ function asString(v: unknown): string | null {
 
 function asStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+export function buildR2PublicUrl(baseUrl: string | undefined | null, key: string | undefined | null): string | null {
+  if (!baseUrl || !key) return null;
+  return `${baseUrl.replace(/\/+$/, '')}/${key.replace(/^\/+/, '')}`;
 }
 
 export function shapeChannelProfile(payload: Record<string, unknown> | null): ChannelProfileView | null {

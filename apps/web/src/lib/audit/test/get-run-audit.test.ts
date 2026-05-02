@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { shapeChannelProfile, shapeCanonNode, shapePageBrief } from '../get-run-audit';
+import { buildR2PublicUrl, shapeChannelProfile, shapeCanonNode, shapePageBrief } from '../get-run-audit';
 
 describe('shapeChannelProfile', () => {
   it('extracts creator-facing fields from raw payload', () => {
@@ -138,5 +138,19 @@ describe('shapePageBrief', () => {
     assert.equal(view.audienceQuestion, null);
     assert.deepEqual(view.primaryCanonNodeIds, []);
     assert.deepEqual(view.supportingCanonNodeIds, []);
+  });
+});
+
+describe('buildR2PublicUrl', () => {
+  it('combines public base URL and R2 key', () => {
+    assert.equal(
+      buildR2PublicUrl('https://cdn.creatorcanon.test/assets/', 'workspaces/ws/runs/run/visual-moments/frame.jpg'),
+      'https://cdn.creatorcanon.test/assets/workspaces/ws/runs/run/visual-moments/frame.jpg',
+    );
+  });
+
+  it('returns null when base URL or key is missing', () => {
+    assert.equal(buildR2PublicUrl('', 'workspaces/ws/frame.jpg'), null);
+    assert.equal(buildR2PublicUrl('https://cdn.creatorcanon.test', null), null);
   });
 });

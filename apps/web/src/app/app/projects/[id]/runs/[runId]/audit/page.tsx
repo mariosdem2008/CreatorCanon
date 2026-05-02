@@ -80,6 +80,7 @@ export default async function AuditPage({
           channelProfile={audit.channelProfile}
           canonNodes={audit.canonNodes}
           pageBriefs={audit.pageBriefs}
+          visualMoments={audit.visualMoments}
           debug={debugMode}
           segmentById={new Map(Object.entries(audit.segmentMap))}
           youtubeIdByVideoId={audit.youtubeIdByVideoId}
