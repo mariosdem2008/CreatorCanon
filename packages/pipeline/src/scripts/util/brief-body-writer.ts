@@ -42,6 +42,12 @@ import { runCodex } from './codex-runner';
 import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
 import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
+import { detectRefusalPattern } from './canon-body-writer';
+import {
+  ensureBriefCompleteness,
+  type BriefCompletenessPopulator,
+  type CanonShellForCompleteness,
+} from './brief-completeness';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
@@ -132,6 +138,15 @@ export interface BriefBodyInput {
 export interface BriefBodyResult {
   body: string;
   cited_segment_ids: string[];
+  brief?: PageBriefShell;
+  /** Set when the writer fell back or gave up. Value describes why. */
+  _degraded?: 'no_primary_canon_for_fallback' | 'brief_writer_refused';
+}
+
+export interface BriefBodyWriteOptions {
+  timeoutMs?: number;
+  briefCompletenessPopulator?: BriefCompletenessPopulator;
+  canonShells?: CanonShellForCompleteness[];
 }
 
 // ── Archetype voice loader (cached) ─────────────────────────────────────────
@@ -371,6 +386,61 @@ export async function generateBriefShells(
 
 // ── Stage 2: Brief body writer ─────────────────────────────────────────────
 
+/**
+ * Fallback prompt (Task 10.1): used when the primary prompt fails/is refused.
+ *
+ * Key differences from primary:
+ *  - No inline [UUID] citation requirement (no segment IDs available when canon
+ *    body is thin; citations live on the canon page, not the brief)
+ *  - Uses the primary canon's existing body text as context, not raw segments
+ *  - Asks for 200-300 words only (shorter target is easier to satisfy)
+ *  - Voice-mode-aware but simplified
+ */
+function buildBodyPromptFallback(input: BriefBodyInput, primaryCanonBody: string): string {
+  const { brief, primaryCanons, voiceFingerprint } = input;
+  const primaryTitle = primaryCanons[0]?.title ?? brief.pageTitle;
+
+  const voiceInstruction =
+    input.voiceMode === 'third_person_editorial'
+      ? 'Third-person editorial voice. Subject is the topic, not the creator.'
+      : input.voiceMode === 'hybrid'
+      ? 'Hybrid: editorial framing + 1 blockquoted first-person aphorism.'
+      : 'First-person voice (I/you).';
+
+  return [
+    `Write a 200-300 word page-brief intro. This brief introduces a hub page that links to the primary canon "${primaryTitle}".`,
+    '',
+    `Use the canon body below as context — extract the most striking idea and frame it as the page's opening hook.`,
+    '',
+    `# Source canon (for context — do NOT copy verbatim or cite with [UUID] brackets)`,
+    `"""`,
+    primaryCanonBody.slice(0, 3000),
+    `"""`,
+    '',
+    `# Output rules`,
+    `- 200-300 words`,
+    `- ${voiceInstruction}`,
+    voiceFingerprint.preserveTerms.length > 0
+      ? `- Use these terms VERBATIM: ${voiceFingerprint.preserveTerms.slice(0, 8).join(', ')}`
+      : '',
+    voiceFingerprint.profanityAllowed ? '' : '- No profanity.',
+    `- Open with a hook (a question, a statistic, or a surprising claim)`,
+    `- Name the primary canon by title ("${primaryTitle}") naturally in the body`,
+    `- End with a soft call-to-action pointing toward the primary canon page`,
+    `- NO inline [UUID] citations — those live on the canon, not the brief`,
+    '',
+    `# Page context`,
+    `- pageTitle: ${brief.pageTitle}`,
+    `- hook (sticky line already written): ${brief.hook}`,
+    `- lede: ${brief.lede}`,
+    '',
+    `# Output format`,
+    `ONE JSON object. First char \`{\`, last char \`}\`.`,
+    '',
+    `{ "body": "<200-300 word brief body>" }`,
+  ].filter((x) => x !== '').join('\n');
+}
+
 function buildBodyPrompt(input: BriefBodyInput): string {
   const { brief, primaryCanons, creatorName, archetype, voiceFingerprint } = input;
   const archetypeVoice = loadArchetypeVoice(archetype);
@@ -439,9 +509,29 @@ function buildBodyPrompt(input: BriefBodyInput): string {
   ].filter((x) => x !== '').join('\n');
 }
 
+function defaultCompletenessCanonShells(input: BriefBodyInput): CanonShellForCompleteness[] {
+  return input.primaryCanons.map((canon) => ({
+    id: canon.id,
+    title: canon.title,
+    type: canon.type,
+    internal_summary: canon.internal_summary,
+  }));
+}
+
+async function completeBriefShell(
+  input: BriefBodyInput,
+  options: BriefBodyWriteOptions,
+): Promise<PageBriefShell> {
+  return ensureBriefCompleteness(input.brief, {
+    canonShells: options.canonShells ?? defaultCompletenessCanonShells(input),
+    populator: options.briefCompletenessPopulator,
+    timeoutMs: options.timeoutMs,
+  });
+}
+
 export async function writeBriefBody(
   input: BriefBodyInput,
-  options: { timeoutMs?: number } = {},
+  options: BriefBodyWriteOptions = {},
 ): Promise<BriefBodyResult> {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
   const prompt = buildBodyPrompt(input);
@@ -471,13 +561,19 @@ export async function writeBriefBody(
   if (aq.length > 30 && body.includes(aq)) {
     throw new Error(`brief body leaks _internal_audience_question verbatim: "${aq.slice(0, 80)}…"`);
   }
-  return { body, cited_segment_ids: [...new Set(cited)] };
+  const completedBrief = await completeBriefShell(input, options);
+  return { body, cited_segment_ids: [...new Set(cited)], brief: completedBrief };
 }
 
-/** Parallel orchestrator with retry-on-failure (max 2 retries per brief). */
+/** Parallel orchestrator with retry-on-failure (max 2 retries per brief).
+ *
+ * Task 10.1: After primary retries are exhausted, tries a fallback prompt that
+ * uses the primary canon's existing body as context and drops UUID-citation
+ * requirements. If the fallback also fails, persists an empty body with a
+ * _degraded marker rather than silently writing empty content. */
 export async function writeBriefBodiesParallel(
   inputs: BriefBodyInput[],
-  options: { concurrency?: number; timeoutMs?: number; maxRetries?: number } = {},
+  options: BriefBodyWriteOptions & { concurrency?: number; maxRetries?: number } = {},
 ): Promise<Map<string, BriefBodyResult>> {
   const concurrency = Math.max(1, options.concurrency ?? 3);
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
@@ -492,10 +588,16 @@ export async function writeBriefBodiesParallel(
       cursor += 1;
       const input = inputs[i]!;
       let lastErr: Error | null = null;
+
+      // ── Primary prompt attempts ──────────────────────────────────────────
       for (let attempt = 1; attempt <= 1 + maxRetries; attempt += 1) {
         try {
           const start = Date.now();
-          const res = await writeBriefBody(input, { timeoutMs });
+          const res = await writeBriefBody(input, {
+            timeoutMs,
+            briefCompletenessPopulator: options.briefCompletenessPopulator,
+            canonShells: options.canonShells,
+          });
           const wordCount = res.body.split(/\s+/).filter(Boolean).length;
           console.info(
             `[brief] ${input.brief.pageId} (${input.brief.pageTitle.slice(0, 35)}): ` +
@@ -513,9 +615,64 @@ export async function writeBriefBodiesParallel(
           }
         }
       }
-      if (!out.has(input.brief.pageId) && lastErr) {
-        console.error(`[brief] ${input.brief.pageId} permanently failed: ${lastErr.message.slice(0, 200)}`);
-        out.set(input.brief.pageId, { body: '', cited_segment_ids: [] });
+
+      if (out.has(input.brief.pageId)) continue;
+
+      // ── Fallback prompt (Task 10.1) ──────────────────────────────────────
+      // Primary attempts exhausted. Try the looser fallback prompt that uses
+      // the primary canon's existing body as context (no UUID citations needed).
+      console.warn(`[brief] ${input.brief.pageId} primary attempts exhausted; trying fallback prompt`);
+
+      const primaryCanonBody = input.primaryCanons[0]?.body ?? '';
+      if (!primaryCanonBody || primaryCanonBody.trim().split(/\s+/).filter(Boolean).length < 50) {
+        console.error(
+          `[brief] ${input.brief.pageId} fallback unavailable: primary canon body missing or too short ` +
+            `(${primaryCanonBody.trim().split(/\s+/).filter(Boolean).length} words)`,
+        );
+        out.set(input.brief.pageId, {
+          body: '',
+          cited_segment_ids: [],
+          brief: await completeBriefShell(input, { ...options, timeoutMs }),
+          _degraded: 'no_primary_canon_for_fallback',
+        });
+        continue;
+      }
+
+      try {
+        const fallbackPrompt = buildBodyPromptFallback(input, primaryCanonBody);
+        const raw = await runCodex(fallbackPrompt, { timeoutMs, label: `brief_body_fallback_${input.brief.pageId}` });
+        const json = extractJsonFromCodexOutput(raw);
+        const parsed = JSON.parse(json) as { body?: string };
+        const fallbackBody = typeof parsed.body === 'string' ? parsed.body : '';
+
+        if (detectRefusalPattern(fallbackBody)) {
+          console.error(`[brief] ${input.brief.pageId} fallback also refused/too-short; persisting _degraded`);
+          out.set(input.brief.pageId, {
+            body: '',
+            cited_segment_ids: [],
+            brief: await completeBriefShell(input, { ...options, timeoutMs }),
+            _degraded: 'brief_writer_refused',
+          });
+        } else {
+          const wordCount = fallbackBody.split(/\s+/).filter(Boolean).length;
+          console.info(`[brief] ${input.brief.pageId} fallback succeeded (${wordCount} words)`);
+          // Fallback bodies have no UUID citations — that's intentional.
+          out.set(input.brief.pageId, {
+            body: fallbackBody,
+            cited_segment_ids: [],
+            brief: await completeBriefShell(input, { ...options, timeoutMs }),
+          });
+        }
+      } catch (fallbackErr) {
+        console.error(
+          `[brief] ${input.brief.pageId} fallback error: ${(fallbackErr as Error).message.slice(0, 200)}; persisting _degraded`,
+        );
+        out.set(input.brief.pageId, {
+          body: '',
+          cited_segment_ids: [],
+          brief: await completeBriefShell(input, { ...options, timeoutMs }),
+          _degraded: 'brief_writer_refused',
+        });
       }
     }
   }

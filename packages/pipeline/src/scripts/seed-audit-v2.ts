@@ -35,33 +35,54 @@
  *                                              [--regen-canon] [--regen-bodies]
  *                                              [--regen-synthesis] [--regen-journey]
  *                                              [--regen-briefs] [--regen-hero]
+ *                                              [--regen-hero-only] [--regen-briefs-only]
+ *                                              [--regen-synthesis-only]
  *                                              [--regen-evidence] [--regen-workshops]
  *                                              [--per-video-canon]
  *
  * Flags:
- *   --regen-channel     Regenerate the channel profile (rebuilds creator-level voice)
- *   --regen-vic         Regenerate per-video intelligence cards
- *   --regen-canon       Regenerate canon shells (drops bodies, weaving, etc.)
- *   --regen-bodies      Regenerate canon bodies only (keep shells)
- *   --regen-synthesis   Regenerate synthesis pillar nodes
- *   --regen-journey     Regenerate the reader journey
- *   --regen-briefs      Regenerate page briefs
- *   --regen-hero        Regenerate hub_title / hub_tagline / hero_candidates
- *                       (with title-case + hero re-pass)
- *   --regen-evidence    Re-tag evidence registries on all entities (Stage 10)
- *   --regen-workshops   Regenerate workshop stages (Stage 11)
- *                       Using --regen-evidence and/or --regen-workshops alone
- *                       activates the late-stages-only fast path (Stages 1-9 load
- *                       existing v2 entities without regenerating; Stage 4 weaving
- *                       is skipped).
- *   --per-video-canon   Per-video canon-shell sweep (more granular but slower)
- *   --voice-mode <mode>  Override voice register: first_person | third_person_editorial | hybrid
- *                        (defaults from archetype if omitted)
+ *   --regen-channel         Regenerate the channel profile (rebuilds creator-level voice)
+ *   --regen-vic             Regenerate per-video intelligence cards
+ *   --regen-canon           Regenerate canon shells (drops bodies, weaving, etc.)
+ *   --regen-bodies          Regenerate canon bodies only (keep shells)
+ *   --regen-synthesis       Regenerate synthesis pillar nodes
+ *   --regen-journey         Regenerate the reader journey
+ *   --regen-briefs          Regenerate page briefs
+ *   --regen-hero            Regenerate hub_title / hub_tagline / hero_candidates
+ *                           (with title-case + hero re-pass)
+ *   --regen-hero-only       Fast path: run ONLY Stage 9 (hero + persist). Loads the
+ *                           existing channel profile from DB, runs one Codex call, and
+ *                           writes hubTitle/hubTagline/hero_candidates back. Skips
+ *                           Stages 1-8 + 10-11. Use to backfill hubTitle without
+ *                           triggering a full --regen-channel. (Task 9.3)
+ *   --regen-briefs-only     Fast path: run ONLY Stage 8 (page brief shells + bodies).
+ *                           Loads existing channel profile + canon nodes from DB,
+ *                           deletes existing v2 briefs, regenerates briefs (with
+ *                           fallback prompt for thin-content canons). Skips Stages
+ *                           1-7 + 9-11. Use to backfill empty brief bodies without
+ *                           a full re-run. Incompatible with --regen-channel/canon/bodies.
+ *                           (Task 10.1)
+ *   --regen-synthesis-only  Fast path: run ONLY Stage 6 (synthesis shells + bodies).
+ *                           Loads existing channel profile + v2 canon nodes (with bodies)
+ *                           from DB, deletes existing synthesis nodes, regenerates all
+ *                           synthesis shells + bodies (with improved cross-canon weaving
+ *                           and fallback prompt). Skips Stages 1-5 + 7-11.
+ *                           Use to backfill empty synthesis bodies without a full re-run.
+ *                           Incompatible with --regen-channel/canon/bodies. (Task 10.4)
+ *   --regen-evidence        Re-tag evidence registries on all entities (Stage 10)
+ *   --regen-workshops       Regenerate workshop stages (Stage 11)
+ *                           Using --regen-evidence and/or --regen-workshops alone
+ *                           activates the late-stages-only fast path (Stages 1-9 load
+ *                           existing v2 entities without regenerating; Stage 4 weaving
+ *                           is skipped).
+ *   --per-video-canon       Per-video canon-shell sweep (more granular but slower)
+ *   --voice-mode <mode>     Override voice register: first_person | third_person_editorial | hybrid
+ *                           (defaults from archetype if omitted)
  */
 
 import crypto from 'node:crypto';
 
-import { and, asc, closeDb, eq, getDb, inArray } from '@creatorcanon/db';
+import { and, asc, closeDb, ensureDbHealthy, eq, getDb, inArray, sql } from '@creatorcanon/db';
 import {
   canonNode,
   channelProfile,
@@ -77,6 +98,7 @@ import {
 } from '@creatorcanon/db/schema';
 import {
   filterCandidates,
+  filterAndOrderCandidates,
   buildAllWorkshopStages,
   type WorkshopStageInput,
 } from './util/workshop-builder';
@@ -102,6 +124,8 @@ import { generateHeroCandidates } from './util/hero-candidates';
 import {
   generateSynthesisShells,
   writeSynthesisBodiesParallel,
+  countSynthesisLinks,
+  mergeSynthesisBodyResultIntoShell,
   type SynthesisShell,
   type SynthesisBodyInput,
   type ChildCanonRef,
@@ -255,6 +279,12 @@ interface ChannelProfile_v2 {
   creatorName: string;
   hub_title: string;
   hub_tagline: string;
+  /** camelCase alias for hub_title — added by Task 9.3 so downstream SQL
+   *  queries like payload->>'hubTitle' return non-null values. Both
+   *  snake_case and camelCase are written to the DB payload. */
+  hubTitle?: string;
+  /** camelCase alias for hub_tagline — same rationale as hubTitle. */
+  hubTagline?: string;
   hero_candidates: string[];
   _internal_niche: string;
   _internal_audience: string;
@@ -637,6 +667,10 @@ async function main() {
   const runId = process.argv[2];
   if (!runId) throw new Error('Usage: tsx ./src/scripts/seed-audit-v2.ts <runId>');
 
+  // Wake up Neon serverless and clear any stale pool connections from a prior
+  // process. Retries up to 4 times with exponential backoff on ECONNRESET etc.
+  await ensureDbHealthy();
+
   const regenChannel = process.argv.includes('--regen-channel');
   const regenVic = process.argv.includes('--regen-vic');
   const regenCanon = process.argv.includes('--regen-canon');
@@ -647,6 +681,10 @@ async function main() {
   const regenHero = process.argv.includes('--regen-hero');
   const regenEvidence = process.argv.includes('--regen-evidence');
   const regenWorkshops = process.argv.includes('--regen-workshops');
+  /** Task 9.3: fast path that runs ONLY Stage 9 (hero candidates + persist).
+   *  Skips Stages 1-8 + 10-11. Cheap: one Codex call per creator. */
+  const regenHeroOnly = process.argv.includes('--regen-hero-only');
+  const regenSynthesisOnly = process.argv.includes('--regen-synthesis-only');
   const perVideo = process.argv.includes('--per-video-canon');
 
   const voiceModeFlag = (() => {
@@ -659,6 +697,371 @@ async function main() {
     console.warn(`[v2] --voice-mode: invalid value "${val}", ignoring`);
     return null;
   })();
+
+  // ── --regen-hero-only fast path (Task 9.3) ───────────────────────────────
+  // Runs ONLY Stage 9 (hero candidates + hub_title/hub_tagline persist).
+  // Skips Stages 1-8 + 10-11. ~1 Codex call per creator. Use this to
+  // backfill hubTitle/hubTagline without forcing a full --regen-channel.
+  if (regenHeroOnly && !regenChannel) {
+    console.info(`[v2] --regen-hero-only: running Stage 9 only for ${runId}`);
+    const db = getDb();
+
+    // Load existing channel profile.
+    const cpRows = await db.select({ payload: channelProfile.payload })
+      .from(channelProfile)
+      .where(eq(channelProfile.runId, runId))
+      .limit(1);
+    if (!cpRows[0]) throw new Error(`No channelProfile found for runId=${runId}. Run without --regen-hero-only first.`);
+    const profile = cpRows[0].payload as unknown as ChannelProfile_v2;
+    if (!profile._internal_niche) throw new Error(`channelProfile for ${runId} is not v2 (missing _internal_niche). Re-run --regen-channel first.`);
+
+    // Load existing canon shells for top-titles context.
+    const canonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+      .from(canonNode)
+      .where(eq(canonNode.runId, runId));
+    const existingShells = canonRows
+      .map((r) => r.payload as unknown as CanonShell_v2)
+      .filter((s) => s.schemaVersion === 'v2' && !s.kind);
+
+    const topCanonTitles = existingShells
+      .filter((s) => s.pageWorthinessScore >= 60)
+      .sort((a, b) => b.pageWorthinessScore - a.pageWorthinessScore)
+      .slice(0, 10)
+      .map((s) => s.title);
+
+    // Run Stage 9.
+    const heroResult = await generateHeroCandidates({
+      creatorName: profile.creatorName,
+      archetype: profile._index_archetype,
+      niche: profile._internal_niche,
+      audience: profile._internal_audience,
+      dominantTone: profile._internal_dominant_tone,
+      recurringPromise: profile._internal_recurring_promise,
+      monetizationAngle: profile._internal_monetization_angle,
+      topCanonTitles,
+      preserveTerms: profile._index_creator_terminology,
+      voiceFingerprint: {
+        profanityAllowed: profile._index_archetype === 'operator-coach',
+        tonePreset: profile._internal_dominant_tone,
+      },
+    });
+
+    const refined = await refineHeroBlock(heroResult, {
+      creatorName: profile.creatorName,
+      niche: profile._internal_niche,
+      audience: profile._internal_audience,
+      recurringPromise: profile._internal_recurring_promise,
+      preserveTerms: profile._index_creator_terminology,
+      voiceFingerprint: {
+        profanityAllowed: profile._index_archetype === 'operator-coach',
+        tonePreset: profile._internal_dominant_tone,
+      },
+    });
+
+    // Persist: write both snake_case (backward compat) and camelCase aliases.
+    const updatedProfile = {
+      ...profile,
+      hub_title: refined.hub_title,
+      hub_tagline: refined.hub_tagline,
+      hubTitle: refined.hub_title,
+      hubTagline: refined.hub_tagline,
+      hero_candidates: refined.hero_candidates,
+    };
+    await db.update(channelProfile)
+      .set({ payload: updatedProfile as unknown as Record<string, unknown> })
+      .where(eq(channelProfile.runId, runId));
+
+    console.info(`[v2] Stage 9 only: hubTitle="${updatedProfile.hubTitle}" / hubTagline="${updatedProfile.hubTagline}" (${refined.rewriteCount} lines rewritten)`);
+    await closeDb();
+    return;
+  }
+
+  // ── --regen-briefs-only fast path (Task 10.1) ────────────────────────────
+  // Runs ONLY Stage 8 (page brief bodies). Loads existing channel profile +
+  // canon shells from DB, deletes existing v2 briefs, regenerates all brief
+  // shells + bodies (with fallback prompt for thin-content canons), persists.
+  // Skips Stages 1-7 + 9-11. Use after a fallback-prompt fix to backfill
+  // empty brief bodies without re-running the full pipeline.
+  const regenBriefsOnly = process.argv.includes('--regen-briefs-only');
+  if (regenBriefsOnly && !regenChannel && !regenCanon && !regenBodies) {
+    console.info(`[v2] --regen-briefs-only: running Stage 8 only for ${runId}`);
+    const db = getDb();
+
+    // Load existing channel profile.
+    const cpRows = await db.select({ payload: channelProfile.payload })
+      .from(channelProfile)
+      .where(eq(channelProfile.runId, runId))
+      .limit(1);
+    if (!cpRows[0]) throw new Error(`No channelProfile found for runId=${runId}. Run without --regen-briefs-only first.`);
+    const briefOnlyProfile = cpRows[0].payload as unknown as ChannelProfile_v2;
+    if (!briefOnlyProfile._internal_niche) throw new Error(`channelProfile for ${runId} is not v2 (missing _internal_niche). Re-run --regen-channel first.`);
+
+    // Load existing canon nodes (shells + bodies).
+    const canonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+      .from(canonNode)
+      .where(eq(canonNode.runId, runId));
+    const v2CanonRows = canonRows.filter(
+      (c) => (c.payload as { schemaVersion?: string }).schemaVersion === 'v2',
+    );
+    if (v2CanonRows.length < 3) {
+      throw new Error(`Only ${v2CanonRows.length} v2 canon nodes found for ${runId}. Run --regen-canon first.`);
+    }
+
+    const briefOnlyCanonRefs: CanonRefForBrief[] = v2CanonRows.map((c) => {
+      const p = c.payload as CanonShell_v2 & { body?: string };
+      return {
+        id: c.id,
+        title: p.title,
+        type: p.type,
+        body: p.body ?? '',
+        internal_summary: p._internal_summary,
+        pageWorthinessScore: p.pageWorthinessScore,
+      };
+    }).filter((r) => r.pageWorthinessScore >= 40);
+
+    // Identify pillar canons (synthesis kind nodes).
+    const briefOnlyPillarIds = v2CanonRows
+      .filter((c) => (c.payload as CanonShell_v2).kind === 'synthesis')
+      .map((c) => c.id);
+
+    // Delete existing v2 briefs.
+    const existingBriefRows = await db.select({ id: pageBrief.id, payload: pageBrief.payload })
+      .from(pageBrief)
+      .where(eq(pageBrief.runId, runId));
+    const v2BriefIds = existingBriefRows
+      .filter((b) => (b.payload as { schemaVersion?: string }).schemaVersion === 'v2')
+      .map((b) => b.id);
+    if (v2BriefIds.length > 0) {
+      await db.delete(pageBrief).where(inArray(pageBrief.id, v2BriefIds));
+      console.info(`[v2] --regen-briefs-only: deleted ${v2BriefIds.length} existing v2 briefs`);
+    }
+
+    // Resolve voice mode.
+    const briefOnlyVoiceMode: VoiceMode = voiceModeFlag ?? defaultVoiceMode(briefOnlyProfile._index_archetype);
+
+    // Load run for workspaceId.
+    const briefOnlyRun = await loadRun(runId);
+
+    // Re-run Stage 8.
+    const targetCount = Math.min(12, briefOnlyCanonRefs.length);
+    console.info(`[v2] Stage 8 (briefs-only): ${briefOnlyCanonRefs.length} canon refs, ${briefOnlyPillarIds.length} pillars, target=${targetCount}`);
+    const briefShells = await generateBriefShells({
+      canonNodes: briefOnlyCanonRefs,
+      pillarCanonIds: briefOnlyPillarIds,
+      creatorName: briefOnlyProfile.creatorName,
+      archetype: briefOnlyProfile._index_archetype,
+      niche: briefOnlyProfile._internal_niche,
+      audience: briefOnlyProfile._internal_audience,
+      recurringPromise: briefOnlyProfile._internal_recurring_promise,
+      preserveTerms: briefOnlyProfile._index_creator_terminology,
+      defaultVoiceFingerprint: {
+        profanityAllowed: briefOnlyProfile._index_archetype === 'operator-coach',
+        tonePreset: briefOnlyProfile._internal_dominant_tone,
+        preserveTerms: briefOnlyProfile._index_creator_terminology.slice(0, 12),
+      },
+      targetCount,
+    });
+
+    for (const b of briefShells) b.pageTitle = enforceTitleCase(b.pageTitle);
+
+    const briefBodyInputs: BriefBodyInput[] = briefShells.map((b) => {
+      const primaryCanons = b._index_primary_canon_node_ids
+        .map((cid) => briefOnlyCanonRefs.find((r) => r.id === cid))
+        .filter((r): r is CanonRefForBrief => r !== undefined);
+      return {
+        brief: b,
+        primaryCanons,
+        creatorName: briefOnlyProfile.creatorName,
+        archetype: briefOnlyProfile._index_archetype,
+        voiceFingerprint: b._index_voice_fingerprint,
+        channelDominantTone: briefOnlyProfile._internal_dominant_tone,
+        channelAudience: briefOnlyProfile._internal_audience,
+        voiceMode: briefOnlyVoiceMode,
+      };
+    });
+
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, {
+      concurrency: 3,
+      canonShells: briefOnlyCanonRefs.map((c) => ({
+        id: c.id,
+        title: c.title,
+        type: c.type,
+        internal_summary: c.internal_summary,
+      })),
+    });
+
+    for (const shell of briefShells) {
+      const result = briefBodies.get(shell.pageId);
+      const finalShell = { ...(result?.brief ?? shell), body: result?.body ?? '' };
+      await db.insert(pageBrief).values({
+        id: `pb_${crypto.randomUUID().slice(0, 12)}`,
+        workspaceId: briefOnlyRun.workspaceId,
+        runId,
+        payload: finalShell as unknown as Record<string, unknown>,
+        pageWorthinessScore: finalShell._internal_page_worthiness_score,
+        position: finalShell._index_position,
+      });
+    }
+
+    const withBodies = [...briefBodies.values()].filter((r) => r.body.length > 0).length;
+    const degraded = [...briefBodies.values()].filter((r) => r._degraded).length;
+    console.info(`[v2] --regen-briefs-only: ${briefShells.length} briefs persisted (${withBodies} with bodies, ${degraded} degraded)`);
+    await closeDb();
+    return;
+  }
+
+  // --regen-synthesis-only fast path (Task 10.4)
+  // Runs ONLY Stage 6. This is intentionally not part of late-stages-only:
+  // synthesis has to delete/recreate synthesis canon nodes, but should not
+  // disturb channel profile, base canon bodies, journey, briefs, hero, evidence,
+  // or workshops.
+  if (regenSynthesisOnly) {
+    if (regenChannel || regenCanon || regenBodies || regenVic || regenJourney || regenBriefs || regenHero || regenEvidence || regenWorkshops) {
+      throw new Error('--regen-synthesis-only cannot be combined with other --regen-* flags');
+    }
+
+    console.info(`[v2] --regen-synthesis-only: running Stage 6 only for ${runId}`);
+    const db = getDb();
+    const synthOnlyRun = await loadRun(runId);
+
+    const cpRows = await db.select({ payload: channelProfile.payload })
+      .from(channelProfile)
+      .where(eq(channelProfile.runId, runId))
+      .limit(1);
+    if (!cpRows[0]) throw new Error(`No channelProfile found for runId=${runId}. Run without --regen-synthesis-only first.`);
+    const synthOnlyProfile = cpRows[0].payload as unknown as ChannelProfile_v2;
+    if (!synthOnlyProfile._internal_niche) {
+      throw new Error(`channelProfile for ${runId} is not v2 (missing _internal_niche). Re-run --regen-channel first.`);
+    }
+
+    const storedVoiceMode = (synthOnlyProfile as unknown as { _index_voice_mode?: unknown })._index_voice_mode;
+    const synthOnlyVoiceMode: VoiceMode =
+      voiceModeFlag ?? (isVoiceMode(storedVoiceMode) ? storedVoiceMode : defaultVoiceMode(synthOnlyProfile._index_archetype));
+
+    const canonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+      .from(canonNode)
+      .where(eq(canonNode.runId, runId));
+    const v2CanonRows = canonRows.filter(
+      (c) => (c.payload as { schemaVersion?: string }).schemaVersion === 'v2',
+    );
+
+    const existingSynthesisRows = v2CanonRows.filter((c) => (c.payload as { kind?: string }).kind === 'synthesis');
+    if (existingSynthesisRows.length > 0) {
+      await db.delete(canonNode).where(inArray(canonNode.id, existingSynthesisRows.map((c) => c.id)));
+      console.info(`[v2] --regen-synthesis-only: deleted ${existingSynthesisRows.length} existing synthesis nodes`);
+    }
+
+    const synthOnlyCanonRefs = v2CanonRows.map((c) => {
+      const p = c.payload as CanonShell_v2 & { body?: string };
+      return {
+        id: c.id,
+        title: p.title,
+        type: p.type,
+        internal_summary: p._internal_summary ?? '',
+        body: typeof p.body === 'string' ? p.body : '',
+        pageWorthinessScore: p.pageWorthinessScore ?? 0,
+        sourceVideoIds: p._index_source_video_ids ?? [],
+        kind: p.kind,
+      };
+    }).filter((r) => !r.kind && r.body.length > 100);
+
+    if (synthOnlyCanonRefs.length < 6) {
+      throw new Error(`Only ${synthOnlyCanonRefs.length} base canon refs with bodies found for ${runId}. Need >=6 for synthesis.`);
+    }
+
+    const targetCount = Math.min(3, Math.max(2, Math.floor(synthOnlyCanonRefs.length / 4)));
+    console.info(`[v2] Stage 6 (synthesis-only): target ${targetCount} over ${synthOnlyCanonRefs.length} canon refs`);
+
+    const synthShells = await generateSynthesisShells({
+      canonNodes: synthOnlyCanonRefs.map((r) => ({
+        id: r.id,
+        title: r.title,
+        type: r.type,
+        internal_summary: r.internal_summary,
+        pageWorthinessScore: r.pageWorthinessScore,
+        sourceVideoIds: r.sourceVideoIds,
+      })),
+      creatorName: synthOnlyProfile.creatorName,
+      archetype: synthOnlyProfile._index_archetype,
+      niche: synthOnlyProfile._internal_niche,
+      recurringPromise: synthOnlyProfile._internal_recurring_promise,
+      targetCount,
+    });
+    for (const s of synthShells) s.title = enforceTitleCase(s.title);
+
+    const synthInputs: SynthesisBodyInput[] = [];
+    for (const shell of synthShells) {
+      const id = `cn_${crypto.randomUUID().slice(0, 12)}`;
+      shell.confidenceScore = normalizeScore(shell.confidenceScore);
+      shell.pageWorthinessScore = normalizeScore(shell.pageWorthinessScore);
+      shell.specificityScore = normalizeScore(shell.specificityScore);
+      shell.creatorUniquenessScore = normalizeScore(shell.creatorUniquenessScore);
+      await db.insert(canonNode).values({
+        id,
+        workspaceId: synthOnlyRun.workspaceId,
+        runId,
+        type: shell.type as any,
+        payload: shell as unknown as Record<string, unknown>,
+        evidenceSegmentIds: [],
+        sourceVideoIds: shell._index_source_video_ids,
+        evidenceQuality: shell.evidenceQuality,
+        origin: shell.origin as any,
+        confidenceScore: shell.confidenceScore,
+        pageWorthinessScore: shell.pageWorthinessScore,
+        specificityScore: shell.specificityScore,
+        creatorUniquenessScore: shell.creatorUniquenessScore,
+        citationCount: 0,
+        sourceCoverage: shell._index_source_video_ids.length,
+      });
+
+      const children: ChildCanonRef[] = shell._index_cross_link_canon
+        .map((cid) => synthOnlyCanonRefs.find((r) => r.id === cid))
+        .filter((r): r is typeof synthOnlyCanonRefs[number] => r !== undefined)
+        .map((r) => ({
+          id: r.id,
+          title: r.title,
+          type: r.type,
+          body: r.body,
+          internal_summary: r.internal_summary,
+        }));
+
+      synthInputs.push({
+        id,
+        shell,
+        children,
+        creatorName: synthOnlyProfile.creatorName,
+        archetype: synthOnlyProfile._index_archetype,
+        voiceFingerprint: {
+          profanityAllowed: synthOnlyProfile._index_archetype === 'operator-coach',
+          tonePreset: synthOnlyProfile._internal_dominant_tone,
+          preserveTerms: synthOnlyProfile._index_creator_terminology.slice(0, 12),
+        },
+        channelDominantTone: synthOnlyProfile._internal_dominant_tone,
+        channelAudience: synthOnlyProfile._internal_audience,
+        voiceMode: synthOnlyVoiceMode,
+      });
+    }
+
+    const synthBodies = await writeSynthesisBodiesParallel(synthInputs, { concurrency: 2 });
+    for (const input of synthInputs) {
+      const res = synthBodies.get(input.id);
+      if (!res) continue;
+      const updated = mergeSynthesisBodyResultIntoShell(input.shell, res);
+      await db.update(canonNode)
+        .set({
+          payload: updated as unknown as Record<string, unknown>,
+          evidenceSegmentIds: res.cited_segment_ids.slice(0, 50),
+          citationCount: countSynthesisLinks(res.body),
+        })
+        .where(eq(canonNode.id, input.id));
+    }
+
+    const withBodies = [...synthBodies.values()].filter((r) => r.body.length > 0).length;
+    const degraded = [...synthBodies.values()].filter((r) => r._degraded).length;
+    console.info(`[v2] --regen-synthesis-only: ${synthInputs.length} synthesis nodes persisted (${withBodies} with bodies, ${degraded} degraded)`);
+    await closeDb();
+    return;
+  }
 
   // Late-stages-only fast path: if the operator runs ONLY --regen-evidence
   // and/or --regen-workshops (no other regen flags), the existing v2 entities
@@ -869,7 +1272,9 @@ async function main() {
   for (const arr of segByVideo.values()) for (const s of arr) segById.set(s.segmentId, s);
 
   // Build per-canon body inputs.
-  const bodyInputs: CanonBodyInput[] = canonShells.map((shell, i) => {
+  const degradedNoSegmentsCanonIds = new Set<string>();
+
+  const bodyInputs = canonShells.map<CanonBodyInput | null>((shell, i) => {
     const id = canonShellIds.get(shell.title) ?? `cn_temp_${i}`;
     const sel = selections.get(id) ?? { example_ids: [], story_ids: [], mistake_ids: [], contrarian_take_ids: [] };
 
@@ -899,6 +1304,14 @@ async function main() {
     for (const segId of [...segIdsForBody].slice(0, 18)) {
       const s = segById.get(segId);
       if (s) segments.push({ segmentId: s.segmentId, timestamp: formatTs(s.startMs), text: s.text });
+    }
+
+    // Phase 9 G1: skip body write entirely for canons with zero source segments.
+    // Codex would refuse — better to mark _degraded upfront than to burn a Codex call.
+    if (segments.length === 0) {
+      console.warn(`[v2] Stage 4 weaver: canon ${id} (${shell.title}) has 0 source segments — marking _degraded='no_source_segments', skipping body write`);
+      degradedNoSegmentsCanonIds.add(id);
+      return null;
     }
 
     // Build woven items by ID lookup.
@@ -948,8 +1361,8 @@ async function main() {
       channelDominantTone: profile._internal_dominant_tone,
       channelAudience: profile._internal_audience,
       voiceMode: resolvedVoiceMode,
-    };
-  });
+    } satisfies CanonBodyInput;
+  }).filter((x): x is CanonBodyInput => x !== null);
 
   // Skip canon already with body unless regenBodies.
   const bodiesToWrite = regenBodies
@@ -961,6 +1374,16 @@ async function main() {
 
   console.info(`[v2] writing ${bodiesToWrite.length} bodies (${bodyInputs.length - bodiesToWrite.length} resumed with existing bodies)`);
   const bodyResults = await writeCanonBodiesParallel(bodiesToWrite, { concurrency: 3, timeoutMs: 10 * 60 * 1000 });
+
+  // Phase 9 G1: persist _degraded='no_source_segments' for skipped canons.
+  if (degradedNoSegmentsCanonIds.size > 0) {
+    console.info(`[v2] Stage 5: persisting _degraded='no_source_segments' for ${degradedNoSegmentsCanonIds.size} skipped canons`);
+    for (const canonId of degradedNoSegmentsCanonIds) {
+      await db.update(canonNode)
+        .set({ payload: sql`payload || '{"body":"","_degraded":"no_source_segments"}'::jsonb` })
+        .where(eq(canonNode.id, canonId));
+    }
+  }
 
   // Merge bodies into shells + persist.
   for (const shell of canonShells) {
@@ -1088,17 +1511,13 @@ async function main() {
       // Persist bodies onto the synthesis canon nodes.
       for (const input of synthInputs) {
         const res = synthBodies.get(input.id);
-        if (!res || res.body.length === 0) continue;
-        const updated = {
-          ...input.shell,
-          body: res.body,
-          _index_evidence_segments: res.cited_segment_ids,
-        };
+        if (!res) continue;
+        const updated = mergeSynthesisBodyResultIntoShell(input.shell, res);
         await db.update(canonNode)
           .set({
             payload: updated as unknown as Record<string, unknown>,
             evidenceSegmentIds: res.cited_segment_ids.slice(0, 50),
-            citationCount: res.cited_segment_ids.length,
+            citationCount: countSynthesisLinks(res.body),
           })
           .where(eq(canonNode.id, input.id));
       }
@@ -1275,13 +1694,21 @@ async function main() {
       };
     });
 
-    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, { concurrency: 3 });
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, {
+      concurrency: 3,
+      canonShells: briefCanonRefs.map((c) => ({
+        id: c.id,
+        title: c.title,
+        type: c.type,
+        internal_summary: c.internal_summary,
+      })),
+    });
 
     // Persist briefs (with bodies merged in).
     for (const shell of briefShells) {
       const result = briefBodies.get(shell.pageId);
       const finalShell = {
-        ...shell,
+        ...(result?.brief ?? shell),
         body: result?.body ?? '',
       };
       await db.insert(pageBrief).values({
@@ -1341,6 +1768,10 @@ async function main() {
 
     profile.hub_title = refined.hub_title;
     profile.hub_tagline = refined.hub_tagline;
+    // Task 9.3: also write camelCase aliases so SQL queries on
+    // payload->>'hubTitle' and payload->>'hubTagline' return non-null values.
+    profile.hubTitle = refined.hub_title;
+    profile.hubTagline = refined.hub_tagline;
     profile.hero_candidates = refined.hero_candidates;
 
     await db.update(channelProfile)
@@ -1553,13 +1984,31 @@ async function main() {
       const phases = journeyPayload._index_phases ?? [];
       const totalPhases = phases.length;
 
+      // Phase 10 Task 10.3: lower threshold (3→1) + accept needs_review candidates.
+      // Phase 8 had 4/7 creators (Sivers/Clouse/Huber/Norton) at workshops=0 because
+      // the prior threshold required 2+ verified high-confidence candidates per phase —
+      // too strict for thin-content creators (short TED clips, podcast-interview format).
+      const MIN_WORKSHOP_CANDIDATES = 1;   // was 2 (plan says was 3, actual code was 2)
+      const MAX_WORKSHOP_CANDIDATES = 5;
+
       const workshopInputs: WorkshopStageInput[] = [];
       for (const phase of phases) {
-        const candidates = filterCandidates(phase, canonByCanonId, segmentById);
-        if (candidates.length < 2) {
-          console.info(`[v2] Stage 11: phase ${phase._index_phase_number} (${phase.title}) — only ${candidates.length} candidates, skipping`);
+        const allCandidates = filterCandidates(phase, canonByCanonId, segmentById);
+        const candidates = filterAndOrderCandidates(allCandidates, {
+          min: MIN_WORKSHOP_CANDIDATES,
+          max: MAX_WORKSHOP_CANDIDATES,
+        });
+        if (candidates.length < MIN_WORKSHOP_CANDIDATES) {
+          console.info(`[v2] Stage 11: phase ${phase._index_phase_number} (${phase.title}) — only ${allCandidates.length} usable candidates (${candidates.length} after ordering), skipping`);
           continue;
         }
+        console.info(
+          `[v2] Stage 11: phase ${phase._index_phase_number} (${phase.title}) — ` +
+          `${candidates.length} candidates accepted ` +
+          `(high=${candidates.filter((c) => c.confidence === 'high').length}, ` +
+          `medium=${candidates.filter((c) => c.confidence === 'medium').length}, ` +
+          `needs_review=${candidates.filter((c) => c.confidence === 'needs_review').length})`,
+        );
         workshopInputs.push({
           phaseNumber: phase._index_phase_number,
           phaseTitle: phase.title ?? `Phase ${phase._index_phase_number}`,

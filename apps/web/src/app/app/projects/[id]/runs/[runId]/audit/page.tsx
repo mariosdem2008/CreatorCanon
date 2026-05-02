@@ -77,9 +77,11 @@ export default async function AuditPage({
 
       {isV2 ? (
         <HubSourceV2View
+          runId={audit.runId}
           channelProfile={audit.channelProfile}
           canonNodes={audit.canonNodes}
           pageBriefs={audit.pageBriefs}
+          visualMoments={audit.visualMoments}
           debug={debugMode}
           segmentById={new Map(Object.entries(audit.segmentMap))}
           youtubeIdByVideoId={audit.youtubeIdByVideoId}

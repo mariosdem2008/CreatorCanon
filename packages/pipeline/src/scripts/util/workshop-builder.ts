@@ -40,7 +40,7 @@ export interface WorkshopClip {
   startSeconds?: number;
   endSeconds?: number;
   _index_relevance_score: number;
-  _index_confidence: 'high' | 'medium';
+  _index_confidence: 'high' | 'medium' | 'needs_review';
   _index_why_this_clip_teaches_this_step: string;
   _index_related_canon_node_ids: string[];
 }
@@ -70,7 +70,7 @@ export interface ClipCandidate {
   supportingPhrase: string;
   whyThisSegmentFits: string;
   relevanceScore: number;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: 'high' | 'medium' | 'low' | 'needs_review' | 'unsupported';
   sourceCanonNodeId: string;
   sourceCanonTitle: string;
 }
@@ -93,6 +93,13 @@ export interface WorkshopStageInput {
 // Step 2: filterCandidates pure function
 // ---------------------------------------------------------------------------
 
+// Phase 10 Task 10.3: accept needs_review confidence + needs_review verification status
+// for thin-content creators. Phase 8 cohort had 4/7 creators (Sivers/Clouse/Huber/Norton)
+// at workshops=0 because the prior filter required confidence==='high' AND
+// verificationStatus==='verified' — too strict for short-clip / podcast-interview content.
+const USABLE_CONFIDENCE = new Set<string>(['high', 'medium', 'needs_review']);
+const USABLE_VERIFICATION = new Set<string>(['verified', 'needs_review']);
+
 export function filterCandidates(
   phase: { _index_primary_canon_node_ids: string[] },
   canonByCanonId: Map<string, any>,    // Map<canonId, canon payload with _index_evidence_registry>
@@ -105,9 +112,9 @@ export function filterCandidates(
     for (const [segId, entry] of Object.entries(canon._index_evidence_registry)) {
       const e = entry as any;
       if (!['framework_step', 'tool', 'example', 'mistake'].includes(e.evidenceType)) continue;
-      if (e.confidence !== 'high') continue;
+      if (!USABLE_CONFIDENCE.has(e.confidence)) continue;
       if (e.relevanceScore < 80) continue;
-      if (e.verificationStatus !== 'verified') continue;
+      if (!USABLE_VERIFICATION.has(e.verificationStatus)) continue;
       const seg = segmentById.get(segId);
       if (!seg) continue;
       out.push({
@@ -120,13 +127,33 @@ export function filterCandidates(
         supportingPhrase: e.supportingPhrase,
         whyThisSegmentFits: e.whyThisSegmentFits,
         relevanceScore: e.relevanceScore,
-        confidence: e.confidence as 'high' | 'medium',
+        confidence: e.confidence as ClipCandidate['confidence'],
         sourceCanonNodeId: cid,
         sourceCanonTitle: canon.title,
       });
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Step 2b: filterAndOrderCandidates — pure helper for Stage 11 pre-selection
+// ---------------------------------------------------------------------------
+
+// Phase 10 Task 10.3: extracted as a pure helper so it's independently testable.
+// Orders: high > medium > needs_review. Drops low + unsupported entirely.
+// Returns [] if below min (caller must handle the skip).
+export function filterAndOrderCandidates<T extends Pick<ClipCandidate, 'confidence'>>(
+  candidates: T[],
+  opts: { min: number; max: number },
+): T[] {
+  const usable = candidates.filter((c) => USABLE_CONFIDENCE.has(c.confidence));
+  if (usable.length < opts.min) return [];
+  return [
+    ...usable.filter((c) => c.confidence === 'high'),
+    ...usable.filter((c) => c.confidence === 'medium'),
+    ...usable.filter((c) => c.confidence === 'needs_review'),
+  ].slice(0, opts.max);
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +503,9 @@ export async function buildWorkshopStage(
       startSeconds,
       endSeconds,
       _index_relevance_score: candidate.relevanceScore,
-      _index_confidence: candidate.confidence === 'low' ? 'medium' : candidate.confidence,
+      _index_confidence: (['high', 'medium', 'needs_review'] as const).includes(candidate.confidence as 'high' | 'medium' | 'needs_review')
+        ? candidate.confidence as 'high' | 'medium' | 'needs_review'
+        : 'medium',
       _index_why_this_clip_teaches_this_step:
         typeof rc.whyThisClipTeachesThisStep === 'string' ? rc.whyThisClipTeachesThisStep : '',
       _index_related_canon_node_ids: [candidate.sourceCanonNodeId],

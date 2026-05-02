@@ -175,6 +175,108 @@ function buildRewritePrompt(
   ].join('\n');
 }
 
+export function buildHeroCritiquePrompt(lines: string[], ctx: HeroRewriteContext): string {
+  return [
+    `You are the homepage creative director for ${ctx.creatorName}.`,
+    '',
+    `Critique these hero lines like they need to be tweet-worthy: sharp, specific, memorable, and worth putting above the fold.`,
+    '',
+    `# Channel context`,
+    `- niche: ${ctx.niche}`,
+    `- audience: ${ctx.audience}`,
+    `- recurring promise: ${ctx.recurringPromise}`,
+    `- preserveTerms: ${ctx.preserveTerms.slice(0, 10).join(', ')}`,
+    `- tonePreset: ${ctx.voiceFingerprint.tonePreset}`,
+    '',
+    `# Hero lines`,
+    ...lines.slice(0, 5).map((line, index) => `${index + 1}. ${line}`),
+    '',
+    `# Task`,
+    `Return a concise critique for EXACTLY 5 lines. Name what is generic, soft, unclear, too long, not first-person, or not tweet-worthy.`,
+    '',
+    `# Output format`,
+    `ONE JSON object. No code fences.`,
+    `{`,
+    `  "critique": ["<critique for line 1>", "<critique for line 2>", "<critique for line 3>", "<critique for line 4>", "<critique for line 5>"],`,
+    `  "overall": "<one sentence on the set>"`,
+    `}`,
+    `JSON only.`,
+  ].join('\n');
+}
+
+export function buildHeroRewriteFromCritiquePrompt(
+  lines: string[],
+  critique: string[],
+  ctx: HeroRewriteContext,
+): string {
+  return [
+    `You are ${ctx.creatorName}. Rewrite the five homepage hero lines using the critique.`,
+    '',
+    `Goal: each line should be tweet-worthy, billboard-clean, first-person, and specific to ${ctx.audience}.`,
+    '',
+    `# Channel context`,
+    `- niche: ${ctx.niche}`,
+    `- recurring promise: ${ctx.recurringPromise}`,
+    `- preserveTerms (use verbatim if natural): ${ctx.preserveTerms.slice(0, 10).join(', ')}`,
+    `- profanityAllowed: ${ctx.voiceFingerprint.profanityAllowed}`,
+    `- tonePreset: ${ctx.voiceFingerprint.tonePreset}`,
+    '',
+    `# Current lines and critique`,
+    ...lines.slice(0, 5).map((line, index) => {
+      const note = critique[index] ?? 'Make this sharper and more specific.';
+      return `${index + 1}. "${line}"\n   Critique: ${note}`;
+    }),
+    '',
+    `# Rewrite rules`,
+    `- Return EXACTLY 5 lines in the same order`,
+    `- 6-14 words each`,
+    `- First-person or direct-address language`,
+    `- No transcript stutters, filler, generic SaaS phrasing, or soft abstractions`,
+    `- Keep the five angles meaningfully different`,
+    '',
+    `# Output format`,
+    `ONE JSON object. No code fences.`,
+    `{ "rewritten": ["<line 1>", "<line 2>", "<line 3>", "<line 4>", "<line 5>"] }`,
+    `JSON only.`,
+  ].join('\n');
+}
+
+async function runHeroCritiqueRewritePass(
+  lines: string[],
+  ctx: HeroRewriteContext,
+  timeoutMs: number,
+): Promise<{ refined: string[]; rewriteCount: number }> {
+  try {
+    const critiqueRaw = await runCodex(buildHeroCritiquePrompt(lines, ctx), {
+      timeoutMs,
+      label: 'hero_critique',
+    });
+    const critiqueJson = extractJsonFromCodexOutput(critiqueRaw);
+    const critiqueParsed = JSON.parse(critiqueJson) as { critique?: unknown };
+    const critique = Array.isArray(critiqueParsed.critique)
+      ? critiqueParsed.critique.filter((x): x is string => typeof x === 'string').slice(0, 5)
+      : [];
+
+    const rewriteRaw = await runCodex(buildHeroRewriteFromCritiquePrompt(lines, critique, ctx), {
+      timeoutMs,
+      label: 'hero_critique_rewrite',
+    });
+    const rewriteJson = extractJsonFromCodexOutput(rewriteRaw);
+    const rewriteParsed = JSON.parse(rewriteJson) as { rewritten?: unknown };
+    const rewritten = Array.isArray(rewriteParsed.rewritten)
+      ? rewriteParsed.rewritten.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).slice(0, 5)
+      : [];
+    if (rewritten.length !== 5 || rewritten.some((line) => line.length === 0)) {
+      throw new Error(`critique rewrite returned ${rewritten.length} usable lines, expected 5`);
+    }
+    const rewriteCount = rewritten.filter((line, index) => line !== lines[index]).length;
+    return { refined: rewritten, rewriteCount };
+  } catch (err) {
+    console.warn(`[hero-rewrite] critique/rewrite pass failed: ${(err as Error).message.slice(0, 200)} — keeping current lines`);
+    return { refined: lines, rewriteCount: 0 };
+  }
+}
+
 export interface HeroRewriteResult {
   refined: string[];                  // 5 final lines
   evaluations: HeroLineEvaluation[];  // pre-rewrite scores (length 5)
@@ -183,7 +285,7 @@ export interface HeroRewriteResult {
 
 /** Re-pass on the 5 hero candidates. Heuristic-score, send awkward ones to
  *  Codex, splice in replacements, return refined 5. */
-export async function rewriteAwkwardHeroes(
+async function rewriteAwkwardHeroesBase(
   candidates: string[],
   ctx: HeroRewriteContext,
   options: { threshold?: number; timeoutMs?: number } = {},
@@ -231,6 +333,22 @@ export async function rewriteAwkwardHeroes(
     }
   }
   return { refined, evaluations, rewriteCount: replacements.filter(Boolean).length };
+}
+
+export async function rewriteAwkwardHeroes(
+  candidates: string[],
+  ctx: HeroRewriteContext,
+  options: { threshold?: number; timeoutMs?: number } = {},
+): Promise<HeroRewriteResult> {
+  const timeoutMs = options.timeoutMs ?? 5 * 60 * 1000;
+  const baseResult = await rewriteAwkwardHeroesBase(candidates, ctx, options);
+  const critiquePass = await runHeroCritiqueRewritePass(baseResult.refined, ctx, timeoutMs);
+
+  return {
+    refined: critiquePass.refined,
+    evaluations: baseResult.evaluations,
+    rewriteCount: baseResult.rewriteCount + critiquePass.rewriteCount,
+  };
 }
 
 /** Convenience wrapper: enforce title case on hub_title and run hero re-pass. */

@@ -63,6 +63,8 @@ export interface VisualMomentView {
   hubUse: string | null;
   usefulnessScore: number | null;
   extractedText: string | null;
+  frameUrl: string | null;
+  thumbnailUrl: string | null;
 }
 
 export interface VideoIntelligenceCardView {

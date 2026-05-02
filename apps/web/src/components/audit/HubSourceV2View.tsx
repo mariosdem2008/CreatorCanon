@@ -10,10 +10,12 @@
  * Spec: docs/superpowers/specs/2026-05-01-hub-source-document-schema.md
  */
 
-import type { ChannelProfileView, CanonNodeView, PageBriefView } from '@/lib/audit/types';
+import type { ChannelProfileView, CanonNodeView, PageBriefView, VisualMomentView } from '@/lib/audit/types';
 import { type EvidenceEntry } from '@/components/audit/EvidenceChip';
 import { renderBodyWithChips } from '@/components/audit/render-body-with-chips';
 import { WorkshopStagesView, type WorkshopStage } from '@/components/audit/WorkshopStagesView';
+import { splitManualReviewParagraphs } from '@/lib/audit/manual-review-text';
+import { ManualReviewParagraph } from '@/app/app/projects/[id]/runs/[runId]/audit/ManualReview';
 
 interface ChannelProfileV2 {
   schemaVersion?: 'v2';
@@ -92,17 +94,21 @@ interface BriefV2 {
 }
 
 export function HubSourceV2View({
+  runId,
   channelProfile,
   canonNodes,
   pageBriefs,
+  visualMoments,
   debug,
   segmentById,
   youtubeIdByVideoId,
   workshopStages = [],
 }: {
+  runId: string;
   channelProfile: ChannelProfileView | null;
   canonNodes: CanonNodeView[];
   pageBriefs: PageBriefView[];
+  visualMoments: VisualMomentView[];
   debug: boolean;
   segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
   youtubeIdByVideoId: Record<string, string | null>;
@@ -113,6 +119,7 @@ export function HubSourceV2View({
 
   const v2Canon = canonNodes.filter((n) => (n.payload as { schemaVersion?: string }).schemaVersion === 'v2');
   const v2Briefs = pageBriefs.filter((b) => (b.payload as { schemaVersion?: string }).schemaVersion === 'v2');
+  const visualMomentById = new Map(visualMoments.map((m) => [m.id, m]));
 
   // Bucket canon by tier (synthesis = pillar conceptual, others by pageWorthinessScore)
   const synthesisNodes = v2Canon.filter((n) => (n.payload as CanonV2).kind === 'synthesis');
@@ -224,14 +231,14 @@ export function HubSourceV2View({
           </p>
           <div className="mt-3 space-y-4">
             {synthesisNodes.map((n) => (
-              <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
+              <CanonNodeCard key={n.id} runId={runId} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
             ))}
           </div>
         </section>
       ) : null}
 
       {/* READER JOURNEY (timeline) */}
-      {journeyNode ? <ReaderJourneyTimeline node={journeyNode} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} /> : null}
+      {journeyNode ? <ReaderJourneyTimeline node={journeyNode} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} /> : null}
 
       {/* WORKSHOP STAGES */}
       {workshopStages.length > 0 ? (
@@ -269,7 +276,7 @@ export function HubSourceV2View({
                   </p>
                   <div className="mt-3 space-y-3">
                     {spokes.map((n) => (
-                      <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
+                      <CanonNodeCard key={n.id} runId={runId} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
                     ))}
                   </div>
                 </div>
@@ -284,7 +291,7 @@ export function HubSourceV2View({
                 ) : null}
                 <div className="space-y-3">
                   {unanchoredNodes.map((n) => (
-                    <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
+                    <CanonNodeCard key={n.id} runId={runId} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
                   ))}
                 </div>
               </div>
@@ -304,7 +311,7 @@ export function HubSourceV2View({
           </p>
           <div className="mt-3 space-y-4">
             {v2Briefs.map((b, i) => (
-              <BriefCard key={i} brief={b} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} />
+              <BriefCard key={i} brief={b} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
             ))}
           </div>
         </section>
@@ -317,15 +324,19 @@ export function HubSourceV2View({
 }
 
 function CanonNodeCard({
+  runId,
   node,
   debug,
   segmentById,
   youtubeIdByVideoId,
+  visualMomentById,
 }: {
+  runId: string;
   node: CanonNodeView;
   debug: boolean;
   segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
   youtubeIdByVideoId: Record<string, string | null>;
+  visualMomentById: Map<string, VisualMomentView>;
 }) {
   const p = node.payload as CanonV2;
   return (
@@ -345,15 +356,16 @@ function CanonNodeCard({
         ) : null}
       </header>
       {p.body ? (
-        <div className="prose prose-sm mt-4 max-w-none text-[14px] leading-[1.65] text-[var(--cc-ink-2)] whitespace-pre-wrap">
-          {renderBodyWithChips({
-            body: p.body,
-            registry: p._index_evidence_registry ?? undefined,
-            segmentById,
-            youtubeIdByVideoId,
-            debug,
-          })}
-        </div>
+        <ReviewableCanonBody
+          runId={runId}
+          canonId={node.id}
+          body={p.body}
+          registry={p._index_evidence_registry ?? undefined}
+          segmentById={segmentById}
+          youtubeIdByVideoId={youtubeIdByVideoId}
+          visualMomentById={visualMomentById}
+          debug={debug}
+        />
       ) : (
         <p className="mt-3 text-[12px] italic text-[var(--cc-ink-4)]">
           No body content yet.
@@ -361,6 +373,51 @@ function CanonNodeCard({
       )}
       {debug ? <CanonNodeDebug node={p} /> : null}
     </article>
+  );
+}
+
+function ReviewableCanonBody({
+  runId,
+  canonId,
+  body,
+  registry,
+  segmentById,
+  youtubeIdByVideoId,
+  visualMomentById,
+  debug,
+}: {
+  runId: string;
+  canonId: string;
+  body: string;
+  registry: Record<string, EvidenceEntry> | undefined;
+  segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
+  youtubeIdByVideoId: Record<string, string | null>;
+  visualMomentById: Map<string, VisualMomentView>;
+  debug: boolean;
+}) {
+  const paragraphs = splitManualReviewParagraphs(body);
+  return (
+    <div className="prose prose-sm mt-4 max-w-none space-y-3 text-[14px] leading-[1.65] text-[var(--cc-ink-2)]">
+      {paragraphs.map((paragraph, index) => (
+        <ManualReviewParagraph
+          key={`${canonId}-${index}`}
+          runId={runId}
+          canonId={canonId}
+          paragraph={paragraph}
+        >
+          <div className="whitespace-pre-wrap">
+            {renderBodyWithChips({
+              body: paragraph,
+              registry,
+              segmentById,
+              youtubeIdByVideoId,
+              visualMomentById,
+              debug,
+            })}
+          </div>
+        </ManualReviewParagraph>
+      ))}
+    </div>
   );
 }
 
@@ -390,11 +447,13 @@ function BriefCard({
   debug,
   segmentById,
   youtubeIdByVideoId,
+  visualMomentById,
 }: {
   brief: PageBriefView;
   debug: boolean;
   segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
   youtubeIdByVideoId: Record<string, string | null>;
+  visualMomentById: Map<string, VisualMomentView>;
 }) {
   const p = brief.payload as BriefV2;
   return (
@@ -422,6 +481,7 @@ function BriefCard({
             registry: p._index_evidence_registry ?? undefined,
             segmentById,
             youtubeIdByVideoId,
+            visualMomentById,
             debug,
           })}
         </div>
@@ -564,11 +624,13 @@ function ReaderJourneyTimeline({
   debug,
   segmentById,
   youtubeIdByVideoId,
+  visualMomentById,
 }: {
   node: CanonNodeView;
   debug: boolean;
   segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
   youtubeIdByVideoId: Record<string, string | null>;
+  visualMomentById: Map<string, VisualMomentView>;
 }) {
   const p = node.payload as CanonV2;
   const phases = (p._index_phases ?? []).slice().sort((a, b) =>
@@ -609,6 +671,7 @@ function ReaderJourneyTimeline({
                     registry: phase._index_evidence_registry ?? undefined,
                     segmentById,
                     youtubeIdByVideoId,
+                    visualMomentById,
                     debug,
                   })}
                 </div>
