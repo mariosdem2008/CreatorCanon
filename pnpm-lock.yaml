@@ -373,6 +373,34 @@ importers:
         specifier: 5.6.2
         version: 5.6.2
 
+  packages/synthesis:
+    dependencies:
+      '@creatorcanon/core':
+        specifier: workspace:*
+        version: link:../core
+      '@creatorcanon/db':
+        specifier: workspace:*
+        version: link:../db
+      '@creatorcanon/pipeline':
+        specifier: workspace:*
+        version: link:../pipeline
+      drizzle-orm:
+        specifier: 0.33.0
+        version: 0.33.0(@opentelemetry/api@1.9.0)(@types/pg@8.6.1)(@types/react@18.3.5)(postgres@3.4.4)(react@18.3.1)
+      zod:
+        specifier: 3.23.8
+        version: 3.23.8
+    devDependencies:
+      '@creatorcanon/config':
+        specifier: workspace:*
+        version: link:../config
+      tsx:
+        specifier: 4.19.1
+        version: 4.19.1
+      typescript:
+        specifier: 5.6.2
+        version: 5.6.2
+
   packages/ui:
     dependencies:
       clsx:
