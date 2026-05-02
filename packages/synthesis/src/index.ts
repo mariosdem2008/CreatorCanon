@@ -57,6 +57,8 @@ export {
   tierAmount,
   tierSource,
   tierResetSource,
+  requireCredits,
+  runWithCredits,
   MemoryCreditLedger,
   DrizzleCreditLedger,
   InsufficientCreditsError,
@@ -75,4 +77,5 @@ export type {
   Tier,
   AllocateTierCreditsArgs,
   AddAddonCreditArgs,
+  RunWithCreditsArgs,
 } from './credits';

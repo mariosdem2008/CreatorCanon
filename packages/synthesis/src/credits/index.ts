@@ -21,6 +21,9 @@ export type {
   AddAddonCreditArgs,
 } from './allocator';
 
+export { requireCredits, runWithCredits } from './enforcer';
+export type { RunWithCreditsArgs } from './enforcer';
+
 export { MemoryCreditLedger } from './memory-store';
 export { DrizzleCreditLedger } from './drizzle-store';
 
