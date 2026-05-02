@@ -173,6 +173,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 Open hub
               </Link>
             ) : null}
+            {publishedHub?.liveReleaseId ? (
+              <Link
+                href={`/app/projects/${params.id}/domain`}
+                className="inline-flex h-9 items-center rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-ink-4)]"
+              >
+                Domain
+              </Link>
+            ) : null}
           </>
         }
       />

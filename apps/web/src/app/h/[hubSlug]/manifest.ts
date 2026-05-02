@@ -12,6 +12,7 @@ import {
   type CreatorManualManifest,
   type HubManifest as ParsedHubManifest,
 } from '@/lib/hub/manifest/schema';
+import { resolveHubManifestSelector } from '@/lib/hub/manifest-selector';
 
 type HubRow = {
   id: string;
@@ -69,6 +70,7 @@ export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubM
   }
 
   const db = getDb();
+  const selector = resolveHubManifestSelector(hubSlug);
   const hubs = await db
     .select({
       id: hub.id,
@@ -78,7 +80,11 @@ export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubM
       deletedAt: hub.deletedAt,
     })
     .from(hub)
-    .where(eq(hub.subdomain, hubSlug))
+    .where(
+      selector.column === 'id'
+        ? eq(hub.id, selector.value)
+        : eq(hub.subdomain, selector.value),
+    )
     .limit(1);
 
   const hubRow = hubs[0];

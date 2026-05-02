@@ -141,6 +141,7 @@ export class MissingVercelTokenError extends Error {
 }
 
 export interface VercelClient {
+  getProject(idOrName: string): Promise<VercelProject>;
   createProject(requestBody: VercelCreateProjectRequest): Promise<VercelProject>;
   addProjectDomain(
     idOrName: string,
@@ -221,6 +222,13 @@ export function createVercelClient(options: VercelClientOptions): VercelClient {
   };
 
   return {
+    getProject(idOrName) {
+      return request<VercelProject>(
+        `/v9/projects/${encodeURIComponent(idOrName)}`,
+        { method: 'GET' },
+      );
+    },
+
     createProject(requestBody) {
       return request<VercelProject>('/v9/projects', {
         method: 'POST',

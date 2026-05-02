@@ -88,6 +88,27 @@ describe('createVercelClient', () => {
     });
   });
 
+  it('retrieves a project by id or deterministic name', async () => {
+    const { calls, fetchStub } = createFetchStub(
+      jsonResponse({
+        id: 'prj_123',
+        name: 'creator-canon-demo',
+        framework: 'nextjs',
+        rootDirectory: 'apps/web',
+      }),
+    );
+    const client = createVercelClient({ token: 'vc_test', fetch: fetchStub });
+
+    const result = await client.getProject('creator-canon-demo');
+
+    assert.equal(result.id, 'prj_123');
+    const call = calls[0];
+    assert.ok(call);
+    assert.equal(call.url, 'https://api.vercel.com/v9/projects/creator-canon-demo');
+    assert.equal(call.init.method, 'GET');
+  });
+
+
   it('reads and verifies a project domain', async () => {
     const { calls, fetchStub } = createFetchStub(
       jsonResponse({ name: 'learn.example.com', projectId: 'prj_123', verified: true }),
