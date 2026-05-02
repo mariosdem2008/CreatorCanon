@@ -18,6 +18,7 @@
 import { extractJsonFromCodexOutput } from '../../agents/providers/codex-extract-json';
 import { runCodex } from './codex-runner';
 import { repairTruncatedJson } from './json-repair';
+import { fuzzyPhraseInText } from './fuzzy-phrase-match';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,7 +87,14 @@ export function computeVerificationStatus(
   entry: EvidenceEntry,
   segmentText: string,
 ): EvidenceEntry['verificationStatus'] {
-  if (!segmentText.includes(entry.supportingPhrase)) return 'unsupported';
+  // Phase 9 fix: use three-strategy fuzzy verifier instead of strict substring.
+  // Whisper transcription diverges from Codex-extracted supportingPhrase
+  // (gonna vs going to, contractions, filler words, comma placement),
+  // causing 100% unsupported for the 4 new creators in Phase 8 cohort.
+  const { match } = fuzzyPhraseInText(entry.supportingPhrase, segmentText, {
+    maxDistanceRatio: 0.15,
+  });
+  if (!match) return 'unsupported';
   if (entry.relevanceScore < 40) return 'unsupported';
   if (entry.relevanceScore >= 70 && entry.confidence !== 'low') return 'verified';
   return 'needs_review';
@@ -293,16 +301,27 @@ export async function tagEntityEvidence(
 
     const raw_entry = parsed.registry[uuid]!;
 
-    // Hard-fail if supportingPhrase not a substring of the segment text
+    // Phase 9 fix: soft-fail if supportingPhrase is missing/empty (hard-fail was
+    // throwing when Whisper drift caused no exact match). A missing/empty phrase
+    // is still a hard-fail (Codex returned garbage); a phrase that doesn't
+    // exactly match the segment is now OK — computeVerificationStatus will
+    // downgrade it to 'unsupported' via the fuzzy verifier.
     const segText = input.segmentTextById[uuid] ?? '';
     if (
       typeof raw_entry.supportingPhrase !== 'string' ||
-      raw_entry.supportingPhrase.length === 0 ||
-      !segText.includes(raw_entry.supportingPhrase)
+      raw_entry.supportingPhrase.length === 0
     ) {
       throw new Error(
-        `[evidence_tagger_${input.entityId}] supportingPhrase is not a substring of segment ${uuid}. ` +
+        `[evidence_tagger_${input.entityId}] supportingPhrase missing or empty for segment ${uuid}. ` +
         `Got: "${String(raw_entry.supportingPhrase).slice(0, 80)}"`,
+      );
+    }
+    // Log a warning (not a throw) when the phrase is not an exact substring —
+    // computeVerificationStatus handles downgrading via fuzzy match.
+    if (!segText.includes(raw_entry.supportingPhrase)) {
+      console.warn(
+        `[evidence] ${input.entityId} phrase not exact substring of segment ${uuid} — ` +
+        `fuzzy verifier will assess. phrase: "${raw_entry.supportingPhrase.slice(0, 60)}"`,
       );
     }
 
