@@ -1,10 +1,15 @@
 /**
- * Diagnostic composer — front-door routing for the operator-coach hub.
+ * Diagnostic composer — front-door routing for the active hub.
+ *
+ * Originally written for operator-coach but reused by science-explainer
+ * (and future archetypes) — the prompts now parameterize the archetype
+ * descriptor from `input.channelProfile.archetype` so Codex drafts
+ * archetype-appropriate question + intro copy.
  *
  * Pipeline:
  *   1. extractAudienceJobs: read _index_audience_jobs from channel profile.
  *   2. Codex authors 8-12 multi-choice questions whose answers reveal the
- *      reader's job (1 call). Voice-mode-aware.
+ *      reader's job (1 call). Voice-mode-aware + archetype-aware.
  *   3. buildScoringRubric (pure code): for each job, find canons whose
  *      _index_audience_job_tags overlap with the job's tags, surface them
  *      as routeToCanonIds. Recommend an actionPlan phase if signals match.
@@ -27,6 +32,20 @@ export interface AudienceJob {
   id: string;
   label: string;
   tags: string[];
+}
+
+/**
+ * Map a channel-profile archetype to the noun phrase used in Codex prompts.
+ * Anything we don't explicitly know becomes the generic "knowledge hub" so
+ * Codex doesn't get a misleading hint.
+ */
+function archetypeDescriptor(input: ComposeInput): string {
+  const a = String(input.channelProfile?.archetype ?? '').toLowerCase();
+  if (a.includes('operator')) return 'operator-coach';
+  if (a.includes('science') || a.includes('explainer')) return 'science-explainer';
+  if (a.includes('contemplative') || a.includes('thinker')) return 'contemplative-thinker';
+  if (a.includes('instructional') || a.includes('craft')) return 'instructional-craft';
+  return 'knowledge';
 }
 
 function safeJsonParse<T>(raw: string): T | null {
@@ -130,8 +149,9 @@ async function authorQuestions(
     ? jobs.map((j) => `- ${j.id}: ${j.label} (tags: ${j.tags.join(', ')})`).join('\n')
     : '- general: figure out where the reader is stuck (no tags)';
 
+  const archetype = archetypeDescriptor(input);
   const prompt = [
-    `Author 8-12 multi-choice diagnostic questions for an operator-coach hub. The hub serves audiences with these jobs-to-be-done:`,
+    `Author 8-12 multi-choice diagnostic questions for a ${archetype} hub. The hub serves audiences with these jobs-to-be-done:`,
     jobList,
     '',
     `Voice: ${voiceLabel}.`,
@@ -166,8 +186,12 @@ async function authorIntro(input: ComposeInput, codex: CodexClient): Promise<str
         ? 'editorial third-person'
         : 'mixed register';
 
+  const archetype = archetypeDescriptor(input);
+  // Archetype-aware framing: operator-coach gets "your next move",
+  // science-explainer gets "the right evidence", etc. Codex picks up on the
+  // hub kind even when the rest of the prompt is shared.
   const prompt = [
-    `Write a 1-2 sentence ${voiceLabel} intro for an operator-coach diagnostic. Tell the reader: "answer ~10 questions, get your next move." Direct, no hype.`,
+    `Write a 1-2 sentence ${voiceLabel} intro for a ${archetype} hub diagnostic. Tell the reader: "answer ~10 questions, get the most relevant ${archetype === 'science-explainer' ? 'evidence' : archetype === 'contemplative-thinker' ? 'card' : archetype === 'instructional-craft' ? 'lesson' : 'next move'}." Direct, no hype.`,
     '',
     `Creator: ${input.creatorName}`,
     '',

@@ -35,8 +35,21 @@ export interface ClaimSearchBarProps {
   cards: EvidenceCard[];
   /** Build href for a result; default: /claim/[card.id]. */
   hrefForCard?: (card: EvidenceCard) => string;
-  /** Inject a custom embedder; defaults to mockHashEmbedder for dev. */
+  /**
+   * Inject a custom embedder. Two safe ways to pass it:
+   *   1. `embedderFactory={() => openaiEmbedder()}` — called once on mount
+   *      (preferred when the embedder closes over heavy resources).
+   *   2. `embedder={stableEmbedderRef.current}` — works only if the SAME
+   *      object identity is preserved across renders. Pass an inline
+   *      `{embed: async () => ...}` object and you'll trigger an infinite
+   *      re-index loop. Default behaviour (no embedder) uses `mockHashEmbedder`.
+   *
+   * `embedderKey` is the cache invalidation hook — change it to force a
+   * re-index (e.g. when swapping models).
+   */
   embedder?: Embedder;
+  embedderFactory?: () => Embedder;
+  embedderKey?: string;
   topN?: number;
   primaryColor?: string;
 }
@@ -52,12 +65,19 @@ export function ClaimSearchBar({
   cards,
   hrefForCard,
   embedder,
+  embedderFactory,
+  embedderKey,
   topN = 3,
   primaryColor = '#111',
 }: ClaimSearchBarProps) {
+  // Resolve the embedder ONCE (or when embedderKey changes). We do NOT
+  // include `embedder` in the dep array — passing an inline embedder
+  // object would otherwise reset the index every render. Callers that
+  // need to swap embedders dynamically must change `embedderKey`.
   const resolvedEmbedder = useMemo<Embedder>(
-    () => embedder ?? mockHashEmbedder(64),
-    [embedder],
+    () => embedderFactory?.() ?? embedder ?? mockHashEmbedder(64),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [embedderKey],
   );
   const indexRef = useRef<IndexedCard[] | null>(null);
   const [indexReady, setIndexReady] = useState(false);
@@ -65,7 +85,8 @@ export function ClaimSearchBar({
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [pending, setPending] = useState(false);
 
-  // Build index once per (cards, embedder) tuple.
+  // Build index when cards change or the embedder is invalidated via
+  // embedderKey. Same-identity embedder swaps are intentionally ignored.
   useEffect(() => {
     let cancelled = false;
     indexRef.current = null;

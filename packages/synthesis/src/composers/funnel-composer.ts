@@ -34,6 +34,20 @@ export interface FunnelComposeInput extends ComposeInput {
   creatorConfig: CreatorConfig;
 }
 
+/**
+ * Map a channel-profile archetype to the noun phrase used in funnel prompts.
+ * Funnel copy is reused across all archetypes; without parameterization,
+ * Codex was being told "operator-coach hub" for science-explainer runs.
+ */
+function archetypeDescriptor(input: FunnelComposeInput): string {
+  const a = String(input.channelProfile?.archetype ?? '').toLowerCase();
+  if (a.includes('operator')) return 'operator-coach';
+  if (a.includes('science') || a.includes('explainer')) return 'science-explainer';
+  if (a.includes('contemplative') || a.includes('thinker')) return 'contemplative-thinker';
+  if (a.includes('instructional') || a.includes('craft')) return 'instructional-craft';
+  return 'knowledge';
+}
+
 function safeJsonParse<T>(raw: string): T | null {
   try {
     return JSON.parse(raw) as T;
@@ -60,8 +74,9 @@ async function authorEmailCapture(
   input: FunnelComposeInput,
   codex: CodexClient,
 ): Promise<FunnelEmailCapture> {
+  const archetype = archetypeDescriptor(input);
   const prompt = [
-    `Author lead capture copy for an operator-coach hub. Goal: lead_magnet.`,
+    `Author lead capture copy for a ${archetype} hub. Goal: lead_magnet.`,
     `Creator: ${input.creatorName}. Niche: ${input.channelProfile.niche ?? '(unknown)'}.`,
     '',
     'Output rules:',
@@ -91,8 +106,9 @@ async function authorPaywall(
   input: FunnelComposeInput,
   codex: CodexClient,
 ): Promise<FunnelPaywall> {
+  const archetype = archetypeDescriptor(input);
   const prompt = [
-    `Author paywall copy for an operator-coach hub. Goal: paid_product.`,
+    `Author paywall copy for a ${archetype} hub. Goal: paid_product.`,
     `Creator: ${input.creatorName}.`,
     '',
     'Output rules:',
@@ -122,8 +138,9 @@ async function authorLogin(
   input: FunnelComposeInput,
   codex: CodexClient,
 ): Promise<FunnelLogin> {
+  const archetype = archetypeDescriptor(input);
   const prompt = [
-    `Author login wall copy for an operator-coach hub. Goal: member_library.`,
+    `Author login wall copy for a ${archetype} hub. Goal: member_library.`,
     `Creator: ${input.creatorName}.`,
     '',
     'Output rules:',
@@ -156,8 +173,9 @@ async function authorInlineCtas(
     input.creatorConfig.ctas.primary?.href ??
     input.creatorConfig.funnelDestination ??
     '#';
+  const archetype = archetypeDescriptor(input);
   const prompt = [
-    `Author 3 inline CTAs for an operator-coach hub. One per page-depth: shallow, mid, deep.`,
+    `Author 3 inline CTAs for a ${archetype} hub. One per page-depth: shallow, mid, deep.`,
     `Goal: ${input.productGoal}.`,
     `Creator: ${input.creatorName}.`,
     `Default destination href if you cannot determine one: "${fallbackHref}".`,

@@ -35,6 +35,16 @@ const DEBUNKING_BODY_CUES: RegExp[] = [
   /\bno evidence (?:for|that|to support)\b/i,
 ];
 
+// Forward-hook tag set. The current audit pipeline does NOT emit these tags
+// on `_index_voice_fingerprint.rhetoricalMoves` — that path is intentionally
+// open for a future audit-side enhancement that classifies rhetorical posture
+// (myth-busting, fearmongering-pushback, contrarian-evidence) in Stage 6 or
+// 7. Until that lands, only DEBUNKING_BODY_CUES is exercised in real cohort
+// runs; the smoke fixture fabricates these tags to verify the hook does the
+// right thing once it goes live.
+//
+// TODO(audit-pipeline): emit these tags on the voice fingerprint so this
+// branch isn't dead in production. Tracked in phase-h-followups.md.
 const DEBUNKING_FINGERPRINT_TAGS = [
   'fearmongering-pushback',
   'myth-busting',
