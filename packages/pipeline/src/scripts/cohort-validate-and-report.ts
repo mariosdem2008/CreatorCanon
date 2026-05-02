@@ -45,6 +45,7 @@ async function main() {
       const result = spawnSync('npx', ['tsx', validatorPath, runId], {
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024,
+        shell: true, // Windows: needs shell to resolve npx.cmd
       });
       const dt = Date.now() - t0;
       const logPath = path.join(outDir, `${runId}-${validator.replace('.ts', '.log')}`);
@@ -68,6 +69,7 @@ async function main() {
   const result = spawnSync('npx', ['tsx', cohortPath, ...runIds], {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
+    shell: true,
   });
   const cohortLogPath = path.join(outDir, 'cohort-report.log');
   fs.writeFileSync(cohortLogPath, (result.stdout || '') + '\n--- stderr ---\n' + (result.stderr || ''));
