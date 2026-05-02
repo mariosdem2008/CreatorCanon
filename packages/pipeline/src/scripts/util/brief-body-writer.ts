@@ -43,6 +43,11 @@ import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
 import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
 import { detectRefusalPattern } from './canon-body-writer';
+import {
+  ensureBriefCompleteness,
+  type BriefCompletenessPopulator,
+  type CanonShellForCompleteness,
+} from './brief-completeness';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
@@ -133,8 +138,15 @@ export interface BriefBodyInput {
 export interface BriefBodyResult {
   body: string;
   cited_segment_ids: string[];
+  brief?: PageBriefShell;
   /** Set when the writer fell back or gave up. Value describes why. */
   _degraded?: 'no_primary_canon_for_fallback' | 'brief_writer_refused';
+}
+
+export interface BriefBodyWriteOptions {
+  timeoutMs?: number;
+  briefCompletenessPopulator?: BriefCompletenessPopulator;
+  canonShells?: CanonShellForCompleteness[];
 }
 
 // ── Archetype voice loader (cached) ─────────────────────────────────────────
@@ -497,9 +509,29 @@ function buildBodyPrompt(input: BriefBodyInput): string {
   ].filter((x) => x !== '').join('\n');
 }
 
+function defaultCompletenessCanonShells(input: BriefBodyInput): CanonShellForCompleteness[] {
+  return input.primaryCanons.map((canon) => ({
+    id: canon.id,
+    title: canon.title,
+    type: canon.type,
+    internal_summary: canon.internal_summary,
+  }));
+}
+
+async function completeBriefShell(
+  input: BriefBodyInput,
+  options: BriefBodyWriteOptions,
+): Promise<PageBriefShell> {
+  return ensureBriefCompleteness(input.brief, {
+    canonShells: options.canonShells ?? defaultCompletenessCanonShells(input),
+    populator: options.briefCompletenessPopulator,
+    timeoutMs: options.timeoutMs,
+  });
+}
+
 export async function writeBriefBody(
   input: BriefBodyInput,
-  options: { timeoutMs?: number } = {},
+  options: BriefBodyWriteOptions = {},
 ): Promise<BriefBodyResult> {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
   const prompt = buildBodyPrompt(input);
@@ -529,7 +561,8 @@ export async function writeBriefBody(
   if (aq.length > 30 && body.includes(aq)) {
     throw new Error(`brief body leaks _internal_audience_question verbatim: "${aq.slice(0, 80)}…"`);
   }
-  return { body, cited_segment_ids: [...new Set(cited)] };
+  const completedBrief = await completeBriefShell(input, options);
+  return { body, cited_segment_ids: [...new Set(cited)], brief: completedBrief };
 }
 
 /** Parallel orchestrator with retry-on-failure (max 2 retries per brief).
@@ -540,7 +573,7 @@ export async function writeBriefBody(
  * _degraded marker rather than silently writing empty content. */
 export async function writeBriefBodiesParallel(
   inputs: BriefBodyInput[],
-  options: { concurrency?: number; timeoutMs?: number; maxRetries?: number } = {},
+  options: BriefBodyWriteOptions & { concurrency?: number; maxRetries?: number } = {},
 ): Promise<Map<string, BriefBodyResult>> {
   const concurrency = Math.max(1, options.concurrency ?? 3);
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
@@ -560,7 +593,11 @@ export async function writeBriefBodiesParallel(
       for (let attempt = 1; attempt <= 1 + maxRetries; attempt += 1) {
         try {
           const start = Date.now();
-          const res = await writeBriefBody(input, { timeoutMs });
+          const res = await writeBriefBody(input, {
+            timeoutMs,
+            briefCompletenessPopulator: options.briefCompletenessPopulator,
+            canonShells: options.canonShells,
+          });
           const wordCount = res.body.split(/\s+/).filter(Boolean).length;
           console.info(
             `[brief] ${input.brief.pageId} (${input.brief.pageTitle.slice(0, 35)}): ` +
@@ -592,7 +629,12 @@ export async function writeBriefBodiesParallel(
           `[brief] ${input.brief.pageId} fallback unavailable: primary canon body missing or too short ` +
             `(${primaryCanonBody.trim().split(/\s+/).filter(Boolean).length} words)`,
         );
-        out.set(input.brief.pageId, { body: '', cited_segment_ids: [], _degraded: 'no_primary_canon_for_fallback' });
+        out.set(input.brief.pageId, {
+          body: '',
+          cited_segment_ids: [],
+          brief: await completeBriefShell(input, { ...options, timeoutMs }),
+          _degraded: 'no_primary_canon_for_fallback',
+        });
         continue;
       }
 
@@ -605,18 +647,32 @@ export async function writeBriefBodiesParallel(
 
         if (detectRefusalPattern(fallbackBody)) {
           console.error(`[brief] ${input.brief.pageId} fallback also refused/too-short; persisting _degraded`);
-          out.set(input.brief.pageId, { body: '', cited_segment_ids: [], _degraded: 'brief_writer_refused' });
+          out.set(input.brief.pageId, {
+            body: '',
+            cited_segment_ids: [],
+            brief: await completeBriefShell(input, { ...options, timeoutMs }),
+            _degraded: 'brief_writer_refused',
+          });
         } else {
           const wordCount = fallbackBody.split(/\s+/).filter(Boolean).length;
           console.info(`[brief] ${input.brief.pageId} fallback succeeded (${wordCount} words)`);
           // Fallback bodies have no UUID citations — that's intentional.
-          out.set(input.brief.pageId, { body: fallbackBody, cited_segment_ids: [] });
+          out.set(input.brief.pageId, {
+            body: fallbackBody,
+            cited_segment_ids: [],
+            brief: await completeBriefShell(input, { ...options, timeoutMs }),
+          });
         }
       } catch (fallbackErr) {
         console.error(
           `[brief] ${input.brief.pageId} fallback error: ${(fallbackErr as Error).message.slice(0, 200)}; persisting _degraded`,
         );
-        out.set(input.brief.pageId, { body: '', cited_segment_ids: [], _degraded: 'brief_writer_refused' });
+        out.set(input.brief.pageId, {
+          body: '',
+          cited_segment_ids: [],
+          brief: await completeBriefShell(input, { ...options, timeoutMs }),
+          _degraded: 'brief_writer_refused',
+        });
       }
     }
   }

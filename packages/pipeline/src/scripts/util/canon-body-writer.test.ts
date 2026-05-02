@@ -1,7 +1,12 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { detectRefusalPattern, MIN_BODY_WORDS_FALLBACK } from './canon-body-writer';
+import {
+  buildBodyPrompt,
+  type CanonBodyInput,
+  detectRefusalPattern,
+  MIN_BODY_WORDS_FALLBACK,
+} from './canon-body-writer';
 
 describe('detectRefusalPattern', () => {
   test('detects "I can\'t produce" refusal', () => {
@@ -55,5 +60,46 @@ describe('detectRefusalPattern', () => {
 
   test('MIN_BODY_WORDS_FALLBACK is 100', () => {
     assert.equal(MIN_BODY_WORDS_FALLBACK, 100);
+  });
+});
+
+describe('buildBodyPrompt', () => {
+  test('includes stricter voice retry guidance when voice fingerprint scoring drifts', () => {
+    const input: CanonBodyInput = {
+      id: 'cn_voice',
+      title: 'Raise The Floor',
+      type: 'principle',
+      internal_summary: 'A principle about better operator standards.',
+      segments: [
+        {
+          segmentId: '11111111-1111-4111-8111-111111111111',
+          timestamp: '00:12',
+          text: 'I raise the floor before I try to raise the ceiling.',
+        },
+      ],
+      woven: {
+        examples: [],
+        stories: [],
+        mistakes: [],
+        contrarian_takes: [],
+      },
+      creatorName: 'Alex Hormozi',
+      voiceMode: 'first_person',
+      archetype: 'operator-coach',
+      voiceFingerprint: {
+        profanityAllowed: true,
+        tonePreset: 'blunt-tactical',
+        preserveTerms: ['Grand Slam Offer'],
+      },
+      channelDominantTone: 'direct',
+      channelAudience: 'agency owners',
+    };
+
+    const prompt = buildBodyPrompt(input, {
+      voiceRetryGuidance: 'Voice fingerprint drift detected. Write closer to Alex Hormozi.',
+    });
+
+    assert.match(prompt, /Voice-fingerprint retry guidance/);
+    assert.match(prompt, /Voice fingerprint drift detected/);
   });
 });

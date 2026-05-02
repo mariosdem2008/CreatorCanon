@@ -880,11 +880,19 @@ async function main() {
       };
     });
 
-    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, { concurrency: 3 });
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, {
+      concurrency: 3,
+      canonShells: briefOnlyCanonRefs.map((c) => ({
+        id: c.id,
+        title: c.title,
+        type: c.type,
+        internal_summary: c.internal_summary,
+      })),
+    });
 
     for (const shell of briefShells) {
       const result = briefBodies.get(shell.pageId);
-      const finalShell = { ...shell, body: result?.body ?? '' };
+      const finalShell = { ...(result?.brief ?? shell), body: result?.body ?? '' };
       await db.insert(pageBrief).values({
         id: `pb_${crypto.randomUUID().slice(0, 12)}`,
         workspaceId: briefOnlyRun.workspaceId,
@@ -1686,13 +1694,21 @@ async function main() {
       };
     });
 
-    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, { concurrency: 3 });
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, {
+      concurrency: 3,
+      canonShells: briefCanonRefs.map((c) => ({
+        id: c.id,
+        title: c.title,
+        type: c.type,
+        internal_summary: c.internal_summary,
+      })),
+    });
 
     // Persist briefs (with bodies merged in).
     for (const shell of briefShells) {
       const result = briefBodies.get(shell.pageId);
       const finalShell = {
-        ...shell,
+        ...(result?.brief ?? shell),
         body: result?.body ?? '',
       };
       await db.insert(pageBrief).values({

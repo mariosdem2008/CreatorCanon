@@ -11,7 +11,9 @@
     "./stages": "./src/stages/index.ts",
     "./contracts": "./src/contracts/index.ts",
     "./audit": "./src/audit/index.ts",
-    "./audit-handoff": "./src/audit-handoff/index.ts"
+    "./audit-handoff": "./src/audit-handoff/index.ts",
+    "./dev-codex-runner": "./src/scripts/util/codex-runner.ts",
+    "./dev-codex-json": "./src/agents/providers/codex-extract-json.ts"
   },
   "scripts": {
     "lint": "eslint src",

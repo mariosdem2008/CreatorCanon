@@ -14,6 +14,8 @@ import type { ChannelProfileView, CanonNodeView, PageBriefView, VisualMomentView
 import { type EvidenceEntry } from '@/components/audit/EvidenceChip';
 import { renderBodyWithChips } from '@/components/audit/render-body-with-chips';
 import { WorkshopStagesView, type WorkshopStage } from '@/components/audit/WorkshopStagesView';
+import { splitManualReviewParagraphs } from '@/lib/audit/manual-review-text';
+import { ManualReviewParagraph } from '@/app/app/projects/[id]/runs/[runId]/audit/ManualReview';
 
 interface ChannelProfileV2 {
   schemaVersion?: 'v2';
@@ -92,6 +94,7 @@ interface BriefV2 {
 }
 
 export function HubSourceV2View({
+  runId,
   channelProfile,
   canonNodes,
   pageBriefs,
@@ -101,6 +104,7 @@ export function HubSourceV2View({
   youtubeIdByVideoId,
   workshopStages = [],
 }: {
+  runId: string;
   channelProfile: ChannelProfileView | null;
   canonNodes: CanonNodeView[];
   pageBriefs: PageBriefView[];
@@ -227,7 +231,7 @@ export function HubSourceV2View({
           </p>
           <div className="mt-3 space-y-4">
             {synthesisNodes.map((n) => (
-              <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
+              <CanonNodeCard key={n.id} runId={runId} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
             ))}
           </div>
         </section>
@@ -272,7 +276,7 @@ export function HubSourceV2View({
                   </p>
                   <div className="mt-3 space-y-3">
                     {spokes.map((n) => (
-                      <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
+                      <CanonNodeCard key={n.id} runId={runId} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
                     ))}
                   </div>
                 </div>
@@ -287,7 +291,7 @@ export function HubSourceV2View({
                 ) : null}
                 <div className="space-y-3">
                   {unanchoredNodes.map((n) => (
-                    <CanonNodeCard key={n.id} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
+                    <CanonNodeCard key={n.id} runId={runId} node={n} debug={debug} segmentById={segmentById} youtubeIdByVideoId={youtubeIdByVideoId} visualMomentById={visualMomentById} />
                   ))}
                 </div>
               </div>
@@ -320,12 +324,14 @@ export function HubSourceV2View({
 }
 
 function CanonNodeCard({
+  runId,
   node,
   debug,
   segmentById,
   youtubeIdByVideoId,
   visualMomentById,
 }: {
+  runId: string;
   node: CanonNodeView;
   debug: boolean;
   segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
@@ -350,16 +356,16 @@ function CanonNodeCard({
         ) : null}
       </header>
       {p.body ? (
-        <div className="prose prose-sm mt-4 max-w-none text-[14px] leading-[1.65] text-[var(--cc-ink-2)] whitespace-pre-wrap">
-          {renderBodyWithChips({
-            body: p.body,
-            registry: p._index_evidence_registry ?? undefined,
-            segmentById,
-            youtubeIdByVideoId,
-            visualMomentById,
-            debug,
-          })}
-        </div>
+        <ReviewableCanonBody
+          runId={runId}
+          canonId={node.id}
+          body={p.body}
+          registry={p._index_evidence_registry ?? undefined}
+          segmentById={segmentById}
+          youtubeIdByVideoId={youtubeIdByVideoId}
+          visualMomentById={visualMomentById}
+          debug={debug}
+        />
       ) : (
         <p className="mt-3 text-[12px] italic text-[var(--cc-ink-4)]">
           No body content yet.
@@ -367,6 +373,51 @@ function CanonNodeCard({
       )}
       {debug ? <CanonNodeDebug node={p} /> : null}
     </article>
+  );
+}
+
+function ReviewableCanonBody({
+  runId,
+  canonId,
+  body,
+  registry,
+  segmentById,
+  youtubeIdByVideoId,
+  visualMomentById,
+  debug,
+}: {
+  runId: string;
+  canonId: string;
+  body: string;
+  registry: Record<string, EvidenceEntry> | undefined;
+  segmentById: Map<string, { videoId: string; startMs: number; text?: string }>;
+  youtubeIdByVideoId: Record<string, string | null>;
+  visualMomentById: Map<string, VisualMomentView>;
+  debug: boolean;
+}) {
+  const paragraphs = splitManualReviewParagraphs(body);
+  return (
+    <div className="prose prose-sm mt-4 max-w-none space-y-3 text-[14px] leading-[1.65] text-[var(--cc-ink-2)]">
+      {paragraphs.map((paragraph, index) => (
+        <ManualReviewParagraph
+          key={`${canonId}-${index}`}
+          runId={runId}
+          canonId={canonId}
+          paragraph={paragraph}
+        >
+          <div className="whitespace-pre-wrap">
+            {renderBodyWithChips({
+              body: paragraph,
+              registry,
+              segmentById,
+              youtubeIdByVideoId,
+              visualMomentById,
+              debug,
+            })}
+          </div>
+        </ManualReviewParagraph>
+      ))}
+    </div>
   );
 }
 

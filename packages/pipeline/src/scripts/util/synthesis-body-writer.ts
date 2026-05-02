@@ -46,8 +46,9 @@ import { citationFloor, countCitations } from './citation-density';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
-/** Also capture canon-node cross-link tokens like [cn_abc123456789] */
-const CROSS_LINK_REGEX = /\[cn_[a-z0-9]{12}\]/g;
+/** Also capture canon-node cross-link tokens like [cn_abc123456789] and
+ *  real persisted IDs like [cn_c29bb69e-577]. */
+const CROSS_LINK_REGEX = /\[cn_[a-z0-9_-]+\]/gi;
 
 /** Synthesis citation floor: 5 unique cross-link/citation tokens.
  *  Includes both [<UUID>] segment citations AND [cn_xxx] cross-links. */
@@ -171,7 +172,7 @@ export function countSynthesisLinks(body: string | undefined | null): number {
   if (!body) return 0;
   const uuidCount = countCitations(body);
   const seenCanonLinks = new Set<string>();
-  for (const m of body.matchAll(new RegExp(CROSS_LINK_REGEX.source, 'g'))) {
+  for (const m of body.matchAll(new RegExp(CROSS_LINK_REGEX.source, CROSS_LINK_REGEX.flags))) {
     seenCanonLinks.add(m[0].toLowerCase());
   }
   return uuidCount + seenCanonLinks.size;

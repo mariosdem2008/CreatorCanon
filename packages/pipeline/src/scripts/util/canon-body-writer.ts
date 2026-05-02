@@ -27,6 +27,7 @@ import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
 import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
 import { countCitations, citationFloor } from './citation-density';
+import { type VoiceFingerprintScore } from './voice-fingerprint-score';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 
@@ -92,7 +93,25 @@ export interface CanonBodyResult {
   used_story_ids: string[];
   used_mistake_ids: string[];
   used_contrarian_take_ids: string[];
+  _degraded?: 'low_citation_density' | 'voice_drift';
+  _voice_fingerprint?: Pick<VoiceFingerprintScore, 'similarity' | 'threshold' | 'status'>;
 }
+
+export type VoiceFingerprintEvaluator = (args: {
+  input: CanonBodyInput;
+  result: CanonBodyResult;
+}) => Promise<VoiceFingerprintScore>;
+
+export interface CanonBodyWriteOptions {
+  timeoutMs?: number;
+  voiceRetryGuidance?: string;
+  voiceFingerprintEvaluator?: VoiceFingerprintEvaluator;
+}
+
+type CanonBodyWriteError = Error & {
+  partialResult?: CanonBodyResult;
+  voiceRetryGuidance?: string;
+};
 
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
 
@@ -170,7 +189,10 @@ function targetWordCount(type: string): { min: number; max: number } {
   }
 }
 
-function buildBodyPrompt(input: CanonBodyInput): string {
+export function buildBodyPrompt(
+  input: CanonBodyInput,
+  options: { voiceRetryGuidance?: string } = {},
+): string {
   const { min, max } = targetWordCount(input.type);
   const archetypeVoice = loadArchetypeVoice(input.archetype);
 
@@ -197,6 +219,11 @@ function buildBodyPrompt(input: CanonBodyInput): string {
   }
   if (input.channelAudience) {
     lines.push(`- channel audience: ${input.channelAudience}`);
+  }
+  if (options.voiceRetryGuidance) {
+    lines.push('');
+    lines.push(`# Voice-fingerprint retry guidance`);
+    lines.push(options.voiceRetryGuidance);
   }
   lines.push('');
   lines.push(`# Source material (yours — from your own transcripts)`);
@@ -297,9 +324,9 @@ function minWordCount(type: string): number {
   }
 }
 
-export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs?: number } = {}): Promise<CanonBodyResult> {
+export async function writeCanonBody(input: CanonBodyInput, options: CanonBodyWriteOptions = {}): Promise<CanonBodyResult> {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
-  const prompt = buildBodyPrompt(input);
+  const prompt = buildBodyPrompt(input, { voiceRetryGuidance: options.voiceRetryGuidance });
   const raw = await runCodex(prompt, { timeoutMs, label: `canon_body_${input.id}` });
   const json = extractJsonFromCodexOutput(raw);
   const parsed = JSON.parse(json) as Partial<CanonBodyResult>;
@@ -352,13 +379,33 @@ export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs
     throw new Error(`body has 0 [<segmentId>] citations despite ${input.segments.length} source segments available`);
   }
 
+  if (options.voiceFingerprintEvaluator) {
+    const voiceScore = await options.voiceFingerprintEvaluator({ input, result });
+    result._voice_fingerprint = {
+      similarity: voiceScore.similarity,
+      threshold: voiceScore.threshold,
+      status: voiceScore.status,
+    };
+    if (voiceScore.shouldRetry) {
+      const err = new Error(
+        `voice fingerprint drift: ${voiceScore.similarity.toFixed(3)} < ${voiceScore.threshold.toFixed(3)}`
+      ) as CanonBodyWriteError;
+      err.partialResult = {
+        ...result,
+        _degraded: 'voice_drift',
+      };
+      err.voiceRetryGuidance = voiceScore.retryGuidance;
+      throw err;
+    }
+  }
+
   return result;
 }
 
 /** Parallel orchestrator with retry-on-failure (max 2 retries per canon). */
 export async function writeCanonBodiesParallel(
   inputs: CanonBodyInput[],
-  options: { concurrency?: number; timeoutMs?: number; maxRetries?: number } = {},
+  options: { concurrency?: number; timeoutMs?: number; maxRetries?: number; voiceFingerprintEvaluator?: VoiceFingerprintEvaluator } = {},
 ): Promise<Map<string, CanonBodyResult>> {
   const concurrency = Math.max(1, options.concurrency ?? 3);
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
@@ -374,10 +421,15 @@ export async function writeCanonBodiesParallel(
       const input = inputs[i]!;
       let lastErr: Error | null = null;
       let lastResult: CanonBodyResult | null = null;
+      let voiceRetryGuidance: string | undefined;
       for (let attempt = 1; attempt <= 1 + maxRetries; attempt += 1) {
         try {
           const start = Date.now();
-          const res = await writeCanonBody(input, { timeoutMs });
+          const res = await writeCanonBody(input, {
+            timeoutMs,
+            voiceRetryGuidance,
+            voiceFingerprintEvaluator: options.voiceFingerprintEvaluator,
+          });
           const wordCount = res.body.split(/\s+/).filter(Boolean).length;
           console.info(
             `[body] ${input.id} (${input.title.slice(0, 35)}): ` +
@@ -388,10 +440,13 @@ export async function writeCanonBodiesParallel(
           out.set(input.id, res);
           break;
         } catch (err) {
-          lastErr = err as Error & { partialResult?: CanonBodyResult };
+          lastErr = err as CanonBodyWriteError;
           // Capture the partial result attached by writeCanonBody on word-count failure.
-          if ((lastErr as Error & { partialResult?: CanonBodyResult }).partialResult) {
-            lastResult = (lastErr as Error & { partialResult?: CanonBodyResult }).partialResult!;
+          if ((lastErr as CanonBodyWriteError).partialResult) {
+            lastResult = (lastErr as CanonBodyWriteError).partialResult!;
+          }
+          if ((lastErr as CanonBodyWriteError).voiceRetryGuidance) {
+            voiceRetryGuidance = (lastErr as CanonBodyWriteError).voiceRetryGuidance;
           }
           if (attempt <= maxRetries) {
             console.warn(`[body] ${input.id} attempt ${attempt} failed: ${lastErr.message.slice(0, 200)} — retrying`);
@@ -432,7 +487,15 @@ export async function writeCanonBodiesParallel(
             `(${countCitations(lastResult.body)}/${citationFloor(input.type)} cites); ` +
             `accepting body with _degraded='low_citation_density' marker`
           );
-          out.set(input.id, { ...lastResult, _degraded: 'low_citation_density' } as CanonBodyResult & { _degraded: string });
+          out.set(input.id, { ...lastResult, _degraded: 'low_citation_density' });
+        } else if (lastErr.message.includes('voice fingerprint drift') && lastResult) {
+          const score = lastResult._voice_fingerprint;
+          console.warn(
+            `[body] ${input.id} still voice-drifted after ${1 + maxRetries} attempts ` +
+            (score ? `(${score.similarity.toFixed(3)}/${score.threshold.toFixed(3)}); ` : '') +
+            `accepting body with _degraded='voice_drift' marker`
+          );
+          out.set(input.id, { ...lastResult, _degraded: 'voice_drift' });
         } else {
           // Other failure modes (parse error, third-person leak, etc.) still hard-fail.
           console.error(`[body] ${input.id} permanently failed: ${lastErr.message.slice(0, 200)}`);
