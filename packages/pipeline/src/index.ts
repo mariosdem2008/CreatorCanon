@@ -7,3 +7,5 @@ export * from './source-coverage';
 export * from './audio-extraction';
 export * from './extract-alpha-audio';
 export * from './stages';
+export * from './audit';
+export * from './audit-handoff';

@@ -52,7 +52,7 @@ Open `http://localhost:3000` and click through the flow:
 3. **`/app/library`** → your upload appears with the "Uploaded" badge
 4. **`/app/projects/new`** → create a project, pick your uploads as sources
 5. Click "Generate" → watch the `queue` and `trigger` terminals scroll as `discovery → synthesis → verify → merge → adapt` runs
-6. **`/h/<hubSlug>`** → the rendered hub (loads `editorial_atlas_v1` manifest from R2)
+6. **`/h/<hubSlug>`** → the rendered hub (loads a `creator_manual_v1` manifest from R2)
 
 Inspect what landed for any run:
 ```bash

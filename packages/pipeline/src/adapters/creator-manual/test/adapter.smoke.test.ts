@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq, getDb } from '@creatorcanon/db';
-import { hub, release } from '@creatorcanon/db/schema';
+import { channel, hub, release, video as videoTable } from '@creatorcanon/db/schema';
 import { loadDefaultEnvFiles } from '../../../env-files';
 import { _resetRegistryForTests, registerAllTools } from '../../../agents/tools/registry';
 import {
@@ -72,6 +72,34 @@ describe(
           },
         ],
       });
+      const db = getDb();
+      const suffix = seed.runId.slice(-6);
+      const auditChannelId = `ch_audit_${suffix}`;
+      await db.insert(channel).values([
+        {
+          id: `ch_wrong_${suffix}`,
+          workspaceId: seed.workspaceId,
+          youtubeChannelId: `UC_WRONG_${suffix}`,
+          title: 'Wrong Workspace Channel',
+          handle: '@wrongfixture',
+        },
+        {
+          id: auditChannelId,
+          workspaceId: seed.workspaceId,
+          youtubeChannelId: `audit:${seed.workspaceId}:UC_AUDIT_${suffix}`,
+          title: 'Fixture Audit Creator',
+          handle: '@fixturemanual',
+          avatarUrl: 'https://example.com/fixture-avatar.jpg',
+        },
+      ]);
+      await db
+        .update(videoTable)
+        .set({ channelId: auditChannelId })
+        .where(eq(videoTable.id, 'vid_cm_v1'));
+      await db
+        .update(videoTable)
+        .set({ channelId: auditChannelId })
+        .where(eq(videoTable.id, 'vid_cm_v2'));
 
       const lesson = await proposeLessonTool.handler(
         {
@@ -88,7 +116,9 @@ describe(
         {
           title: 'Reusable Defaults',
           summary: 'A system for turning repeated decisions into reusable defaults.',
-          principles: [{ title: 'Make repeat work explicit', body: 'Name the choice and write the default.' }],
+          principles: [
+            { title: 'Make repeat work explicit', body: 'Name the choice and write the default.' },
+          ],
           evidence: [{ segmentId: 'seg_cm_b' }],
         },
         makeCtx(seed, 'framework_extractor', 'gpt-5.5'),
@@ -122,7 +152,6 @@ describe(
 
       hubId = `hub_cm_${seed.runId.slice(-6)}`;
       releaseId = `rel_cm_${seed.runId.slice(-6)}`;
-      const db = getDb();
 
       await db.insert(hub).values({
         id: hubId,
@@ -133,9 +162,27 @@ describe(
         accessMode: 'public',
         metadata: {
           tagline: 'A source-backed operating manual for the creator archive.',
+          homeHeadline: 'Source-Led Operating Manual',
+          homeSummary:
+            'A practical archive map organized from evidence, patterns, and reusable decisions.',
           brand: {
             name: 'Fixture Manual',
             tone: 'Concise and practical.',
+            colors: {
+              accent: '#123456',
+              typeMap: {
+                lesson: '#0f766e',
+                experiment: '#7c3aed',
+              },
+            },
+            style: { mode: 'dark' },
+            labels: {
+              evidence: 'Receipts',
+              workshop: 'Lab',
+              library: 'Archive',
+            },
+            radius: 'lg',
+            shadow: '0 18px 60px rgba(15, 23, 42, 0.12)',
           },
         } as any,
       });
@@ -166,15 +213,76 @@ describe(
       });
       const parsed = creatorManualManifestSchema.safeParse(manifest);
       if (!parsed.success) {
-        console.error('Manifest validation errors:', JSON.stringify(parsed.error.format(), null, 2));
+        console.error(
+          'Manifest validation errors:',
+          JSON.stringify(parsed.error.format(), null, 2),
+        );
       }
 
       assert.equal(parsed.success, true);
       assert.equal(manifest.schemaVersion, 'creator_manual_v1');
       assert.equal(manifest.template.id, 'creator-manual');
+      assert.equal(manifest.creator.handle, '@fixturemanual');
+      assert.equal(manifest.creator.canonicalUrl, 'https://www.youtube.com/@fixturemanual');
       assert.ok(manifest.nodes.length >= 1);
       assert.ok(manifest.sources.length >= 1);
       assert.ok(manifest.search.length >= manifest.nodes.length);
+      assert.equal(manifest.home.headline, 'Source-Led Operating Manual');
+      assert.equal(
+        manifest.home.summary,
+        'A practical archive map organized from evidence, patterns, and reusable decisions.',
+      );
+      assert.equal(manifest.brand.tokens.colors.accent, '#123456');
+      assert.equal(manifest.brand.tokens.colors.typeMap?.lesson, '#0f766e');
+      assert.equal(manifest.brand.tokens.colors.typeMap?.experiment, '#7c3aed');
+      assert.equal(manifest.brand.style.mode, 'dark');
+      assert.equal(manifest.brand.labels.evidence, 'Receipts');
+      assert.equal(manifest.brand.labels.workshop, 'Lab');
+      assert.equal(manifest.brand.labels.library, 'Archive');
+      assert.equal(manifest.brand.tokens.radius, 'lg');
+      assert.equal(manifest.brand.tokens.shadow, '0 18px 60px rgba(15, 23, 42, 0.12)');
+    });
+
+    it('falls back when metadata design tokens are malformed', async () => {
+      const db = getDb();
+      await db
+        .update(hub)
+        .set({
+          metadata: {
+            tagline: 'Malformed metadata fixture.',
+            homeHeadline: 'Bad Tokens Should Not Leak',
+            brand: {
+              colors: {
+                accent: 'url(javascript:alert(1))',
+                typeMap: {
+                  lesson: 'expression(alert(1))',
+                },
+              },
+              style: { mode: 'javascript:alert(1)' },
+              labels: {
+                evidence: 'internal review receipts',
+              },
+              radius: 'calc(100vw + script)',
+              shadow: '0 0 0 url(javascript:alert(1))',
+            },
+          } as any,
+        })
+        .where(eq(hub.id, hubId));
+
+      const manifest = await adaptArchiveToCreatorManual({
+        runId: seed.runId,
+        hubId,
+        releaseId,
+      });
+
+      assert.equal(manifest.home.headline, 'Bad Tokens Should Not Leak');
+      assert.equal(manifest.brand.tokens.colors.accent, '#246b5f');
+      assert.equal(manifest.brand.tokens.colors.typeMap?.lesson, '#246b5f');
+      assert.equal(manifest.brand.style.mode, 'custom');
+      assert.equal(manifest.brand.labels.evidence, 'editorial review receipts');
+      assert.equal(manifest.brand.labels.workshop, 'Workshop');
+      assert.equal(manifest.brand.tokens.radius, '8px');
+      assert.equal(manifest.brand.tokens.shadow, '0 18px 60px rgba(25, 23, 22, 0.12)');
     });
   },
 );

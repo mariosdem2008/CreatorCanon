@@ -1,4 +1,4 @@
-import { asc, eq, getDb, inArray } from '@creatorcanon/db';
+import { and, asc, eq, getDb, inArray } from '@creatorcanon/db';
 import {
   canonNode,
   channel,
@@ -44,9 +44,25 @@ type SegmentRow = {
 type VideoRow = typeof videoTable.$inferSelect;
 type CanonNodeRow = typeof canonNode.$inferSelect;
 type ColorTokens = CreatorManualManifest['brand']['tokens']['colors'];
+type BrandStyleMode = CreatorManualManifest['brand']['style']['mode'];
+type BrandLabels = CreatorManualManifest['brand']['labels'];
 
-const uuidLikePattern = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+const uuidLikePattern =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 const typeMapKeyPattern = /^[a-z][a-z0-9_-]*$/;
+const hexColorPattern = /^#[0-9a-fA-F]{6}$/;
+const typographyFamilyPattern = /^[A-Za-z0-9 ,'"_-]+$/;
+const radiusTokenPattern = /^(?:0|(?:\d+(?:\.\d+)?(?:px|rem))|none|sm|md|lg|xl|full)$/;
+const publicUrlUnsafeCharsPattern = /[\s"'()<>\\]/;
+const safeShadowValues = new Set([
+  'none',
+  '0 18px 60px rgba(15, 23, 42, 0.12)',
+  '0 18px 60px rgba(22, 21, 19, 0.14)',
+  '0 20px 70px rgba(15, 23, 42, 0.12)',
+  '0 24px 80px rgba(15, 23, 42, 0.14)',
+  '0 18px 60px rgba(25, 23, 22, 0.12)',
+]);
+const styleModes = new Set<BrandStyleMode>(['light', 'dark', 'system', 'custom']);
 const colorOverrideFields = [
   'background',
   'foreground',
@@ -80,6 +96,14 @@ const defaultColors: ColorTokens = {
   },
 };
 
+const defaultRadius = '8px';
+const defaultShadow = '0 18px 60px rgba(25, 23, 22, 0.12)';
+const defaultLabels: Required<BrandLabels> = {
+  evidence: 'Evidence',
+  workshop: 'Workshop',
+  library: 'Library',
+};
+
 const navigation = {
   primary: [
     { label: 'Library', routeKey: 'library' },
@@ -97,9 +121,7 @@ const navigation = {
 } satisfies CreatorManualManifest['navigation'];
 
 function asRecord(value: unknown): JsonRecord {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as JsonRecord)
-    : {};
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonRecord) : {};
 }
 
 function asStringArray(value: unknown): string[] {
@@ -119,7 +141,10 @@ function firstString(record: JsonRecord, keys: string[], fallback: string): stri
 function publicText(value: string): string {
   return value
     .replace(uuidLikePattern, 'the source')
-    .replace(/\b(?:internal review|manual review|manual-review|tagger|review queue|needs review|audit note|unpublished draft)\b/gi, 'editorial review')
+    .replace(
+      /\b(?:internal review|manual review|manual-review|tagger|review queue|needs review|audit note|unpublished draft)\b/gi,
+      'editorial review',
+    )
     .trim();
 }
 
@@ -130,6 +155,7 @@ function safeText(value: unknown, fallback: string, max = 280): string {
 function optionalPublicUrl(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value.trim()) return undefined;
   const trimmed = value.trim();
+  if (publicUrlUnsafeCharsPattern.test(trimmed)) return undefined;
   if (/^\/(?!\/)[^\s"'()<>\\]*$/.test(trimmed)) return trimmed;
   try {
     const parsed = new URL(trimmed);
@@ -139,27 +165,136 @@ function optionalPublicUrl(value: unknown): string | undefined {
   }
 }
 
+function safeColorToken(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return hexColorPattern.test(trimmed) ? trimmed : undefined;
+}
+
 function sanitizeBrandColorOverrides(value: unknown): Partial<ColorTokens> {
   const record = asRecord(value);
   const overrides: Partial<ColorTokens> = {};
 
   for (const field of colorOverrideFields) {
-    const candidate = record[field];
-    if (typeof candidate === 'string' && candidate.trim()) {
-      overrides[field] = candidate.trim();
+    const candidate = safeColorToken(record[field]);
+    if (candidate) {
+      overrides[field] = candidate;
     }
   }
 
   const typeMapRecord = asRecord(record.typeMap);
   const typeMap: Record<string, string> = {};
   for (const [key, candidate] of Object.entries(typeMapRecord)) {
-    if (typeMapKeyPattern.test(key) && typeof candidate === 'string' && candidate.trim()) {
-      typeMap[key] = candidate.trim();
+    const color = safeColorToken(candidate);
+    if (typeMapKeyPattern.test(key) && color) {
+      typeMap[key] = color;
     }
   }
   if (Object.keys(typeMap).length > 0) overrides.typeMap = typeMap;
 
   return overrides;
+}
+
+function safeTypographyFamily(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 160 || !typographyFamilyPattern.test(trimmed)) return fallback;
+  return trimmed;
+}
+
+function safeRadiusToken(value: unknown, fallback = defaultRadius): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 32 || !radiusTokenPattern.test(trimmed)) return fallback;
+  return trimmed;
+}
+
+function safeShadowToken(value: unknown, fallback = defaultShadow): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return safeShadowValues.has(trimmed) ? trimmed : fallback;
+}
+
+function safeStyleMode(value: unknown, fallback: BrandStyleMode = 'custom'): BrandStyleMode {
+  return typeof value === 'string' && styleModes.has(value as BrandStyleMode)
+    ? (value as BrandStyleMode)
+    : fallback;
+}
+
+function safeLabel(value: unknown, fallback: string): string {
+  return safeText(value, fallback, 80);
+}
+
+export function resolveCreatorManualManifestMetadata(input: {
+  metadata: unknown;
+  creatorName: string;
+  projectTitle: string;
+}): Pick<CreatorManualManifest, 'tagline' | 'brand'> & {
+  home: Pick<CreatorManualManifest['home'], 'headline' | 'summary'>;
+} {
+  const metadata = asRecord(input.metadata);
+  const brandOverrides = asRecord(metadata.brand);
+  const defaultTagline = `${input.creatorName}'s source-backed operating manual.`;
+  const tagline = safeText(metadata.tagline, defaultTagline);
+
+  const colorOverrides = sanitizeBrandColorOverrides(brandOverrides.colors);
+  const colors: ColorTokens = {
+    ...defaultColors,
+    ...colorOverrides,
+    typeMap: {
+      ...defaultColors.typeMap,
+      ...(colorOverrides.typeMap ?? {}),
+    },
+  };
+
+  const typographyOverrides = asRecord(brandOverrides.typography);
+  const typography = {
+    headingFamily: safeTypographyFamily(
+      typographyOverrides.headingFamily,
+      'Inter, ui-sans-serif, system-ui, sans-serif',
+    ),
+    bodyFamily: safeTypographyFamily(
+      typographyOverrides.bodyFamily,
+      'Inter, ui-sans-serif, system-ui, sans-serif',
+    ),
+  };
+
+  const assetsOverrides = asRecord(brandOverrides.assets);
+  const logoUrl = optionalPublicUrl(assetsOverrides.logoUrl);
+  const heroImageUrl = optionalPublicUrl(assetsOverrides.heroImageUrl);
+  const patternImageUrl = optionalPublicUrl(assetsOverrides.patternImageUrl);
+  const assets = {
+    ...(logoUrl ? { logoUrl } : {}),
+    ...(heroImageUrl ? { heroImageUrl } : {}),
+    ...(patternImageUrl ? { patternImageUrl } : {}),
+  };
+
+  const labelOverrides = asRecord(brandOverrides.labels);
+
+  return {
+    tagline,
+    brand: {
+      name: safeText(brandOverrides.name, `${input.creatorName} Manual`, 120),
+      tone: safeText(brandOverrides.tone, 'Professional, practical, and evidence-led.', 180),
+      tokens: {
+        colors,
+        typography,
+        radius: safeRadiusToken(brandOverrides.radius),
+        shadow: safeShadowToken(brandOverrides.shadow),
+      },
+      ...(Object.keys(assets).length > 0 ? { assets } : {}),
+      style: { mode: safeStyleMode(asRecord(brandOverrides.style).mode) },
+      labels: {
+        evidence: safeLabel(labelOverrides.evidence, defaultLabels.evidence),
+        workshop: safeLabel(labelOverrides.workshop, defaultLabels.workshop),
+        library: safeLabel(labelOverrides.library, defaultLabels.library),
+      },
+    },
+    home: {
+      headline: safeText(metadata.homeHeadline, input.projectTitle, 160),
+      summary: safeText(metadata.homeSummary, tagline, 360),
+    },
+  };
 }
 
 function uniqueSlug(value: string, used: Set<string>, fallback: string): string {
@@ -176,7 +311,10 @@ function uniqueSlug(value: string, used: Set<string>, fallback: string): string 
 
 function keywords(...values: string[]): string[] {
   const tokens = new Set<string>();
-  for (const token of values.join(' ').toLowerCase().match(/[a-z0-9]{3,}/g) ?? []) {
+  for (const token of values
+    .join(' ')
+    .toLowerCase()
+    .match(/[a-z0-9]{3,}/g) ?? []) {
     tokens.add(token);
   }
   return [...tokens].slice(0, 18);
@@ -252,7 +390,10 @@ function canonSummary(row: CanonNodeRow): string {
   );
 }
 
-function evidenceRefs(segmentIds: string[], segmentsById: Map<string, SegmentRow>): CreatorManualEvidenceRef[] {
+function evidenceRefs(
+  segmentIds: string[],
+  segmentsById: Map<string, SegmentRow>,
+): CreatorManualEvidenceRef[] {
   const refs: CreatorManualEvidenceRef[] = [];
   for (const segmentId of new Set(segmentIds)) {
     const row = segmentsById.get(segmentId);
@@ -278,23 +419,48 @@ function creatorCanonicalUrl(input: {
   youtubeChannelId?: string | null;
   handle?: string | null;
 }): string {
-  if (input.youtubeChannelId) return `https://www.youtube.com/channel/${input.youtubeChannelId}`;
-  if (input.handle) return `https://www.youtube.com/${input.handle.startsWith('@') ? input.handle : `@${input.handle}`}`;
+  const handle = input.handle?.trim();
+  if (handle) return `https://www.youtube.com/${handle.startsWith('@') ? handle : `@${handle}`}`;
+
+  const youtubeChannelId = input.youtubeChannelId?.trim();
+  if (youtubeChannelId && !isSyntheticAuditChannelId(youtubeChannelId)) {
+    return `https://www.youtube.com/channel/${youtubeChannelId}`;
+  }
+
   return 'https://www.youtube.com/';
 }
 
-function buildSearch(
-  collections: {
-    nodes: CreatorManualNode[];
-    pillars: CreatorManualPillar[];
-    sources: CreatorManualSource[];
-    segments: CreatorManualSegment[];
-    claims: CreatorManualClaim[];
-    glossary: CreatorManualGlossaryEntry[];
-    themes: CreatorManualTheme[];
-    workshop: CreatorManualWorkshopStage[];
-  },
-): CreatorManualSearchDoc[] {
+function isSyntheticAuditChannelId(value: string | null | undefined): boolean {
+  return value?.startsWith('audit:') ?? false;
+}
+
+function primaryChannelIdForVideos(videoRows: VideoRow[]): string | null {
+  const counts = new Map<string, number>();
+  for (const row of videoRows) {
+    counts.set(row.channelId, (counts.get(row.channelId) ?? 0) + 1);
+  }
+
+  let selected: string | null = null;
+  let selectedCount = 0;
+  for (const [channelId, count] of counts) {
+    if (count > selectedCount) {
+      selected = channelId;
+      selectedCount = count;
+    }
+  }
+  return selected;
+}
+
+function buildSearch(collections: {
+  nodes: CreatorManualNode[];
+  pillars: CreatorManualPillar[];
+  sources: CreatorManualSource[];
+  segments: CreatorManualSegment[];
+  claims: CreatorManualClaim[];
+  glossary: CreatorManualGlossaryEntry[];
+  themes: CreatorManualTheme[];
+  workshop: CreatorManualWorkshopStage[];
+}): CreatorManualSearchDoc[] {
   const docs: CreatorManualSearchDoc[] = [];
   for (const node of collections.nodes) {
     docs.push({
@@ -403,21 +569,21 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
     throw new Error(`Adapter: release not found (hubId=${hubId}, releaseId=${releaseId})`);
   }
 
-  const runRow = (await db.select().from(generationRun).where(eq(generationRun.id, runId)).limit(1))[0];
+  const runRow = (
+    await db.select().from(generationRun).where(eq(generationRun.id, runId)).limit(1)
+  )[0];
   if (!runRow) throw new Error(`Adapter: generation run not found (runId=${runId})`);
 
-  const projectRow = (await db.select().from(project).where(eq(project.id, hubRow.projectId)).limit(1))[0];
+  const projectRow = (
+    await db.select().from(project).where(eq(project.id, hubRow.projectId)).limit(1)
+  )[0];
   if (!projectRow) throw new Error(`Adapter: project not found for hub '${hubId}'`);
 
-  const channelRow = (
-    await db.select().from(channel).where(eq(channel.workspaceId, hubRow.workspaceId)).limit(1)
-  )[0];
   const profileRow = (
     await db.select().from(channelProfile).where(eq(channelProfile.runId, runId)).limit(1)
   )[0];
   const profile = asRecord(profileRow?.payload);
   const metadata = asRecord(hubRow.metadata);
-  const brandOverrides = asRecord(metadata.brand);
 
   const segmentRows = await db
     .select({
@@ -449,8 +615,22 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
   const videoRows = sourceVideoIds
     .map((id) => videoById.get(id))
     .filter((row): row is VideoRow => row !== undefined);
+  const primaryChannelId = primaryChannelIdForVideos(videoRows);
+  const channelRow = primaryChannelId
+    ? (
+        await db
+          .select()
+          .from(channel)
+          .where(and(eq(channel.id, primaryChannelId), eq(channel.workspaceId, hubRow.workspaceId)))
+          .limit(1)
+      )[0]
+    : undefined;
 
-  const pageRows = await db.select().from(page).where(eq(page.runId, runId)).orderBy(asc(page.position));
+  const pageRows = await db
+    .select()
+    .from(page)
+    .where(eq(page.runId, runId))
+    .orderBy(asc(page.position));
   const versionRows = await db
     .select()
     .from(pageVersion)
@@ -470,12 +650,24 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
     .orderBy(asc(canonNode.type), asc(canonNode.id));
 
   const creatorName = safeText(
-    firstString(profile, ['creatorName', 'creator', 'channelName', 'name'], channelRow?.title ?? projectRow.title),
+    firstString(
+      profile,
+      ['creatorName', 'creator', 'channelName', 'name'],
+      channelRow?.title ?? projectRow.title,
+    ),
     'Creator',
     120,
   );
   const creatorHandle = safeText(
-    firstString(profile, ['handle', 'creatorHandle'], channelRow?.handle ?? channelRow?.youtubeChannelId ?? 'creator'),
+    firstString(
+      profile,
+      ['handle', 'creatorHandle'],
+      channelRow?.handle ??
+        (isSyntheticAuditChannelId(channelRow?.youtubeChannelId)
+          ? undefined
+          : channelRow?.youtubeChannelId) ??
+        'creator',
+    ),
     'creator',
     80,
   );
@@ -491,21 +683,38 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
       handle: channelRow?.handle,
     }),
     tagline: safeText(
-      firstString(profile, ['tagline', 'positioning', 'promise'], `${creatorName}'s source-backed operating manual.`),
+      firstString(
+        profile,
+        ['tagline', 'positioning', 'promise'],
+        `${creatorName}'s source-backed operating manual.`,
+      ),
       `${creatorName}'s source-backed operating manual.`,
     ),
     thesis: safeText(
-      firstString(profile, ['thesis', 'coreThesis', 'pointOfView'], `${creatorName}'s work is organized into practical principles, source clips, and reusable operating patterns.`),
+      firstString(
+        profile,
+        ['thesis', 'coreThesis', 'pointOfView'],
+        `${creatorName}'s work is organized into practical principles, source clips, and reusable operating patterns.`,
+      ),
       `${creatorName}'s work is organized into practical principles, source clips, and reusable operating patterns.`,
       420,
     ),
     about: safeText(
-      firstString(profile, ['about', 'bio', 'description'], channelRow?.description ?? `${creatorName} publishes ideas worth turning into a usable manual.`),
+      firstString(
+        profile,
+        ['about', 'bio', 'description'],
+        channelRow?.description ??
+          `${creatorName} publishes ideas worth turning into a usable manual.`,
+      ),
       `${creatorName} publishes ideas worth turning into a usable manual.`,
       520,
     ),
     voiceSummary: safeText(
-      firstString(profile, ['voiceSummary', 'voice', 'tone'], 'Clear, practical, and grounded in examples from the source material.'),
+      firstString(
+        profile,
+        ['voiceSummary', 'voice', 'tone'],
+        'Clear, practical, and grounded in examples from the source material.',
+      ),
       'Clear, practical, and grounded in examples from the source material.',
       320,
     ),
@@ -521,7 +730,10 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
       versions.at(-1);
     if (!version) return;
     const title = safeText(version.title, pageRow.slug, 140);
-    const summary = safeText(version.summary, `${title} distills source material into a usable manual entry.`);
+    const summary = safeText(
+      version.summary,
+      `${title} distills source material into a usable manual entry.`,
+    );
     const evidence = evidenceRefs(atlasEvidenceIds(version.blockTreeJson), segmentsById);
     pageNodes.push({
       id: pageRow.id,
@@ -582,7 +794,10 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
         pillarIds: [],
         themeIds: [],
         claimIds: [],
-        evidence: evidenceRefs(segmentRows.slice(0, 3).map((row) => row.id), segmentsById),
+        evidence: evidenceRefs(
+          segmentRows.slice(0, 3).map((row) => row.id),
+          segmentsById,
+        ),
       },
     ];
   }
@@ -608,7 +823,10 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
       publishedAt: row.publishedAt?.toISOString() ?? null,
       durationSec: row.durationSeconds ?? null,
-      summary: safeText(row.description, `${row.title ?? 'This source'} contributes evidence to the manual.`),
+      summary: safeText(
+        row.description,
+        `${row.title ?? 'This source'} contributes evidence to the manual.`,
+      ),
       segmentIds: sourceSegmentIds.get(row.id) ?? [],
     };
   });
@@ -626,7 +844,11 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
   const manifestSegments: CreatorManualSegment[] = segmentRows.map((row, index) => ({
     id: row.id,
     sourceId: row.videoId,
-    slug: uniqueSlug(`segment-${index + 1}-${seconds(row.startMs)}`, usedSegmentSlugs, `segment-${index + 1}`),
+    slug: uniqueSlug(
+      `segment-${index + 1}-${seconds(row.startMs)}`,
+      usedSegmentSlugs,
+      `segment-${index + 1}`,
+    ),
     title: `Segment ${index + 1}`,
     summary: safeText(row.summary, excerpt(row.text, 160)),
     timestampStart: seconds(row.startMs),
@@ -643,19 +865,24 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
     node.themeIds = [primaryThemeId];
   }
 
-  const claims: CreatorManualClaim[] = (
+  const claims: CreatorManualClaim[] =
     canonRows.length > 0
-      ? canonRows.filter((row) => row.type !== 'topic').slice(0, 8).map((row) => ({
-          id: `claim-${row.id}`,
-          title: canonTitle(row),
-          statement: canonSummary(row),
-          confidence: confidence(row.confidenceScore),
-          evidence: evidenceRefs(row.evidenceSegmentIds, segmentsById),
-          relatedNodeIds: nodes
-            .filter((node) => node.evidence.some((ref) => row.evidenceSegmentIds.includes(ref.segmentId ?? '')))
-            .map((node) => node.id)
-            .slice(0, 6),
-        }))
+      ? canonRows
+          .filter((row) => row.type !== 'topic')
+          .slice(0, 8)
+          .map((row) => ({
+            id: `claim-${row.id}`,
+            title: canonTitle(row),
+            statement: canonSummary(row),
+            confidence: confidence(row.confidenceScore),
+            evidence: evidenceRefs(row.evidenceSegmentIds, segmentsById),
+            relatedNodeIds: nodes
+              .filter((node) =>
+                node.evidence.some((ref) => row.evidenceSegmentIds.includes(ref.segmentId ?? '')),
+              )
+              .map((node) => node.id)
+              .slice(0, 6),
+          }))
       : nodes.slice(0, 3).map((node) => ({
           id: `claim-${node.id}`,
           title: node.title,
@@ -663,8 +890,7 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
           confidence: node.evidence.length > 1 ? 'moderate' : 'developing',
           evidence: node.evidence.slice(0, 4),
           relatedNodeIds: [node.id],
-        }))
-  );
+        }));
   for (const claim of claims) {
     if (claim.relatedNodeIds.length === 0 && nodes[0]) claim.relatedNodeIds = [nodes[0].id];
     for (const nodeId of claim.relatedNodeIds) {
@@ -683,7 +909,10 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
       id: primaryPillarId,
       slug: 'core-manual',
       title: 'Core Manual',
-      summary: safeText(`${creatorName}'s main operating ideas, organized from the source archive.`, 'Core operating ideas from the source archive.'),
+      summary: safeText(
+        `${creatorName}'s main operating ideas, organized from the source archive.`,
+        'Core operating ideas from the source archive.',
+      ),
       description: safeText(
         `${creatorName}'s manual brings the strongest pages, clips, and claims into one practical reference system.`,
         'The manual brings the strongest pages, clips, and claims into one practical reference system.',
@@ -705,7 +934,10 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
       id: primaryThemeId,
       slug: 'core-ideas',
       title: 'Core Ideas',
-      summary: safeText(`The recurring patterns across ${creatorName}'s selected source material.`, 'Recurring patterns across the selected source material.'),
+      summary: safeText(
+        `The recurring patterns across ${creatorName}'s selected source material.`,
+        'Recurring patterns across the selected source material.',
+      ),
       nodeIds: nodes.map((node) => node.id),
       pillarIds: [primaryPillarId],
       evidence: nodes.flatMap((node) => node.evidence).slice(0, 8),
@@ -713,7 +945,7 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
   ];
 
   const glossarySourceRows = canonRows.filter((row) => row.type === 'definition').slice(0, 8);
-  const glossary: CreatorManualGlossaryEntry[] = (
+  const glossary: CreatorManualGlossaryEntry[] =
     glossarySourceRows.length > 0
       ? glossarySourceRows.map((row) => ({
           id: `glossary-${row.id}`,
@@ -721,7 +953,9 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
           slug: slugify(canonTitle(row), 'term'),
           definition: canonSummary(row),
           relatedNodeIds: nodes
-            .filter((node) => node.evidence.some((ref) => row.evidenceSegmentIds.includes(ref.segmentId ?? '')))
+            .filter((node) =>
+              node.evidence.some((ref) => row.evidenceSegmentIds.includes(ref.segmentId ?? '')),
+            )
             .map((node) => node.id)
             .slice(0, 5),
         }))
@@ -730,11 +964,11 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
             id: 'glossary-source-backed',
             term: 'Source-backed manual',
             slug: 'source-backed-manual',
-            definition: 'A practical reference built from selected creator source material and its supporting evidence.',
+            definition:
+              'A practical reference built from selected creator source material and its supporting evidence.',
             relatedNodeIds: nodes.slice(0, 5).map((node) => node.id),
           },
-        ]
-  );
+        ];
 
   const workshop: CreatorManualWorkshopStage[] = [
     {
@@ -744,8 +978,14 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
       summary: 'Choose the most relevant manual entry and inspect its supporting evidence.',
       objective: 'Understand the idea in context before applying it.',
       steps: [
-        { title: 'Pick an entry', body: 'Start with the library item that matches the current problem.' },
-        { title: 'Review evidence', body: 'Open the related source segments and note the original framing.' },
+        {
+          title: 'Pick an entry',
+          body: 'Start with the library item that matches the current problem.',
+        },
+        {
+          title: 'Review evidence',
+          body: 'Open the related source segments and note the original framing.',
+        },
       ],
       nodeIds: nodes.slice(0, 3).map((node) => node.id),
       evidence: nodes.flatMap((node) => node.evidence).slice(0, 4),
@@ -758,35 +998,21 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
       objective: 'Move from reference material to a usable next step.',
       steps: [
         { title: 'Translate', body: 'Rewrite the idea as a step you can take this week.' },
-        { title: 'Check fit', body: 'Compare the action against the claim evidence and adjust the scope.' },
+        {
+          title: 'Check fit',
+          body: 'Compare the action against the claim evidence and adjust the scope.',
+        },
       ],
       nodeIds: nodes.slice(0, 5).map((node) => node.id),
       evidence: claims.flatMap((claim) => claim.evidence).slice(0, 4),
     },
   ];
 
-  const colorOverrides = sanitizeBrandColorOverrides(brandOverrides.colors);
-  const colors: ColorTokens = {
-    ...defaultColors,
-    ...colorOverrides,
-    typeMap: {
-      ...defaultColors.typeMap,
-      ...(colorOverrides.typeMap ?? {}),
-    },
-  };
-  const typography = {
-    headingFamily: nonEmpty(asRecord(brandOverrides.typography).headingFamily, 'Inter, ui-sans-serif, system-ui, sans-serif'),
-    bodyFamily: nonEmpty(asRecord(brandOverrides.typography).bodyFamily, 'Inter, ui-sans-serif, system-ui, sans-serif'),
-  };
-  const assetsOverrides = asRecord(brandOverrides.assets);
-  const logoUrl = optionalPublicUrl(assetsOverrides.logoUrl);
-  const heroImageUrl = optionalPublicUrl(assetsOverrides.heroImageUrl);
-  const patternImageUrl = optionalPublicUrl(assetsOverrides.patternImageUrl);
-  const assets = {
-    ...(logoUrl ? { logoUrl } : {}),
-    ...(heroImageUrl ? { heroImageUrl } : {}),
-    ...(patternImageUrl ? { patternImageUrl } : {}),
-  };
+  const resolvedMetadata = resolveCreatorManualManifestMetadata({
+    metadata,
+    creatorName,
+    projectTitle: safeText(projectRow.title, `${creatorName} Manual`, 160),
+  });
 
   const search = buildSearch({
     nodes,
@@ -809,34 +1035,14 @@ export const adaptArchiveToCreatorManual: AdapterFn = async ({ runId, hubId, rel
     publishedAt: releaseRow?.liveAt?.toISOString() ?? null,
     generatedAt: new Date().toISOString(),
     title: safeText(projectRow.title, 'Creator Manual', 160),
-    tagline: safeText(metadata.tagline, `${creatorName}'s source-backed operating manual.`),
+    tagline: resolvedMetadata.tagline,
     creator,
-    brand: {
-      name: safeText(brandOverrides.name, `${creatorName} Manual`, 120),
-      tone: safeText(brandOverrides.tone, 'Professional, practical, and evidence-led.', 180),
-      tokens: {
-        colors,
-        typography,
-        radius: '8px',
-        shadow: '0 18px 60px rgba(25, 23, 22, 0.12)',
-      },
-      ...(Object.keys(assets).length > 0 ? { assets } : {}),
-      style: { mode: 'custom' },
-      labels: {
-        evidence: 'Evidence',
-        workshop: 'Workshop',
-        library: 'Library',
-      },
-    },
+    brand: resolvedMetadata.brand,
     navigation,
     home: {
       eyebrow: 'Creator Manual',
-      headline: safeText(projectRow.title, `${creatorName} Manual`, 160),
-      summary: safeText(
-        metadata.tagline,
-        `${creatorName}'s selected source material organized into nodes, claims, clips, and practical workshop stages.`,
-        360,
-      ),
+      headline: resolvedMetadata.home.headline,
+      summary: resolvedMetadata.home.summary,
       featuredNodeIds: nodes.slice(0, 4).map((node) => node.id),
       featuredPillarIds: pillars.slice(0, 3).map((pillar) => pillar.id),
     },

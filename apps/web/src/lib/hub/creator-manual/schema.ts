@@ -2,12 +2,24 @@ import { z } from 'zod';
 
 import { findCreatorManualManifestPublicTextIssues } from './sanitize';
 
-const slugSchema = z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const slugSchema = z
+  .string()
+  .min(1)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const idSchema = z.string().min(1);
-const tokenValueSchema = z.string().trim().min(1);
+const publicUrlUnsafeCharsPattern = /[\s"'()<>\\]/;
+const cssForbiddenFunctionPattern = /\b(?:url|image-set|cross-fade|paint|expression|import)\s*\(/i;
+const typographyFamilyPattern = /^[A-Za-z0-9 ,'"()_-]+$/;
+const radiusTokenPattern = /^(?:0|(?:\d+(?:\.\d+)?(?:px|rem))|none|sm|md|lg|xl|full)$/;
+const shadowLength = String.raw`(?:0|-?\d+(?:\.\d+)?px)`;
+const shadowColor = String.raw`(?:#[0-9a-fA-F]{6}|rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(?:0|0?\.\d+|1(?:\.0+)?)\s*\))`;
+const shadowTokenPattern = new RegExp(
+  `^(?:none|${shadowLength}\\s+${shadowLength}(?:\\s+${shadowLength}){0,2}\\s+${shadowColor})$`,
+);
 
 const isSafePublicUrl = (value: string) => {
   const trimmed = value.trim();
+  if (publicUrlUnsafeCharsPattern.test(trimmed)) return false;
 
   if (trimmed.startsWith('/')) {
     return /^\/(?!\/)[^\s"'()<>\\]*$/.test(trimmed);
@@ -30,7 +42,33 @@ const optionalUrlSchema = z.preprocess(
   publicUrlSchema.optional(),
 );
 
-const recordTagSchema = z.string().trim().min(1).regex(/^[a-z][a-z0-9_-]*$/);
+const recordTagSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[a-z][a-z0-9_-]*$/);
+const colorTokenSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/);
+const typographyFamilySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(160)
+  .regex(typographyFamilyPattern)
+  .refine((value) => !cssForbiddenFunctionPattern.test(value), {
+    message: 'Unsafe font token.',
+  });
+const radiusTokenSchema = z.string().trim().min(1).max(32).regex(radiusTokenPattern);
+const shadowTokenSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(180)
+  .refine((value) => shadowTokenPattern.test(value), {
+    message: 'Unsafe shadow token.',
+  });
 
 export const creatorManualEvidenceRefSchema = z.object({
   sourceId: idSchema,
@@ -78,10 +116,14 @@ export const creatorManualPillarSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   description: z.string().min(1),
-  sections: z.array(z.object({
-    title: z.string().min(1),
-    body: z.string().min(1),
-  })).optional(),
+  sections: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        body: z.string().min(1),
+      }),
+    )
+    .optional(),
   nodeIds: z.array(idSchema),
   claimIds: z.array(idSchema),
   evidence: z.array(creatorManualEvidenceRefSchema),
@@ -153,10 +195,14 @@ export const creatorManualWorkshopStageSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   objective: z.string().min(1),
-  steps: z.array(z.object({
-    title: z.string().min(1),
-    body: z.string().min(1),
-  })).min(1),
+  steps: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        body: z.string().min(1),
+      }),
+    )
+    .min(1),
   nodeIds: z.array(idSchema),
   evidence: z.array(creatorManualEvidenceRefSchema),
 });
@@ -175,106 +221,110 @@ export const creatorManualSearchDocSchema = z.object({
 export type CreatorManualSearchDoc = z.infer<typeof creatorManualSearchDocSchema>;
 export type CreatorManualSearchDocType = CreatorManualSearchDoc['type'];
 
-export const creatorManualManifestSchema = z.object({
-  schemaVersion: z.literal('creator_manual_v1'),
-  template: z.object({
-    id: z.literal('creator-manual'),
-    version: z.number().int().min(1),
-  }),
-  hubId: idSchema,
-  releaseId: idSchema,
-  hubSlug: slugSchema,
-  visibility: z.enum(['public', 'unlisted']),
-  publishedAt: z.string().datetime().nullable(),
-  generatedAt: z.string().datetime(),
-  title: z.string().min(1),
-  tagline: z.string().min(1),
-  creator: z.object({
-    name: z.string().min(1),
-    handle: z.string().min(1),
-    avatarUrl: optionalUrlSchema,
-    portraitUrl: optionalUrlSchema,
-    canonicalUrl: publicUrlSchema,
+export const creatorManualManifestSchema = z
+  .object({
+    schemaVersion: z.literal('creator_manual_v1'),
+    template: z.object({
+      id: z.literal('creator-manual'),
+      version: z.number().int().min(1),
+    }),
+    hubId: idSchema,
+    releaseId: idSchema,
+    hubSlug: slugSchema,
+    visibility: z.enum(['public', 'unlisted']),
+    publishedAt: z.string().datetime().nullable(),
+    generatedAt: z.string().datetime(),
+    title: z.string().min(1),
     tagline: z.string().min(1),
-    thesis: z.string().min(1),
-    about: z.string().min(1),
-    voiceSummary: z.string().min(1),
-  }),
-  brand: z.object({
-    name: z.string().min(1),
-    tone: z.string().min(1),
-    tokens: z.object({
-      colors: z.object({
-        background: tokenValueSchema,
-        foreground: tokenValueSchema,
-        surface: tokenValueSchema,
-        elevated: tokenValueSchema,
-        border: tokenValueSchema,
-        muted: tokenValueSchema,
-        accent: tokenValueSchema,
-        accentForeground: tokenValueSchema,
-        warning: tokenValueSchema,
-        success: tokenValueSchema,
-        typeMap: z.record(recordTagSchema, tokenValueSchema).optional(),
+    creator: z.object({
+      name: z.string().min(1),
+      handle: z.string().min(1),
+      avatarUrl: optionalUrlSchema,
+      portraitUrl: optionalUrlSchema,
+      canonicalUrl: publicUrlSchema,
+      tagline: z.string().min(1),
+      thesis: z.string().min(1),
+      about: z.string().min(1),
+      voiceSummary: z.string().min(1),
+    }),
+    brand: z.object({
+      name: z.string().min(1),
+      tone: z.string().min(1),
+      tokens: z.object({
+        colors: z.object({
+          background: colorTokenSchema,
+          foreground: colorTokenSchema,
+          surface: colorTokenSchema,
+          elevated: colorTokenSchema,
+          border: colorTokenSchema,
+          muted: colorTokenSchema,
+          accent: colorTokenSchema,
+          accentForeground: colorTokenSchema,
+          warning: colorTokenSchema,
+          success: colorTokenSchema,
+          typeMap: z.record(recordTagSchema, colorTokenSchema).optional(),
+        }),
+        typography: z.object({
+          headingFamily: typographyFamilySchema,
+          bodyFamily: typographyFamilySchema,
+        }),
+        radius: radiusTokenSchema,
+        shadow: shadowTokenSchema,
       }),
-      typography: z.object({
-        headingFamily: tokenValueSchema,
-        bodyFamily: tokenValueSchema,
+      assets: z
+        .object({
+          logoUrl: optionalUrlSchema,
+          heroImageUrl: optionalUrlSchema,
+          patternImageUrl: optionalUrlSchema,
+        })
+        .optional(),
+      style: z.object({
+        mode: z.enum(['light', 'dark', 'system', 'custom']),
       }),
-      radius: tokenValueSchema,
-      shadow: tokenValueSchema,
+      labels: z.object({
+        evidence: z.string().min(1).optional(),
+        workshop: z.string().min(1).optional(),
+        library: z.string().min(1).optional(),
+      }),
     }),
-    assets: z.object({
-      logoUrl: optionalUrlSchema,
-      heroImageUrl: optionalUrlSchema,
-      patternImageUrl: optionalUrlSchema,
-    }).optional(),
-    style: z.object({
-      mode: z.enum(['light', 'dark', 'system', 'custom']),
+    navigation: z.object({
+      primary: z.array(creatorManualNavItemSchema),
+      secondary: z.array(creatorManualNavItemSchema),
     }),
-    labels: z.object({
-      evidence: z.string().min(1).optional(),
-      workshop: z.string().min(1).optional(),
-      library: z.string().min(1).optional(),
+    home: z.object({
+      eyebrow: z.string().min(1),
+      headline: z.string().min(1),
+      summary: z.string().min(1),
+      featuredNodeIds: z.array(idSchema),
+      featuredPillarIds: z.array(idSchema),
     }),
-  }),
-  navigation: z.object({
-    primary: z.array(creatorManualNavItemSchema),
-    secondary: z.array(creatorManualNavItemSchema),
-  }),
-  home: z.object({
-    eyebrow: z.string().min(1),
-    headline: z.string().min(1),
-    summary: z.string().min(1),
-    featuredNodeIds: z.array(idSchema),
-    featuredPillarIds: z.array(idSchema),
-  }),
-  stats: z.object({
-    nodeCount: z.number().int().min(0),
-    pillarCount: z.number().int().min(0),
-    sourceCount: z.number().int().min(0),
-    segmentCount: z.number().int().min(0),
-    claimCount: z.number().int().min(0),
-    glossaryCount: z.number().int().min(0),
-  }),
-  nodes: z.array(creatorManualNodeSchema),
-  pillars: z.array(creatorManualPillarSchema),
-  sources: z.array(creatorManualSourceSchema),
-  segments: z.array(creatorManualSegmentSchema),
-  claims: z.array(creatorManualClaimSchema),
-  glossary: z.array(creatorManualGlossaryEntrySchema),
-  themes: z.array(creatorManualThemeSchema),
-  workshop: z.array(creatorManualWorkshopStageSchema),
-  search: z.array(creatorManualSearchDocSchema),
-}).superRefine((manifest, ctx) => {
-  const issues = findCreatorManualManifestPublicTextIssues(manifest);
+    stats: z.object({
+      nodeCount: z.number().int().min(0),
+      pillarCount: z.number().int().min(0),
+      sourceCount: z.number().int().min(0),
+      segmentCount: z.number().int().min(0),
+      claimCount: z.number().int().min(0),
+      glossaryCount: z.number().int().min(0),
+    }),
+    nodes: z.array(creatorManualNodeSchema),
+    pillars: z.array(creatorManualPillarSchema),
+    sources: z.array(creatorManualSourceSchema),
+    segments: z.array(creatorManualSegmentSchema),
+    claims: z.array(creatorManualClaimSchema),
+    glossary: z.array(creatorManualGlossaryEntrySchema),
+    themes: z.array(creatorManualThemeSchema),
+    workshop: z.array(creatorManualWorkshopStageSchema),
+    search: z.array(creatorManualSearchDocSchema),
+  })
+  .superRefine((manifest, ctx) => {
+    const issues = findCreatorManualManifestPublicTextIssues(manifest);
 
-  for (const issue of issues) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: issue.path,
-      message: `Unsafe public text (${issue.kind}): ${issue.match}`,
-    });
-  }
-});
+    for (const issue of issues) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: issue.path,
+        message: `Unsafe public text (${issue.kind}): ${issue.match}`,
+      });
+    }
+  });
 export type CreatorManualManifest = z.infer<typeof creatorManualManifestSchema>;

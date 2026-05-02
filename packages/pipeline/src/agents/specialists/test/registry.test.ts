@@ -8,8 +8,10 @@ const EXPECTED_AGENTS = [
 ] as const;
 
 describe('SPECIALISTS registry', () => {
-  it('has exactly 8 specialists', () => {
-    assert.equal(Object.keys(SPECIALISTS).length, 8);
+  it('keeps the original extraction specialists registered', () => {
+    for (const name of EXPECTED_AGENTS) {
+      assert.ok((SPECIALISTS as any)[name], `missing specialist: ${name}`);
+    }
   });
 
   it('every expected agent is registered with non-empty prompt + tools', () => {
@@ -23,7 +25,7 @@ describe('SPECIALISTS registry', () => {
   });
 
   it('citation_grounder is the only one with markFindingEvidence', () => {
-    for (const name of EXPECTED_AGENTS) {
+    for (const name of Object.keys(SPECIALISTS)) {
       const cfg = (SPECIALISTS as any)[name];
       const has = cfg.allowedTools.includes('markFindingEvidence');
       assert.equal(has, name === 'citation_grounder', `${name}.allowedTools must${name === 'citation_grounder' ? '' : ' not'} include markFindingEvidence`);
@@ -32,8 +34,9 @@ describe('SPECIALISTS registry', () => {
 
   it('every propose* tool is owned by exactly one specialist (no duplicate ownership)', () => {
     const proposeTools = ['proposeTopic','proposeFramework','proposeLesson','proposePlaybook','proposeQuote','proposeAhaMoment','proposeSourceRanking'];
+    const specialistNames = Object.keys(SPECIALISTS);
     for (const tool of proposeTools) {
-      const owners = EXPECTED_AGENTS.filter((name) => (SPECIALISTS as any)[name].allowedTools.includes(tool));
+      const owners = specialistNames.filter((name) => (SPECIALISTS as any)[name].allowedTools.includes(tool));
       assert.equal(owners.length, 1, `${tool} should be owned by exactly one specialist (got: ${owners.join(', ')})`);
     }
   });

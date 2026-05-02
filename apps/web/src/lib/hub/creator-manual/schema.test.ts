@@ -53,8 +53,21 @@ test('creator manual schema parses a minimal valid manifest', () => {
       labels: {},
     },
     navigation: { primary: [], secondary: [] },
-    home: { eyebrow: 'Manual', headline: 'Build clearly', summary: 'A short summary.', featuredNodeIds: [], featuredPillarIds: [] },
-    stats: { nodeCount: 0, pillarCount: 0, sourceCount: 0, segmentCount: 0, claimCount: 0, glossaryCount: 0 },
+    home: {
+      eyebrow: 'Manual',
+      headline: 'Build clearly',
+      summary: 'A short summary.',
+      featuredNodeIds: [],
+      featuredPillarIds: [],
+    },
+    stats: {
+      nodeCount: 0,
+      pillarCount: 0,
+      sourceCount: 0,
+      segmentCount: 0,
+      claimCount: 0,
+      glossaryCount: 0,
+    },
     nodes: [],
     pillars: [],
     sources: [],
@@ -89,6 +102,67 @@ test('creator manual schema rejects unsafe public asset URLs', () => {
   assert.equal(result.success, false);
 });
 
+test('creator manual schema rejects css-breaking absolute asset URLs', () => {
+  const manifest = structuredClone(sampleCreatorManualManifest);
+  manifest.brand.assets = {
+    patternImageUrl: 'https://example.com/x"),url(https://attacker.test/pixel)/*',
+  };
+
+  const result = creatorManualManifestSchema.safeParse(manifest);
+
+  assert.equal(result.success, false);
+});
+
+test('creator manual schema rejects unsafe css token values', () => {
+  const cases: Array<{
+    label: string;
+    mutate: (manifest: typeof sampleCreatorManualManifest) => void;
+  }> = [
+    {
+      label: 'color declaration injection',
+      mutate: (manifest) => {
+        manifest.brand.tokens.colors.background =
+          'red; background-image:url(https://attacker.test/x)';
+      },
+    },
+    {
+      label: 'type map url token',
+      mutate: (manifest) => {
+        manifest.brand.tokens.colors.typeMap = {
+          lesson: 'url(https://attacker.test/x)',
+        };
+      },
+    },
+    {
+      label: 'radius declaration injection',
+      mutate: (manifest) => {
+        manifest.brand.tokens.radius = '8px; color:red';
+      },
+    },
+    {
+      label: 'shadow url token',
+      mutate: (manifest) => {
+        manifest.brand.tokens.shadow = '0 0 0 url(https://attacker.test/x)';
+      },
+    },
+    {
+      label: 'font declaration injection',
+      mutate: (manifest) => {
+        manifest.brand.tokens.typography.headingFamily = 'Inter; color:red';
+      },
+    },
+  ];
+
+  for (const { label, mutate } of cases) {
+    const manifest = structuredClone(sampleCreatorManualManifest);
+    mutate(manifest);
+
+    const result = creatorManualManifestSchema.safeParse(manifest);
+
+    assert.equal(result.success, false, label);
+  }
+});
+
 test('creator manual schema rejects public UUID and internal review language leaks', () => {
   const manifest = structuredClone(sampleCreatorManualManifest);
   manifest.home.summary = 'Needs review before publishing 123e4567-e89b-12d3-a456-426614174000.';
@@ -121,7 +195,16 @@ test('sample creator manual manifest parses and includes every preview record fa
   assert.equal(sampleCreatorManualManifest.workshop.length >= 4, true);
 
   const searchTypes = new Set(sampleCreatorManualManifest.search.map((doc) => doc.type));
-  const requiredTypes = ['node', 'pillar', 'source', 'segment', 'claim', 'glossary', 'theme', 'workshop'] as const;
+  const requiredTypes = [
+    'node',
+    'pillar',
+    'source',
+    'segment',
+    'claim',
+    'glossary',
+    'theme',
+    'workshop',
+  ] as const;
   for (const type of requiredTypes) {
     assert.equal(searchTypes.has(type), true);
   }

@@ -88,28 +88,76 @@ test('parseCreatorManualManifest rejects missing template id', () => {
   const manifest = validManifest() as any;
   delete manifest.template.id;
 
-  assert.throws(
-    () => parseCreatorManualManifest(manifest),
-    /template\.id/,
-  );
+  assert.throws(() => parseCreatorManualManifest(manifest), /template\.id/);
 });
 
 test('parseCreatorManualManifest rejects unsafe public urls', () => {
   const manifest = validManifest() as any;
   manifest.creator.canonicalUrl = 'javascript:alert(1)';
 
-  assert.throws(
-    () => parseCreatorManualManifest(manifest),
-    /canonicalUrl/,
-  );
+  assert.throws(() => parseCreatorManualManifest(manifest), /canonicalUrl/);
+});
+
+test('parseCreatorManualManifest rejects css-breaking absolute asset urls', () => {
+  const manifest = validManifest() as any;
+  manifest.brand.assets = {
+    patternImageUrl: 'https://example.com/x"),url(https://attacker.test/pixel)/*',
+  };
+
+  assert.throws(() => parseCreatorManualManifest(manifest), /patternImageUrl/);
+});
+
+test('parseCreatorManualManifest rejects unsafe css token values', () => {
+  const cases: Array<{
+    label: string;
+    mutate: (manifest: any) => void;
+  }> = [
+    {
+      label: 'color declaration injection',
+      mutate: (manifest) => {
+        manifest.brand.tokens.colors.background =
+          'red; background-image:url(https://attacker.test/x)';
+      },
+    },
+    {
+      label: 'type map url token',
+      mutate: (manifest) => {
+        manifest.brand.tokens.colors.typeMap = {
+          lesson: 'url(https://attacker.test/x)',
+        };
+      },
+    },
+    {
+      label: 'radius declaration injection',
+      mutate: (manifest) => {
+        manifest.brand.tokens.radius = '8px; color:red';
+      },
+    },
+    {
+      label: 'shadow url token',
+      mutate: (manifest) => {
+        manifest.brand.tokens.shadow = '0 0 0 url(https://attacker.test/x)';
+      },
+    },
+    {
+      label: 'font declaration injection',
+      mutate: (manifest) => {
+        manifest.brand.tokens.typography.headingFamily = 'Inter; color:red';
+      },
+    },
+  ];
+
+  for (const { label, mutate } of cases) {
+    const manifest = validManifest() as any;
+    mutate(manifest);
+
+    assert.throws(() => parseCreatorManualManifest(manifest), /brand\.tokens/, label);
+  }
 });
 
 test('parseCreatorManualManifest rejects unsafe public text', () => {
   const manifest = validManifest() as any;
   manifest.home.summary = 'This needs review before publish.';
 
-  assert.throws(
-    () => parseCreatorManualManifest(manifest),
-    /Unsafe public text/,
-  );
+  assert.throws(() => parseCreatorManualManifest(manifest), /Unsafe public text/);
 });

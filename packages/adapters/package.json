@@ -16,6 +16,7 @@
     "./gemini": "./src/gemini/client.ts",
     "./stripe": "./src/stripe/client.ts",
     "./youtube": "./src/youtube/client.ts",
+    "./youtube/public-channel": "./src/youtube/public-channel.ts",
     "./resend": "./src/resend/client.ts"
   },
   "scripts": {
