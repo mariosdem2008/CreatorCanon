@@ -90,6 +90,7 @@ import {
 } from '@creatorcanon/db/schema';
 import {
   filterCandidates,
+  filterAndOrderCandidates,
   buildAllWorkshopStages,
   type WorkshopStageInput,
 } from './util/workshop-builder';
@@ -1807,13 +1808,31 @@ async function main() {
       const phases = journeyPayload._index_phases ?? [];
       const totalPhases = phases.length;
 
+      // Phase 10 Task 10.3: lower threshold (3→1) + accept needs_review candidates.
+      // Phase 8 had 4/7 creators (Sivers/Clouse/Huber/Norton) at workshops=0 because
+      // the prior threshold required 2+ verified high-confidence candidates per phase —
+      // too strict for thin-content creators (short TED clips, podcast-interview format).
+      const MIN_WORKSHOP_CANDIDATES = 1;   // was 2 (plan says was 3, actual code was 2)
+      const MAX_WORKSHOP_CANDIDATES = 5;
+
       const workshopInputs: WorkshopStageInput[] = [];
       for (const phase of phases) {
-        const candidates = filterCandidates(phase, canonByCanonId, segmentById);
-        if (candidates.length < 2) {
-          console.info(`[v2] Stage 11: phase ${phase._index_phase_number} (${phase.title}) — only ${candidates.length} candidates, skipping`);
+        const allCandidates = filterCandidates(phase, canonByCanonId, segmentById);
+        const candidates = filterAndOrderCandidates(allCandidates, {
+          min: MIN_WORKSHOP_CANDIDATES,
+          max: MAX_WORKSHOP_CANDIDATES,
+        });
+        if (candidates.length < MIN_WORKSHOP_CANDIDATES) {
+          console.info(`[v2] Stage 11: phase ${phase._index_phase_number} (${phase.title}) — only ${allCandidates.length} usable candidates (${candidates.length} after ordering), skipping`);
           continue;
         }
+        console.info(
+          `[v2] Stage 11: phase ${phase._index_phase_number} (${phase.title}) — ` +
+          `${candidates.length} candidates accepted ` +
+          `(high=${candidates.filter((c) => c.confidence === 'high').length}, ` +
+          `medium=${candidates.filter((c) => c.confidence === 'medium').length}, ` +
+          `needs_review=${candidates.filter((c) => c.confidence === 'needs_review').length})`,
+        );
         workshopInputs.push({
           phaseNumber: phase._index_phase_number,
           phaseTitle: phase.title ?? `Phase ${phase._index_phase_number}`,
