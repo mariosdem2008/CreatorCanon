@@ -70,4 +70,4 @@ All 12 tasks done. 12 commits on the branch.
 
 ## Pull request
 
-(set after final push)
+Draft PR: https://github.com/mariosdem2008/CreatorCanon/pull/21
