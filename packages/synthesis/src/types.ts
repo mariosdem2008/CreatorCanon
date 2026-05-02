@@ -208,6 +208,70 @@ export interface FunnelComponent {
   inlineCtas: FunnelInlineCta[];
 }
 
+// ---------- Contemplative-thinker (Phase I) ----------
+
+/**
+ * AphorismCard — a single short, declarative line drawn from a contemplative
+ * creator's canon. The PRODUCT MOMENT for this archetype is "drawing a card":
+ * the audience opens the hub, draws a random aphorism, and walks away with
+ * one line they'll remember for a week.
+ *
+ * Text is verbatim from source (creator's own voice). Codex authors
+ * `whyThisMatters` and the optional `journalingPrompt`; theme tags come from
+ * the Theme Curator's embedding cluster pass.
+ */
+export interface AphorismCard {
+  id: string;
+  /** Verbatim from source. Never paraphrase — these are the creator's own words. */
+  text: string;
+  /** Codex/Theme-Curator-authored tags. e.g. ['work', 'money', 'creativity']. */
+  themeTags: string[];
+  /** 1 line — Codex-authored "why this aphorism matters." */
+  whyThisMatters: string;
+  sourceCanonId: string;
+  sourceVideoId?: string;
+  sourceTimestampMs?: number;
+  /** 1-2 sentence reflection prompt. Optional. */
+  journalingPrompt?: string;
+  /** @vercel/og rendered card image. Optional — generated at deploy time. */
+  shareableImageUrl?: string;
+}
+
+export interface ThemeCollection {
+  id: string;
+  /** Short name, e.g. "Work" or "Decision making". */
+  name: string;
+  description: string;
+  cardIds: string[];
+  /** Optional brand-tinted accent colour for this theme. */
+  primaryColor?: string;
+}
+
+export interface DecisionFrame {
+  id: string;
+  /** Short name, e.g. "Hell Yeah or No". */
+  name: string;
+  description: string;
+  sourceCanonId: string;
+  /** The verbatim rule from the source canon. */
+  decisionRule: string;
+  /** Ordered application steps for the reader. */
+  applicationSteps: string[];
+  examples: Array<{ situation: string; outcome: string }>;
+}
+
+export interface CardComponent {
+  cards: AphorismCard[];
+}
+
+export interface ThemeComponent {
+  themes: ThemeCollection[];
+}
+
+export interface DecisionFrameComponent {
+  frames: DecisionFrame[];
+}
+
 // ---------- Bundle ----------
 
 export interface ProductBundle {
@@ -220,8 +284,12 @@ export interface ProductBundle {
     worksheets?: WorksheetComponent[];
     calculators?: CalculatorComponent[];
     diagnostic?: DiagnosticComponent;
-    /** contemplative-thinker — filled in Phase I. */
-    cards?: never;
+    /** contemplative-thinker — Phase I. */
+    cards?: CardComponent;
+    /** contemplative-thinker — Phase I. */
+    themes?: ThemeComponent;
+    /** contemplative-thinker — Phase I. */
+    decisionFrames?: DecisionFrameComponent;
     /** science-explainer — filled in Phase H. */
     reference?: never;
     /** instructional-craft — filled in Phase J. */

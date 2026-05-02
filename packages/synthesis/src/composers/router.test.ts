@@ -17,11 +17,14 @@ describe('routeComposers', () => {
     assert.ok(set.has('funnel'));
   });
 
-  test('contemplative-thinker gets cards + funnel only', () => {
+  test('contemplative-thinker gets cards + themes + decisionFrames + funnel', () => {
     const set = routeComposers('contemplative-thinker');
     assert.ok(set.has('cards'));
+    assert.ok(set.has('themes'));
+    assert.ok(set.has('decisionFrames'));
     assert.ok(set.has('funnel'));
     assert.ok(!set.has('actionPlan'));
+    assert.ok(!set.has('worksheets'));
   });
 
   test('_DEFAULT falls back to funnel-only', () => {

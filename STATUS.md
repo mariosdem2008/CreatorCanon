@@ -1,54 +1,33 @@
-# Phase A Executor Status — DONE
+# Phase I — Contemplative-Thinker Synthesis (STATUS)
 
-**Started:** 2026-05-02 (autonomous run, ~7h budget)
-**Branch:** `feat/phase-a-operator-coach-synthesis`
-**Worktree:** `SaaS/.worktrees/phase-a-execute`
+**Started:** 2026-05-02 (autonomous run, ~5h budget)
+**Branch:** `feat/phase-i-contemplative-synthesis` (off Phase A's tip + HIGH fixes)
+**Worktree:** `SaaS/.worktrees/phase-i-execute/`
 **Operator:** Claude Opus 4.7 (1M ctx) — autonomous
 
-## Status: COMPLETE
-
-All 12 tasks done. 14 commits + 1 cycle fix on the branch. Draft PR open.
+## Status: in progress
 
 ## Task progress
 
-- [x] A.1 — Synthesis package scaffold + ProductBundle types (`c1d21b4`)
-- [x] A.2 — ActionPlan composer (`f645395`)
-- [x] A.3 — Worksheet Forge (`021352f`)
-- [x] A.4 — Calculator Forge (`7840c83`)
-- [x] A.5 — Diagnostic composer (`73ad3b7` + `16b1988`)
-- [x] A.6 — Funnel composer (`14fd569`)
-- [x] A.7 — Router + Runner (`2410e45`)
-- [x] A.8 — DB schema (migration 0017) (`d7dae7e`)
-- [x] A.9 — Synthesis API endpoints (`ec5b11a`)
-- [x] A.10 — CLI runner + fixture smoke (`408e326`)
-- [x] A.11 — Operator-coach shell (`09f8e0e`)
-- [x] A.12 — Results doc + draft PR (this commit)
+- [ ] I.1 — Card / Theme / DecisionFrame component types
+- [ ] I.2 — Card Forge composer
+- [ ] I.3 — Theme Curator (embedding clustering)
+- [ ] I.4 — Decision Frame Composer
+- [ ] I.5 — Contemplative shell + CardDraw
+- [ ] I.6 — Email-of-the-day cron (script + config; sending deferred)
+- [ ] I.7 — Cohort smoke test (fixture-based; live run deferred)
+- [ ] I.8 — Phase I results doc + draft PR
 
-Plus `9c727db` — fix synthesis→pipeline workspace cycle.
+## Constraints honoured
 
-## Test results
+- Touch ONLY the files listed in the meta-prompt's "You own" section.
+- Additive only on shared files (`packages/synthesis/src/index.ts`, `types.ts`, `composers/router.ts`).
+- Migration slot: `0023_phase_i_*.sql`.
+- Live cohort run on Sivers (`ad22df26-2b7f-4387-bcb3-19f0d9a06246`) DEFERRED — fixture-based smoke only.
 
-- `pnpm --filter @creatorcanon/synthesis test`: **52/52 pass**
-  - 5 composer suites + router + runner + fixture smoke
-- `pnpm typecheck` (turbo full graph): **20/20 successful**
+## Conflict map
 
-## Notes
-
-- Smoke tests are fixture-only per directive; live cohort run is for Mario
-  to trigger via `tsx packages/pipeline/src/scripts/run-synthesis.ts <runId>`.
-- Codex CLI was NOT invoked in this session (no real prompts were run).
-  Composers used deterministic stub clients in tests; the production
-  CodexClient wraps `@creatorcanon/pipeline/dev-codex-runner` (already
-  wired into the API route + CLI script).
-- Hub route mounting was deferred to Phase B to avoid colliding with
-  Codex's Phase G work in `apps/web/src/app/h/[hubSlug]/...`.
-- Migration 0017 reserved + applied in `_journal.json`. Codex Phase G has
-  0022+ free per the meta-plan.
-
-## Results doc
-
-`docs/superpowers/plans/2026-05-02-phase-a-results.md`
-
-## Pull request
-
-Draft PR: https://github.com/mariosdem2008/CreatorCanon/pull/19
+- Phase A composer files: untouched.
+- Phase H composer files (`reference-composer.ts`, `debunking-forge.ts`, `glossary-builder.ts`): not on this branch — Phase H is in PR #20.
+- Codex (Phase G) territory: `apps/web/src/lib/vercel/`, `apps/web/src/components/onboarding/`, `apps/web/src/app/api/{domains,deploy}/` — untouched.
+- Phase N credit territory (`packages/synthesis/src/credits/`) — untouched.

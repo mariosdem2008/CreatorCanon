@@ -16,7 +16,12 @@ export const COMPOSER_MATRIX: Record<ArchetypeSlug, Set<ProductBundleComponentKe
     'funnel',
   ]),
   'science-explainer': new Set<ProductBundleComponentKey>(['reference', 'diagnostic', 'funnel']),
-  'contemplative-thinker': new Set<ProductBundleComponentKey>(['cards', 'funnel']),
+  'contemplative-thinker': new Set<ProductBundleComponentKey>([
+    'cards',
+    'themes',
+    'decisionFrames',
+    'funnel',
+  ]),
   'instructional-craft': new Set<ProductBundleComponentKey>([
     'lessonSequence',
     'worksheets',

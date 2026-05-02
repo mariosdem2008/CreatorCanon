@@ -39,6 +39,16 @@ export type {
   WorksheetFieldType,
 } from './types';
 
+// Phase I — contemplative-thinker types.
+export type {
+  AphorismCard,
+  CardComponent,
+  DecisionFrame,
+  DecisionFrameComponent,
+  ThemeCollection,
+  ThemeComponent,
+} from './types';
+
 export { runSynthesis } from './runner';
 export { routeComposers, COMPOSER_MATRIX } from './composers/router';
 export { composeActionPlan, classifyCanonByPhase } from './composers/action-plan-composer';
