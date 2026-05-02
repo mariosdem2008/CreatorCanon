@@ -54,3 +54,9 @@ export { composeWorksheets } from './composers/worksheet-forge';
 export { composeCalculators } from './composers/calculator-forge';
 export { composeDiagnostic } from './composers/diagnostic-composer';
 export { composeFunnel } from './composers/funnel-composer';
+// Phase H — science-explainer composers
+export {
+  composeReference,
+  classifyVerdictFromCanon,
+  topicSlugFromCanon,
+} from './composers/reference-composer';
