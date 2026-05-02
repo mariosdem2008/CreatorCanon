@@ -49,3 +49,6 @@ export * from './archive_audit';
 // Atlas agent + inbox
 export * from './agent';
 export * from './inbox';
+
+// Phase A — product synthesis (composer-emitted ProductBundle persistence)
+export * from './synthesis';

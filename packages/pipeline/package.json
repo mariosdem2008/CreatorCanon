@@ -43,6 +43,7 @@
     "@creatorcanon/core": "workspace:*",
     "@creatorcanon/cost-ledger": "workspace:*",
     "@creatorcanon/db": "workspace:*",
+    "@creatorcanon/synthesis": "workspace:*",
     "@google/generative-ai": "0.21.0",
     "@sentry/node": "8.33.1",
     "openai": "4.61.0",
