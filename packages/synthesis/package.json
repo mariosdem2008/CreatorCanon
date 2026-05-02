@@ -10,7 +10,8 @@
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
     "./runner": "./src/runner.ts",
-    "./composers/*": "./src/composers/*.ts"
+    "./composers/*": "./src/composers/*.ts",
+    "./credits": "./src/credits/index.ts"
   },
   "scripts": {
     "lint": "eslint src",

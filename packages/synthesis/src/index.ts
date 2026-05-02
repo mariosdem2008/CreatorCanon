@@ -46,3 +46,23 @@ export { composeWorksheets } from './composers/worksheet-forge';
 export { composeCalculators } from './composers/calculator-forge';
 export { composeDiagnostic } from './composers/diagnostic-composer';
 export { composeFunnel } from './composers/funnel-composer';
+
+// Phase N — credit ledger (usage metering: hours / builder_credits / chat_credits).
+export {
+  grant,
+  consume,
+  MemoryCreditLedger,
+  DrizzleCreditLedger,
+  InsufficientCreditsError,
+  CREDIT_KINDS,
+  isCreditKind,
+} from './credits';
+export type {
+  CreditKind,
+  CreditEvent,
+  CreditBalanceRow,
+  CreditLedgerStore,
+  GrantArgs,
+  ConsumeArgs,
+  GrantResult,
+} from './credits';
