@@ -22,7 +22,6 @@
   "dependencies": {
     "@creatorcanon/core": "workspace:*",
     "@creatorcanon/db": "workspace:*",
-    "@creatorcanon/pipeline": "workspace:*",
     "drizzle-orm": "0.33.0",
     "zod": "3.23.8"
   },
