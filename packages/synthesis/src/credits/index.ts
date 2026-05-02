@@ -24,6 +24,22 @@ export type {
 export { requireCredits, runWithCredits } from './enforcer';
 export type { RunWithCreditsArgs } from './enforcer';
 
+export {
+  reserveAuditHours,
+  finalizeAuditHours,
+  refundAuditHours,
+  consumeBuilderCredit,
+  consumeChatCredit,
+  consumeOnSuccess,
+} from './consumers';
+export type {
+  ReserveAuditHoursArgs,
+  FinalizeAuditHoursArgs,
+  ConsumeBuilderCreditArgs,
+  ConsumeChatCreditArgs,
+  ConsumeOnSuccessArgs,
+} from './consumers';
+
 export { onSubscriptionPeriodStart, onAddonPurchased } from './stripe-hooks';
 export type {
   OnSubscriptionPeriodStartArgs,
