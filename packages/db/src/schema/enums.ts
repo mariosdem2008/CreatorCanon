@@ -309,6 +309,13 @@ export const archiveAuditStatusEnum = pgEnum('archive_audit_status', [
   'failed',
 ]);
 
+export const deploymentStatusEnum = pgEnum('deployment_status', [
+  'pending',
+  'building',
+  'live',
+  'failed',
+]);
+
 // ----- Manual video upload -----
 
 /** Origin of a video/channel row. */

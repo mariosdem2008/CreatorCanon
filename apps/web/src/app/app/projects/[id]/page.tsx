@@ -21,6 +21,7 @@ import {
   StatusPill,
 } from '@/components/cc';
 import { getHubTemplate } from '@/components/hub/templates';
+import { buildHubPublicUrl } from '@/lib/hub/public-url';
 import { requireWorkspace } from '@/lib/workspace';
 
 import { CopyUrlButton } from './CopyUrlButton';
@@ -83,6 +84,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       ? db
           .select({
             subdomain: hub.subdomain,
+            customDomain: hub.customDomain,
             theme: hub.theme,
             liveReleaseId: hub.liveReleaseId,
           })
@@ -95,6 +97,12 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const selectedTemplate = getHubTemplate(proj.config?.presentation_preset);
   const publishedHub = publishedHubs[0];
   const publishedTemplate = getHubTemplate(publishedHub?.theme ?? selectedTemplate.id);
+  const publicHubUrl = publishedHub
+    ? buildHubPublicUrl({
+        subdomain: publishedHub.subdomain,
+        customDomain: publishedHub.customDomain,
+      })
+    : null;
   const isActive = Boolean(run && activeRunStatuses.has(run.status));
   const draftPagesReady = pages.length > 0;
   const approvedCount = pages.filter((item) => item.status === 'approved').length;
@@ -167,10 +175,18 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             ) : null}
             {publishedHub?.liveReleaseId ? (
               <Link
-                href={`/h/${publishedHub.subdomain}`}
+                href={publicHubUrl ?? `/h/${publishedHub.subdomain}`}
                 className="inline-flex h-9 items-center rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-ink-4)]"
               >
                 Open hub
+              </Link>
+            ) : null}
+            {publishedHub?.liveReleaseId ? (
+              <Link
+                href={`/app/projects/${params.id}/domain`}
+                className="inline-flex h-9 items-center rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-ink-4)]"
+              >
+                Domain
               </Link>
             ) : null}
           </>
@@ -312,7 +328,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
               <div className="space-y-3 px-4 py-4">
                 <div>
                   <p className="text-[13px] font-semibold text-[var(--cc-ink)]">
-                    /h/{publishedHub.subdomain}
+                    {publicHubUrl ?? `/h/${publishedHub.subdomain}`}
                   </p>
                   <p className="mt-0.5 text-[11px] text-[var(--cc-ink-4)]">
                     {publishedTemplate.name}
@@ -320,12 +336,12 @@ export default async function ProjectPage({ params }: { params: { id: string } }
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link
-                    href={`/h/${publishedHub.subdomain}`}
+                    href={publicHubUrl ?? `/h/${publishedHub.subdomain}`}
                     className="inline-flex h-8 items-center rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-ink-4)]"
                   >
                     Open hub
                   </Link>
-                  <CopyUrlButton url={`https://creatorcanon.com/h/${publishedHub.subdomain}`} />
+                  <CopyUrlButton url={publicHubUrl ?? `/h/${publishedHub.subdomain}`} />
                 </div>
               </div>
             </Panel>

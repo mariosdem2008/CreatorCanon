@@ -12,6 +12,7 @@ import {
   type CreatorManualManifest,
   type HubManifest as ParsedHubManifest,
 } from '@/lib/hub/manifest/schema';
+import { resolveHubManifestSelector } from '@/lib/hub/manifest-selector';
 
 type HubRow = {
   id: string;
@@ -63,12 +64,13 @@ function creatorManualPreviewResponse(hubSlug: string): LoadedHubManifest<Creato
 
 // React.cache dedupes within a single request — generateMetadata and the page
 // render both call loadHubManifest, but only one DB+R2 round-trip happens.
-export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest> => {
+export const loadHubManifest = cache(async (hubSlug: string | null): Promise<LoadedHubManifest> => {
   if (hubSlug === CREATOR_MANUAL_PREVIEW_SLUG && canServeCreatorManualPreview()) {
     return creatorManualPreviewResponse(hubSlug);
   }
 
   const db = getDb();
+  const selector = resolveHubManifestSelector(hubSlug);
   const hubs = await db
     .select({
       id: hub.id,
@@ -78,7 +80,11 @@ export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubM
       deletedAt: hub.deletedAt,
     })
     .from(hub)
-    .where(eq(hub.subdomain, hubSlug))
+    .where(
+      selector.column === 'id'
+        ? eq(hub.id, selector.value)
+        : eq(hub.subdomain, selector.value),
+    )
     .limit(1);
 
   const hubRow = hubs[0];
@@ -128,7 +134,7 @@ export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubM
   };
 });
 
-export const loadCreatorManualManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest<CreatorManualManifest>> => {
+export const loadCreatorManualManifest = cache(async (hubSlug: string | null): Promise<LoadedHubManifest<CreatorManualManifest>> => {
   const loaded = await loadHubManifest(hubSlug);
   if (!isCreatorManualManifest(loaded.manifest)) notFound();
   return { ...loaded, manifest: loaded.manifest };
