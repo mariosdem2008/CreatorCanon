@@ -24,6 +24,12 @@ export type {
 export { requireCredits, runWithCredits } from './enforcer';
 export type { RunWithCreditsArgs } from './enforcer';
 
+export { onSubscriptionPeriodStart, onAddonPurchased } from './stripe-hooks';
+export type {
+  OnSubscriptionPeriodStartArgs,
+  OnAddonPurchasedArgs,
+} from './stripe-hooks';
+
 export { reconcile } from './reconciler';
 export type {
   ReconcilerEventRow,
