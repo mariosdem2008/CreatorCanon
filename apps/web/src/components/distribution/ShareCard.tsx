@@ -28,7 +28,9 @@ export function ShareCard({
             </span>
           </div>
           <blockquote className="text-[28px] font-semibold leading-[1.08]">
-            "{quote}"
+            <span aria-hidden>&ldquo;</span>
+            {quote}
+            <span aria-hidden>&rdquo;</span>
           </blockquote>
           <div>
             <p className="text-[14px] font-semibold">{creatorName}</p>

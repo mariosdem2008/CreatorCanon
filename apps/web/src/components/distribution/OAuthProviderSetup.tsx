@@ -25,7 +25,7 @@ export function OAuthProviderSetup({
       />
       <div className="grid gap-4 p-4">
         <p className="text-[13px] leading-[1.6] text-[var(--cc-ink-3)]">
-          Add this callback URL to your {providerLabels[provider]} app. Claude's
+          Add this callback URL to your {providerLabels[provider]} app. Claude&apos;s
           backend branch will handle code exchange and membership validation.
         </p>
         <div className="rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 py-2 font-mono text-[12px] text-[var(--cc-ink-2)]">
