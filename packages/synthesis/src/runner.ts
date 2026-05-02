@@ -35,6 +35,7 @@ import { composeWorksheets } from './composers/worksheet-forge';
 import { composeCalculators } from './composers/calculator-forge';
 import { composeDiagnostic } from './composers/diagnostic-composer';
 import { composeFunnel } from './composers/funnel-composer';
+import { composeCards } from './composers/card-forge';
 
 export interface RunSynthesisInput {
   runId: string;
@@ -95,20 +96,30 @@ export async function runSynthesis(input: RunSynthesisInput): Promise<ProductBun
 
   const selected = routeComposers(archetype);
 
-  const [actionPlan, worksheets, calculators, diagnostic, funnel] = await Promise.all([
-    selected.has('actionPlan') ? composeActionPlan(baseInput, { codex: input.codex }) : undefined,
-    selected.has('worksheets') ? composeWorksheets(baseInput, { codex: input.codex }) : undefined,
-    selected.has('calculators') ? composeCalculators(baseInput, { codex: input.codex }) : undefined,
-    selected.has('diagnostic') ? composeDiagnostic(baseInput, { codex: input.codex }) : undefined,
-    composeFunnel(
-      {
-        ...baseInput,
-        productGoal: input.productGoal,
-        creatorConfig: input.creatorConfig,
-      },
-      { codex: input.codex },
-    ),
-  ]);
+  const [actionPlan, worksheets, calculators, diagnostic, cards, funnel] =
+    await Promise.all([
+      selected.has('actionPlan')
+        ? composeActionPlan(baseInput, { codex: input.codex })
+        : undefined,
+      selected.has('worksheets')
+        ? composeWorksheets(baseInput, { codex: input.codex })
+        : undefined,
+      selected.has('calculators')
+        ? composeCalculators(baseInput, { codex: input.codex })
+        : undefined,
+      selected.has('diagnostic')
+        ? composeDiagnostic(baseInput, { codex: input.codex })
+        : undefined,
+      selected.has('cards') ? composeCards(baseInput, { codex: input.codex }) : undefined,
+      composeFunnel(
+        {
+          ...baseInput,
+          productGoal: input.productGoal,
+          creatorConfig: input.creatorConfig,
+        },
+        { codex: input.codex },
+      ),
+    ]);
 
   const bundle: ProductBundle = {
     archetype,
@@ -120,6 +131,7 @@ export async function runSynthesis(input: RunSynthesisInput): Promise<ProductBun
       ...(worksheets ? { worksheets } : {}),
       ...(calculators ? { calculators } : {}),
       ...(diagnostic ? { diagnostic } : {}),
+      ...(cards ? { cards: { cards } } : {}),
       funnel,
     },
     generatedAt: new Date().toISOString(),

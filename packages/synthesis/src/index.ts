@@ -56,3 +56,12 @@ export { composeWorksheets } from './composers/worksheet-forge';
 export { composeCalculators } from './composers/calculator-forge';
 export { composeDiagnostic } from './composers/diagnostic-composer';
 export { composeFunnel } from './composers/funnel-composer';
+
+// Phase I composers.
+export {
+  composeCards,
+  extractAphorismCandidates,
+  extractBlockquotedAphorisms,
+  extractShortPrincipleSentences,
+  dedupCandidates,
+} from './composers/card-forge';
