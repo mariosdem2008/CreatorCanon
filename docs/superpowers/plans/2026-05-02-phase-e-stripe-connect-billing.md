@@ -1,51 +1,79 @@
-# Phase E — Stripe Connect Billing
+# Phase E — CreatorCanon SaaS Subscription Billing
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development.
 
-**Goal:** Creators sell their hub with their own Stripe account, CreatorCanon takes a platform fee. Audience purchases give them durable access (magic-link login).
+**Goal:** Creators pay CreatorCanon a monthly subscription. Three usage tiers (video generation hours + AI builder credits + AI chat credits). Optional addon credit packs for overages. Optional separate maintenance subscription for hosting + AI chat on the live hub. **CreatorCanon does NOT take any cut of creator revenue.** If a creator wants to sell their hub via Stripe Connect (paid_product distribution profile), it's their own Stripe account, their full revenue, our platform charges $0 platform fee.
 
-**Architecture:** Stripe Connect Standard. Each creator connects their existing Stripe account via OAuth. CreatorCanon is the platform; charges are made to the creator's account with `application_fee_amount` for our cut. Webhooks land on our infrastructure → issue access tokens → magic-link email to buyer.
+**Architecture:** Stripe Billing (subscription products) for CreatorCanon's own SaaS pricing. Stripe Connect kept ONLY as a thin pass-through for creators who want to charge audience for their hub (paid_product profile) — but with `application_fee_amount = 0`. The interesting/critical work is our subscription tier model, the usage credit ledger (Phase N), and addon credit purchases.
 
 **Owner:** Codex + Claude split.
-- **Claude:** Stripe webhook handlers, access-token issuance + verification, magic-link generation, DB schema for access grants
-- **Codex:** Stripe Connect onboarding UI, pricing-page builder, checkout-redirect, thank-you page, magic-link login UI
+- **Claude:** Stripe webhook handlers, subscription state machine, addon credit ledger entry on purchase, magic-link issuance for Connect-paid hubs (when used)
+- **Codex:** Stripe Customer Portal embed, pricing page UI, upgrade/downgrade UX, addon credit purchase modal, billing history page, Connect onboarding UI (kept for paid_product creators)
 
-**Dependencies:** Phase C (distribution profile abstraction must exist; paid_product profile uses Stripe).
+**Dependencies:** Phase N (usage metering + credit ledger) is a hard prerequisite — Phase E enforces limits that Phase N tracks. Phase C (distribution profile abstraction) for the Connect-paid pass-through.
 
 **Estimated weeks:** 6 (weeks 6-12 of meta-timeline).
+
+---
+
+## Pricing tiers (lock-in defaults — adjust prices via env)
+
+| Tier | Monthly Price | Generation Hours | AI Builder Credits | AI Chat Credits | Hubs |
+|---|---|---|---|---|---|
+| **Starter** | $29 | 3 hours of source video | 100 builder calls | 0 (chat is addon/maintenance) | 1 active hub |
+| **Pro** | $99 | 12 hours | 500 builder calls | 1,000 chat msgs | 3 active hubs |
+| **Studio** | $299 | 40 hours | 2,000 builder calls | 5,000 chat msgs | unlimited |
+
+**Maintenance Subscription** (separate, optional, per-hub): **$19/month per published hub** — covers hosting (Vercel project + custom domain SSL + R2 bandwidth) + ongoing AI chat at hub level (RAG-grounded answers for the audience). Without it, hubs go read-only after a 30-day grace period and AI chat is disabled.
+
+**Addon credit packs:** purchasable any time, one-shot:
+- +5 video hours: $39
+- +500 builder credits: $19
+- +2,000 chat credits: $19
+
+Addon credits roll over forever; tier-included credits reset at billing period.
+
+> Prices are configured in env vars (`STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_STUDIO`, `STRIPE_PRICE_MAINTENANCE`, `STRIPE_PRICE_ADDON_HOURS`, `STRIPE_PRICE_ADDON_BUILDER`, `STRIPE_PRICE_ADDON_CHAT`). Codex and Claude use these env keys; the actual Stripe price IDs land at deploy time.
 
 ---
 
 ## File structure
 
 ```
-packages/synthesis/src/distribution/stripe/         ← Claude
-  connect-onboarding.ts                             ← creates Connect account link
-  webhook-handler.ts                                ← processes payment events
-  access-token.ts                                   ← JWT issuance + verification
-  magic-link.ts                                     ← issue + consume
+packages/synthesis/src/billing/                       ← Claude
+  subscription-state.ts                               ← tier state machine + entitlements lookup
+  webhook-handler.ts                                  ← Stripe webhook → DB updates + ledger inserts
+  addon-credit.ts                                     ← addon-credit purchase → ledger entry
+  connect-passthrough.ts                              ← Connect paid_product flow (application_fee_amount=0)
+  magic-link.ts                                       ← buyer access for paid_product hubs
+  entitlements.ts                                     ← reads tier+addon ledger; returns "can the creator do X right now?"
 
-apps/web/src/app/api/stripe/
-  connect-onboard/route.ts                          ← Claude — POST: returns Stripe onboarding URL
-  webhook/route.ts                                  ← Claude — POST: stripe webhook entry
-  magic-link/[token]/route.ts                       ← Claude — GET: verify + set cookie
+apps/web/src/app/api/billing/
+  checkout/route.ts                                   ← Claude — POST: create Stripe Checkout session for tier or addon
+  portal/route.ts                                     ← Claude — POST: returns Stripe Customer Portal URL
+  webhook/route.ts                                    ← Claude — POST: stripe webhook entry (verify signature)
+  entitlements/route.ts                               ← Claude — GET: current tier + remaining credits
+  connect-onboard/route.ts                            ← Claude — POST: returns Connect onboarding URL (paid_product creators)
 
-apps/web/src/app/(billing)/                         ← Codex
-  pricing/[hubId]/page.tsx                          ← public-facing pricing page
-  checkout/[hubId]/page.tsx                         ← Stripe Checkout redirect
-  thank-you/page.tsx                                ← post-purchase
-  login/page.tsx                                    ← magic-link request
+apps/web/src/app/(billing)/                           ← Codex
+  pricing/page.tsx                                    ← public marketing pricing (3 tiers + maintenance)
+  upgrade/page.tsx                                    ← in-app upgrade UX
+  addons/page.tsx                                     ← addon credit purchase
+  history/page.tsx                                    ← billing history
+  thank-you/page.tsx                                  ← post-checkout
 
-apps/web/src/components/billing/                    ← Codex
-  StripeConnectButton.tsx
-  PricingCardEditor.tsx                             ← creator dashboard component for editing price
-  CheckoutRedirect.tsx
-  ThankYouCelebrate.tsx                             ← confetti + magic-link sent message
+apps/web/src/components/billing/                      ← Codex
+  TierCard.tsx                                        ← single tier card with CTA
+  TierComparison.tsx                                  ← 3-tier comparison table
+  AddonPurchaseModal.tsx                              ← buy more credits
+  EntitlementsBadge.tsx                               ← header pill: "12 / 40 hours used this month"
+  StripeCustomerPortalLink.tsx                        ← link to Stripe-hosted portal
+  StripeConnectButton.tsx                             ← FOR PAID_PRODUCT CREATORS ONLY (no platform fee)
 
 packages/db/src/schema/
-  billing.ts                                        ← Claude — stripe_account, access_grant tables
+  billing.ts                                          ← Claude — subscription, addon_purchase, stripe_account tables
 packages/db/drizzle/
-  0020_phase_e_billing.sql                          ← Claude
+  0020_phase_e_billing.sql                            ← Claude
 ```
 
 ---
@@ -55,15 +83,48 @@ packages/db/drizzle/
 ### E.1 — DB schema (Claude)
 
 ```ts
+export const subscription = pgTable('subscription', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  stripeCustomerId: varchar('stripe_customer_id', { length: 64 }).notNull(),
+  stripeSubscriptionId: varchar('stripe_subscription_id', { length: 64 }).notNull().unique(),
+  tier: varchar('tier', { length: 16 }).notNull(),                      // starter | pro | studio
+  status: varchar('status', { length: 24 }).notNull(),                  // active | past_due | canceled | paused | trialing
+  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+export const maintenanceSubscription = pgTable('maintenance_subscription', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  hubId: uuid('hub_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  stripeSubscriptionId: varchar('stripe_subscription_id', { length: 64 }).notNull().unique(),
+  status: varchar('status', { length: 24 }).notNull(),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+});
+
+export const addonPurchase = pgTable('addon_purchase', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  stripeChargeId: varchar('stripe_charge_id', { length: 128 }).notNull().unique(),
+  kind: varchar('kind', { length: 32 }).notNull(),                      // hours | builder_credits | chat_credits
+  amount: integer('amount').notNull(),                                  // hours, credits, msgs
+  purchasedAt: timestamp('purchased_at', { withTimezone: true }).defaultNow(),
+});
+
+// stripe_account kept for paid_product creators (no platform fee taken)
 export const stripeAccount = pgTable('stripe_account', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull(),
   stripeAccountId: varchar('stripe_account_id', { length: 64 }).notNull().unique(),
-  status: varchar('status', { length: 16 }).notNull(),  // pending | active | restricted
+  status: varchar('status', { length: 16 }).notNull(),
   payoutsEnabled: boolean('payouts_enabled').default(false),
   chargesEnabled: boolean('charges_enabled').default(false),
 });
 
+// access grants for paid_product hub buyers (audience side)
 export const accessGrant = pgTable('access_grant', {
   id: uuid('id').primaryKey().defaultRandom(),
   hubId: uuid('hub_id').notNull(),
@@ -76,95 +137,139 @@ export const accessGrant = pgTable('access_grant', {
 
 Migration 0020.
 
-### E.2 — Stripe Connect onboarding (Claude + Codex)
+### E.2 — Stripe products + prices bootstrap script (Claude)
 
-**Claude:** API route `POST /api/stripe/connect-onboard` — creates Stripe Account Link, returns hosted onboarding URL.
-**Codex:** `StripeConnectButton.tsx` — calls API, redirects to Stripe-hosted form, handles return URL (success/refresh).
+`scripts/stripe-bootstrap.ts` — idempotently creates 3 tier products, 1 maintenance product, 3 addon products in Stripe (test + production via env). Outputs price IDs to `.env.example`. Run once per environment.
 
-### E.3 — Pricing page builder (Codex)
+### E.3 — Subscription checkout (Claude + Codex)
 
-`PricingCardEditor.tsx` lets creator set: price (one-time vs subscription), trial period, refund policy text, custom thank-you message. Persists to `distribution_profile.config.pricing`.
+**Claude:** `POST /api/billing/checkout` accepts `{tier: 'starter'|'pro'|'studio', returnUrl}` → creates Stripe Checkout session in subscription mode, returns URL.
+**Codex:** `pricing/page.tsx` lists 3 tiers + maintenance card. Each "Subscribe" button POSTs to checkout API + redirects to Stripe.
 
-### E.4 — Checkout redirect (Codex)
+### E.4 — Stripe Customer Portal (Claude + Codex)
 
-When buyer hits `pricing/[hubId]/page.tsx` and clicks "Buy," redirect to Stripe-hosted Checkout (using creator's Connect account + our `application_fee_amount`). Pass success/cancel URLs back to our domain.
+Stripe-hosted portal handles upgrade/downgrade/cancel/payment-method. We don't reinvent this UX.
+**Claude:** `POST /api/billing/portal` returns portal URL.
+**Codex:** "Manage subscription" button on dashboard → calls API + redirects.
 
-### E.5 — Stripe webhook handler (Claude)
+### E.5 — Webhook handler (Claude)
 
-`POST /api/stripe/webhook` — verifies Stripe signature, processes events:
-- `checkout.session.completed` → create `access_grant`, send magic-link email to buyer
-- `account.updated` → update `stripe_account.status` (Connect KYC progress)
-- `charge.refunded` → revoke access_grant
-- `customer.subscription.deleted` (subscriptions) → revoke
+`POST /api/billing/webhook` — verifies Stripe signature. Events:
+- `customer.subscription.created` / `updated` / `deleted` → update `subscription` row + reset usage period in credit ledger (Phase N hook)
+- `invoice.payment_succeeded` (subscription) → mark active, allocate tier credits in ledger for the new period
+- `invoice.payment_failed` → mark past_due; after 7 days, flip to canceled (DB-side)
+- `checkout.session.completed` (one-shot mode = addon purchase) → insert `addon_purchase` row + credit ledger entry
+- For paid_product hubs (Connect): `checkout.session.completed` → create `access_grant` + magic-link to buyer
 
-Idempotency: keys based on event ID; insert-or-skip pattern.
+Idempotency: `ON CONFLICT (stripe_subscription_id) DO UPDATE` for subs; `ON CONFLICT (stripe_charge_id) DO NOTHING` for addons.
 
-### E.6 — Magic-link issuance + verification (Claude)
+### E.6 — Addon credit purchase flow (Claude + Codex)
 
-`packages/synthesis/src/distribution/stripe/magic-link.ts`:
-- `issue(buyerEmail, hubId)` — creates short-lived (24h) signed JWT, sends via email
-- `verify(token)` — checks signature + expiry + creates session JWT cookie
+**Codex:** `AddonPurchaseModal.tsx` — pick hours / builder / chat credit pack, calls checkout API in one-shot mode.
+**Claude:** Webhook `checkout.session.completed` → calls Phase N's `creditLedger.add({userId, kind, amount, source: 'addon'})`.
 
-Email delivery via existing transactional email provider (Resend / Postmark / etc. — pick whichever Codex's existing app already uses, otherwise Resend default).
+### E.7 — Maintenance subscription (Claude + Codex)
 
-### E.7 — Magic-link login UI (Codex)
+**Claude:** Each hub publish prompts `POST /api/billing/checkout` with `kind: 'maintenance', hubId`. Webhook on `customer.subscription.created` → insert `maintenance_subscription` row.
+**Codex:** Hub publish flow includes "Add maintenance ($19/mo) — required for live hosting + AI chat" with a checkbox. Without it, the hub deploys but has a 30-day grace banner ("Add maintenance to keep this hub live").
 
-`/login` page: email input + "Send me the link" button. On submit, posts to `/api/stripe/magic-link/issue`. Shows confirmation. When user clicks link in email, lands on `/api/stripe/magic-link/[token]` which sets cookie + redirects to hub.
+### E.8 — Entitlements API + middleware (Claude)
 
-### E.8 — Application fee (platform cut)
+`GET /api/billing/entitlements` returns current tier + remaining credits per kind (queries Phase N ledger). Used by:
+- Header badge ("12/40 hours used")
+- Pre-flight gates: when creator triggers an audit, check `entitlements.canConsume({kind: 'hours', amount: estVideoHours})` → if false, prompt addon purchase
 
-In Stripe Checkout creation, set `application_fee_amount` based on creator tier:
-- Starter: 10% of charge
-- Pro: 5% of charge
-- Custom: negotiated
+Middleware factor: `requireEntitlement(kind, amount)` wraps protected API routes (audit start, builder call, chat msg).
 
-Tier persists on `user`. Stripe handles the rest — fee lands in our connected platform account.
+### E.9 — Connect onboarding (paid_product creators only — NO platform fee)
 
-### E.9 — Refund flow (Claude)
+**Critical clarification:** Connect onboarding is **opt-in** for creators on the paid_product distribution profile. CreatorCanon takes **0%** application_fee_amount. The creator's full audience-payment goes to the creator's Stripe account.
 
-Stripe webhook `charge.refunded` revokes access_grant. Email buyer "Your access has been revoked." If creator initiates refund from their own Stripe dashboard, our system reacts via webhook.
+**Claude:** `POST /api/billing/connect-onboard` creates Stripe Account Link → returns hosted onboarding URL. Stores `stripe_account` row.
+**Codex:** `StripeConnectButton.tsx` lives inside the paid_product distribution config (Phase C); only shown for that profile.
 
-### E.10 — Subscription support (optional v1)
+When creating a Checkout session for an audience purchase of a paid_product hub:
+```ts
+stripe.checkout.sessions.create({
+  payment_intent_data: {
+    application_fee_amount: 0,                        // ← PLATFORM TAKES NOTHING
+    transfer_data: { destination: creatorStripeAccountId },
+  },
+  // ...
+});
+```
 
-If price is recurring, treat differently: access_grant persists as long as subscription is active. `customer.subscription.deleted` revokes. `customer.subscription.updated` (e.g., upgrade) syncs.
+### E.10 — Magic-link for paid_product buyers (Claude)
 
-### E.11 — Testing
+Buyer paid via creator's Connect account → webhook creates `access_grant` + sends magic-link email → consumer hits `/api/auth/magic/[token]` → cookie set → can read paid hub.
+
+(Reuses existing Phase C member-area access infrastructure where possible.)
+
+### E.11 — Pricing page UI (Codex)
+
+`/pricing` public page:
+- Hero: "From YouTube channel to a polished knowledge hub in hours."
+- 3-column tier comparison
+- Maintenance card below ("Hosting + AI chat $19/mo per hub")
+- FAQ: "Do you take a cut of my hub revenue?" → "**No.** CreatorCanon's revenue comes only from your subscription. If you sell your hub through Stripe, 100% of your revenue goes to your Stripe account."
+
+### E.12 — Billing history + dashboard (Codex)
+
+`/dashboard/billing` shows:
+- Current tier + next renewal
+- Usage bars: "12 / 40 hours used this period"
+- Addon credit balance
+- Purchase history list (subscription invoices + addon purchases)
+- "Manage subscription" → Stripe portal
+- "Buy more credits" → addon modal
+
+### E.13 — Trial period
+
+14-day Stripe trial on Starter only. Pro and Studio require payment method up front. Webhook handles `customer.subscription.trial_will_end` for nudge email.
+
+### E.14 — Testing
 
 Stripe test mode end-to-end:
-- Create test creator, run Connect onboarding
-- Set price ($19 one-time)
-- Buy with test card 4242
-- Verify access_grant created + magic-link delivered
-- Verify deep page accessible with cookie
-- Verify refund revokes access
+- Create Starter sub with test card 4242 → tier credits allocated in ledger
+- Run audit consuming 1 hour → credits decrement
+- Buy hours addon → credits increment
+- Upgrade Starter → Pro via portal → tier credits reset to Pro level
+- Cancel sub → status flips to canceled at period end
+- Failed payment → subscription past_due → 7 days later auto-cancel
+- Connect onboard a test creator → audience-buy a paid_product hub → access_grant created, NO platform fee retained
 
-### E.12 — PR + ops docs
+### E.15 — PR + ops docs
 
-PR title: "Phase E: Stripe Connect billing (paid_product distribution profile)"
+PR title: "Phase E: SaaS subscription billing (3 tiers + addons + maintenance + Connect pass-through)"
 
-Operations doc: how to apply for Stripe Connect platform account (1-3 week KYC), required env vars (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_CLIENT_ID), webhook endpoint URL setup.
+Ops doc: env vars, Stripe webhook endpoint setup, how to apply for Connect platform account (still needed even with 0% fee for compliance).
 
 ---
 
 ## Success criteria
 
-- [ ] Test creator completes Stripe Connect onboarding
-- [ ] Buyer completes purchase in Stripe test mode
-- [ ] Magic-link delivered + access_grant created
-- [ ] Cookie-based access works on deep hub pages
-- [ ] Refund webhook revokes access correctly
-- [ ] Application fee deducts correctly (test mode shows expected amounts)
+- [ ] Test creator subscribes to Pro → tier credits allocated in Phase N ledger
+- [ ] Addon purchase tops up credits in ledger
+- [ ] Hub publish creates maintenance subscription
+- [ ] Without maintenance, hub goes read-only after grace period
+- [ ] Entitlement gates block actions when credits exhausted
+- [ ] Stripe Customer Portal handles upgrade/cancel correctly
+- [ ] Paid_product Connect flow charges audience with 0% platform fee
+- [ ] Magic-link delivers to paid_product buyer
 
 ## Risk callouts
 
-- **Stripe Connect KYC delay** — 1-3 weeks for our platform account. Apply early. Mitigation: Phase E development uses Stripe Connect test account; production switchover is a config flip.
-- **Webhook idempotency bugs** — duplicate access grants if webhook handler isn't idempotent. Mitigation: insert-with-`ON CONFLICT (stripe_charge_id) DO NOTHING`.
-- **Magic-link email deliverability** — Gmail's spam filter can flag transactional from new domains. Mitigation: SPF/DKIM/DMARC setup early, use established provider.
-- **Subscription state sync** — Stripe is source of truth, but our DB caches. Drift causes incorrect access. Mitigation: nightly reconciliation job + admin tools for force-sync.
+- **Connect KYC delay** — 1-3 weeks even with 0% fee (still need platform account for transfers). Apply early. Mitigation: Connect-only branch dev'd against test mode; production switchover later.
+- **Webhook idempotency** — duplicate ledger entries if handler runs twice. Mitigation: `ON CONFLICT` constraints on `stripe_subscription_id` and `stripe_charge_id`.
+- **Tier downgrade with overage** — creator on Studio (40h) downgrades to Starter (3h) mid-period after using 30h. Mitigation: pro-rate at downgrade time + zero out overage in ledger; surface clear UX about what they keep.
+- **Maintenance lapse** — creator stops paying maintenance, hub goes dark, audience disrupted. Mitigation: 30-day grace + 3 reminder emails before read-only flip.
+- **Trial abuse** — multiple Starter trials per email. Mitigation: Stripe Customer dedup by email; reject duplicate subscription creation.
 
 ## Out of scope
 
-- Tax handling (Stripe Tax integration deferred to v2)
-- Multi-currency (USD-only v1)
+- Annual billing (monthly only v1)
 - Coupons / promo codes (v2)
-- Per-page micro-purchases (whole-hub purchases v1)
+- Multi-currency (USD-only v1)
+- Tax handling beyond Stripe Tax defaults (v2)
+- Team plans / multiple seats per subscription (v2)
+- Per-page micro-purchases on paid_product hubs (whole-hub only v1)

@@ -13,16 +13,18 @@
 | Phase | Title | Owner | Depends on | Estimated weeks |
 |---|---|---|---|---|
 | **A** | Operator-coach product synthesis | Claude | main (Phase 11) | 1-12 |
-| **B** | Creator editor UI | Codex | A (mock data ok wks 1-7) | 8-14 |
+| **B** | Creator editor UI + AI builder (conversational) | Codex + Claude | A (mock data ok wks 1-7) | 8-14 |
 | **C** | Distribution profiles (lead-magnet, paid, member, public, zip) | Codex + Claude | main | 1-8 |
 | **D** | Self-serve onboarding wizard | Codex | A, B, C | 12-20 |
-| **E** | Stripe Connect billing | Codex + Claude | C (profile abstraction) | 6-12 |
+| **E** | CreatorCanon SaaS subscription billing (3 tiers + addons + maintenance) | Codex + Claude | C, N | 6-12 |
 | **F** | Analytics + creator dashboard | Codex + Claude | C (deployed hub) | 14-22 |
-| **G** | Domain + DNS automation | Codex | C | 16-22 |
+| **G** | Domain + DNS automation (per-creator Vercel projects) | Codex | C | 16-22 |
 | **H** | Science-explainer product synthesis | Claude | A | 13-18 |
 | **I** | Contemplative-thinker product synthesis | Claude | A | 16-20 |
 | **J** | Instructional-craft product synthesis | Claude | A | 18-22 |
 | **K** | Production observability | Claude | F (deployed hubs to monitor) | 18-24 |
+| **L** | AI chat on hubs (RAG-grounded, audience-facing) | Claude + Codex | A, E, N, H | 16-21 |
+| **N** | Usage metering + credit ledger (3-kind ledger) | Claude | — (parallel with E) | 6-9 |
 
 **Critical path to PMF demo (one creator, lead-magnet only):** A → B → C → D — 20 weeks.
 
@@ -236,6 +238,8 @@ Each phase has its own detailed plan at:
 | I | `docs/superpowers/plans/2026-05-02-phase-i-contemplative-thinker-synthesis.md` |
 | J | `docs/superpowers/plans/2026-05-02-phase-j-instructional-craft-synthesis.md` |
 | K | `docs/superpowers/plans/2026-05-02-phase-k-production-observability.md` |
+| L | `docs/superpowers/plans/2026-05-02-phase-l-ai-chat-on-hubs.md` |
+| N | `docs/superpowers/plans/2026-05-02-phase-n-usage-metering-credit-ledger.md` |
 
 Each plan is self-contained: tasks, files to create/modify, success criteria, exit criteria.
 
@@ -303,11 +307,18 @@ Critical path: A → B → D → PMF demo at ~week 14. Production-ready at ~week
 4. **Per-archetype shell rendering complexity** — building 4 different shells could blow out frontend timeline. **Mitigation:** ship operator-coach shell first; subsequent archetypes reuse 70%+ of components.
 5. **Live data regen costs** — every phase that changes the audit substrate or synthesis logic needs a re-run on the cohort. Each re-run is ~3 hours of Codex per creator × 7 creators = ~21 hours per phase. **Mitigation:** only re-run when changes are user-facing material; small fixes can roll up.
 
-**Open questions for human (Mario) to decide:**
-1. PMF wedge creator: Huber (most reachable) vs Hormozi (most leverage) vs Clouse (audience = ICP). Phase A plan defaults to Huber but switchable.
-2. Stripe Connect platform fee: what % does CreatorCanon take? Affects the billing UX (do we display platform fee transparently or absorb).
-3. Hosting tier per creator: their own Vercel project (clean but expensive) or shared multi-tenant (cheap but more engineering). Phase G plan defaults to per-creator.
-4. Free-tier limit for lead-magnet plan: how many videos per audit? (Phase D plan defaults to 6 free, $9-19/mo for unlimited).
+**Decided (locked-in by Mario 2026-05-02):**
+1. **PMF wedge creator: Hormozi first, then Clouse.** Phase A smoke-test runs against Hormozi's run; cohort smoke test extended to Clouse second.
+2. **Platform fee: 0%.** CreatorCanon revenue comes ONLY from SaaS subscriptions (Phase E tiers + maintenance + addon credits). NO cut of creator revenue. Stripe Connect kept as opt-in pass-through for paid_product creators with `application_fee_amount=0`.
+3. **Per-creator Vercel project.** Phase G locks per-creator project; multi-tenant shared deferred entirely.
+4. **3-tier subscription model with usage credits:**
+   - Starter $29/mo: 3h video gen + 100 builder credits + 0 chat (chat via maintenance/addon)
+   - Pro $99/mo: 12h + 500 builder + 1k chat
+   - Studio $299/mo: 40h + 2k builder + 5k chat
+   - Maintenance $19/mo per published hub: hosting + AI chat at the hub
+   - Addons: +5h ($39), +500 builder ($19), +2k chat ($19)
+   - Free tier: 6 source videos OR a single trial-based first audit, capped to a single in-progress hub.
+5. **Hubs include RAG-grounded AI chat (Phase L)** for the audience. Cost-counted against the creator's chat-credit balance (Phase N).
 
 ---
 
