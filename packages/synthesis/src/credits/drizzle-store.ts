@@ -22,10 +22,11 @@ import { creditBalance, creditEvent } from '@creatorcanon/db/schema';
 import * as schema from '@creatorcanon/db/schema';
 
 import type { CreditLedgerStore } from './types';
+import type { ReconcilerEventRow, ReconcilerStore } from './reconciler';
 
 type Db = PostgresJsDatabase<typeof schema>;
 
-export class DrizzleCreditLedger implements CreditLedgerStore {
+export class DrizzleCreditLedger implements CreditLedgerStore, ReconcilerStore {
   constructor(private readonly db: Db) {}
 
   async insertEvent(args: {
@@ -116,5 +117,35 @@ export class DrizzleCreditLedger implements CreditLedgerStore {
     const out: Record<string, number> = {};
     for (const r of rows) out[r.kind] = r.balance;
     return out;
+  }
+
+  // ── ReconcilerStore surface ────────────────────────────────────────────
+
+  async *listAllEvents(): AsyncIterable<ReconcilerEventRow> {
+    // Stream all rows. Drizzle's postgres-js adapter loads everything in one
+    // pass — fine for our scale (events / month is tiny).
+    const rows = await this.db
+      .select({
+        userId: creditEvent.userId,
+        kind: creditEvent.kind,
+        delta: creditEvent.delta,
+        createdAt: creditEvent.createdAt,
+      })
+      .from(creditEvent);
+    for (const r of rows) yield r;
+  }
+
+  async getMaterializedBalance(userId: string, kind: string): Promise<number> {
+    return this.getBalance(userId, kind);
+  }
+
+  async setMaterializedBalance(userId: string, kind: string, balance: number): Promise<void> {
+    await this.db
+      .insert(creditBalance)
+      .values({ userId, kind, balance })
+      .onConflictDoUpdate({
+        target: [creditBalance.userId, creditBalance.kind],
+        set: { balance, updatedAt: new Date() },
+      });
   }
 }

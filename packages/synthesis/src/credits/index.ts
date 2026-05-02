@@ -24,6 +24,17 @@ export type {
 export { requireCredits, runWithCredits } from './enforcer';
 export type { RunWithCreditsArgs } from './enforcer';
 
+export { reconcile } from './reconciler';
+export type {
+  ReconcilerEventRow,
+  ReconcilerStore,
+  ReconcileOptions,
+  ReconcileResult,
+  DriftReport,
+} from './reconciler';
+export { runReconciliation } from './reconciler-cli';
+export type { RunReconciliationOptions } from './reconciler-cli';
+
 export { MemoryCreditLedger } from './memory-store';
 export { DrizzleCreditLedger } from './drizzle-store';
 

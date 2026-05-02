@@ -5,6 +5,7 @@
  */
 
 import type { CreditLedgerStore } from './types';
+import type { ReconcilerEventRow, ReconcilerStore } from './reconciler';
 
 interface InMemoryEvent {
   id: string;
@@ -16,7 +17,7 @@ interface InMemoryEvent {
   createdAt: Date;
 }
 
-export class MemoryCreditLedger implements CreditLedgerStore {
+export class MemoryCreditLedger implements CreditLedgerStore, ReconcilerStore {
   /** keyed by `${source}::${reference ?? ''}` for O(1) idempotency check. */
   private readonly bySourceRef = new Map<string, InMemoryEvent>();
   /** keyed by `${userId}::${kind}` */
@@ -86,5 +87,21 @@ export class MemoryCreditLedger implements CreditLedgerStore {
   /** Test-helper: list every event (already chronologically ordered). */
   listEvents(userId?: string): InMemoryEvent[] {
     return userId ? this.events.filter((e) => e.userId === userId) : [...this.events];
+  }
+
+  // ── ReconcilerStore surface ────────────────────────────────────────────
+
+  *listAllEvents(): Iterable<ReconcilerEventRow> {
+    for (const e of this.events) {
+      yield { userId: e.userId, kind: e.kind, delta: e.delta, createdAt: e.createdAt };
+    }
+  }
+
+  async getMaterializedBalance(userId: string, kind: string): Promise<number> {
+    return this.balances.get(this.bKey(userId, kind)) ?? 0;
+  }
+
+  async setMaterializedBalance(userId: string, kind: string, balance: number): Promise<void> {
+    this.balances.set(this.bKey(userId, kind), balance);
   }
 }
