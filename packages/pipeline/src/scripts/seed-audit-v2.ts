@@ -35,6 +35,7 @@
  *                                              [--regen-canon] [--regen-bodies]
  *                                              [--regen-synthesis] [--regen-journey]
  *                                              [--regen-briefs] [--regen-hero]
+ *                                              [--regen-hero-only]
  *                                              [--regen-evidence] [--regen-workshops]
  *                                              [--per-video-canon]
  *
@@ -48,6 +49,11 @@
  *   --regen-briefs      Regenerate page briefs
  *   --regen-hero        Regenerate hub_title / hub_tagline / hero_candidates
  *                       (with title-case + hero re-pass)
+ *   --regen-hero-only   Fast path: run ONLY Stage 9 (hero + persist). Loads the
+ *                       existing channel profile from DB, runs one Codex call, and
+ *                       writes hubTitle/hubTagline/hero_candidates back. Skips
+ *                       Stages 1-8 + 10-11. Use to backfill hubTitle without
+ *                       triggering a full --regen-channel. (Task 9.3)
  *   --regen-evidence    Re-tag evidence registries on all entities (Stage 10)
  *   --regen-workshops   Regenerate workshop stages (Stage 11)
  *                       Using --regen-evidence and/or --regen-workshops alone
@@ -255,6 +261,12 @@ interface ChannelProfile_v2 {
   creatorName: string;
   hub_title: string;
   hub_tagline: string;
+  /** camelCase alias for hub_title — added by Task 9.3 so downstream SQL
+   *  queries like payload->>'hubTitle' return non-null values. Both
+   *  snake_case and camelCase are written to the DB payload. */
+  hubTitle?: string;
+  /** camelCase alias for hub_tagline — same rationale as hubTitle. */
+  hubTagline?: string;
   hero_candidates: string[];
   _internal_niche: string;
   _internal_audience: string;
@@ -647,6 +659,9 @@ async function main() {
   const regenHero = process.argv.includes('--regen-hero');
   const regenEvidence = process.argv.includes('--regen-evidence');
   const regenWorkshops = process.argv.includes('--regen-workshops');
+  /** Task 9.3: fast path that runs ONLY Stage 9 (hero candidates + persist).
+   *  Skips Stages 1-8 + 10-11. Cheap: one Codex call per creator. */
+  const regenHeroOnly = process.argv.includes('--regen-hero-only');
   const perVideo = process.argv.includes('--per-video-canon');
 
   const voiceModeFlag = (() => {
@@ -659,6 +674,84 @@ async function main() {
     console.warn(`[v2] --voice-mode: invalid value "${val}", ignoring`);
     return null;
   })();
+
+  // ── --regen-hero-only fast path (Task 9.3) ───────────────────────────────
+  // Runs ONLY Stage 9 (hero candidates + hub_title/hub_tagline persist).
+  // Skips Stages 1-8 + 10-11. ~1 Codex call per creator. Use this to
+  // backfill hubTitle/hubTagline without forcing a full --regen-channel.
+  if (regenHeroOnly && !regenChannel) {
+    console.info(`[v2] --regen-hero-only: running Stage 9 only for ${runId}`);
+    const db = getDb();
+
+    // Load existing channel profile.
+    const cpRows = await db.select({ payload: channelProfile.payload })
+      .from(channelProfile)
+      .where(eq(channelProfile.runId, runId))
+      .limit(1);
+    if (!cpRows[0]) throw new Error(`No channelProfile found for runId=${runId}. Run without --regen-hero-only first.`);
+    const profile = cpRows[0].payload as unknown as ChannelProfile_v2;
+    if (!profile._internal_niche) throw new Error(`channelProfile for ${runId} is not v2 (missing _internal_niche). Re-run --regen-channel first.`);
+
+    // Load existing canon shells for top-titles context.
+    const canonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+      .from(canonNode)
+      .where(eq(canonNode.runId, runId));
+    const existingShells = canonRows
+      .map((r) => r.payload as unknown as CanonShell_v2)
+      .filter((s) => s.schemaVersion === 'v2' && !s.kind);
+
+    const topCanonTitles = existingShells
+      .filter((s) => s.pageWorthinessScore >= 60)
+      .sort((a, b) => b.pageWorthinessScore - a.pageWorthinessScore)
+      .slice(0, 10)
+      .map((s) => s.title);
+
+    // Run Stage 9.
+    const heroResult = await generateHeroCandidates({
+      creatorName: profile.creatorName,
+      archetype: profile._index_archetype,
+      niche: profile._internal_niche,
+      audience: profile._internal_audience,
+      dominantTone: profile._internal_dominant_tone,
+      recurringPromise: profile._internal_recurring_promise,
+      monetizationAngle: profile._internal_monetization_angle,
+      topCanonTitles,
+      preserveTerms: profile._index_creator_terminology,
+      voiceFingerprint: {
+        profanityAllowed: profile._index_archetype === 'operator-coach',
+        tonePreset: profile._internal_dominant_tone,
+      },
+    });
+
+    const refined = await refineHeroBlock(heroResult, {
+      creatorName: profile.creatorName,
+      niche: profile._internal_niche,
+      audience: profile._internal_audience,
+      recurringPromise: profile._internal_recurring_promise,
+      preserveTerms: profile._index_creator_terminology,
+      voiceFingerprint: {
+        profanityAllowed: profile._index_archetype === 'operator-coach',
+        tonePreset: profile._internal_dominant_tone,
+      },
+    });
+
+    // Persist: write both snake_case (backward compat) and camelCase aliases.
+    const updatedProfile = {
+      ...profile,
+      hub_title: refined.hub_title,
+      hub_tagline: refined.hub_tagline,
+      hubTitle: refined.hub_title,
+      hubTagline: refined.hub_tagline,
+      hero_candidates: refined.hero_candidates,
+    };
+    await db.update(channelProfile)
+      .set({ payload: updatedProfile as unknown as Record<string, unknown> })
+      .where(eq(channelProfile.runId, runId));
+
+    console.info(`[v2] Stage 9 only: hubTitle="${updatedProfile.hubTitle}" / hubTagline="${updatedProfile.hubTagline}" (${refined.rewriteCount} lines rewritten)`);
+    await closeDb();
+    return;
+  }
 
   // Late-stages-only fast path: if the operator runs ONLY --regen-evidence
   // and/or --regen-workshops (no other regen flags), the existing v2 entities
@@ -1361,6 +1454,10 @@ async function main() {
 
     profile.hub_title = refined.hub_title;
     profile.hub_tagline = refined.hub_tagline;
+    // Task 9.3: also write camelCase aliases so SQL queries on
+    // payload->>'hubTitle' and payload->>'hubTagline' return non-null values.
+    profile.hubTitle = refined.hub_title;
+    profile.hubTagline = refined.hub_tagline;
     profile.hero_candidates = refined.hero_candidates;
 
     await db.update(channelProfile)
