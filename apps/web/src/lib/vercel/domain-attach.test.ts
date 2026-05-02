@@ -4,7 +4,10 @@ import { describe, it } from 'node:test';
 import { VercelApiError, type VercelClient } from './client';
 import {
   attachDomainToVercelProject,
+  refreshDomainVerificationStatus,
+  refreshSslStatus,
   type DomainAttachmentRepository,
+  type DomainStatusRepository,
 } from './domain-attach';
 
 function createRepository() {
@@ -117,5 +120,91 @@ describe('attachDomainToVercelProject', () => {
 
     assert.deepEqual(calls, ['add:prj_123:learn.example.com']);
     assert.equal(updates.length, 0);
+  });
+});
+
+describe('domain verification refresh', () => {
+  it('updates persisted verification state from Vercel project domain', async () => {
+    const updates: boolean[] = [];
+    const repository: DomainStatusRepository = {
+      async findDomainStatusByHubId() {
+        return {
+          hubId: 'hub_123',
+          vercelProjectId: 'prj_123',
+          customDomain: 'learn.example.com',
+          domainVerified: false,
+          sslReady: false,
+          liveUrl: null,
+          status: 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      },
+      async updateDomainVerification(input) {
+        updates.push(input.domainVerified);
+      },
+      async updateSslStatus() {},
+    };
+    const vercel: Pick<VercelClient, 'getProjectDomain'> = {
+      async getProjectDomain() {
+        return {
+          name: 'learn.example.com',
+          projectId: 'prj_123',
+          verified: true,
+        };
+      },
+    };
+
+    const result = await refreshDomainVerificationStatus({
+      hubId: 'hub_123',
+      vercel,
+      repository,
+    });
+
+    assert.equal(result.domainVerified, true);
+    assert.deepEqual(updates, [true]);
+  });
+
+  it('marks ssl ready when the verified Vercel domain config is not misconfigured', async () => {
+    const updates: boolean[] = [];
+    const repository: DomainStatusRepository = {
+      async findDomainStatusByHubId() {
+        return {
+          hubId: 'hub_123',
+          vercelProjectId: 'prj_123',
+          customDomain: 'learn.example.com',
+          domainVerified: true,
+          sslReady: false,
+          liveUrl: null,
+          status: 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      },
+      async updateDomainVerification() {},
+      async updateSslStatus(input) {
+        updates.push(input.sslReady);
+      },
+    };
+    const vercel: Pick<VercelClient, 'getDomainConfig'> = {
+      async getDomainConfig() {
+        return {
+          configuredBy: 'CNAME',
+          acceptedChallenges: ['http-01'],
+          recommendedIPv4: [],
+          recommendedCNAME: [],
+          misconfigured: false,
+        };
+      },
+    };
+
+    const result = await refreshSslStatus({
+      hubId: 'hub_123',
+      vercel,
+      repository,
+    });
+
+    assert.equal(result.sslReady, true);
+    assert.deepEqual(updates, [true]);
   });
 });

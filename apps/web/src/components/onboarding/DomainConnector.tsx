@@ -9,10 +9,15 @@ import {
   validateCustomDomain,
 } from '@/lib/vercel/domain-utils';
 import { DnsRecordCard } from './DnsRecordCard';
+import { VerificationStatus } from './VerificationStatus';
 
 interface DomainConnectorProps {
   hubId: string;
   initialDomain?: string | null;
+  initialDomainVerified?: boolean;
+  initialSslReady?: boolean;
+  initialLiveUrl?: string | null;
+  statusStartedAtIso?: string | null;
 }
 
 interface AttachDomainResponse {
@@ -30,14 +35,31 @@ type SubmitState = 'idle' | 'submitting' | 'attached' | 'error';
 export function DomainConnector({
   hubId,
   initialDomain,
+  initialDomainVerified = false,
+  initialSslReady = false,
+  initialLiveUrl = null,
+  statusStartedAtIso = null,
 }: DomainConnectorProps) {
   const [domain, setDomain] = useState(initialDomain ?? '');
   const [attachedDomain, setAttachedDomain] = useState(initialDomain ?? '');
+  const [domainVerified, setDomainVerified] = useState(initialDomainVerified);
+  const [sslReady, setSslReady] = useState(initialSslReady);
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState<string | null>(null);
 
   const validation = useMemo(() => validateCustomDomain(domain), [domain]);
   const records = attachedDomain ? getDnsRecordsForDomain(attachedDomain) : [];
+  const connectionPill = attachedDomain ? (
+    sslReady ? (
+      <StatusPill tone="success">SSL ready</StatusPill>
+    ) : domainVerified ? (
+      <StatusPill tone="info">SSL provisioning</StatusPill>
+    ) : (
+      <StatusPill tone="info">DNS pending</StatusPill>
+    )
+  ) : (
+    <StatusPill tone="neutral">Not connected</StatusPill>
+  );
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,6 +91,8 @@ export function DomainConnector({
     const finalDomain = body.domain?.name ?? next.domain;
     setDomain(finalDomain);
     setAttachedDomain(finalDomain);
+    setDomainVerified(Boolean(body.domain?.verified));
+    setSslReady(false);
     setState('attached');
     setMessage(
       body.domain?.verified
@@ -81,13 +105,7 @@ export function DomainConnector({
     <Panel>
       <PanelHeader
         title="Custom domain"
-        meta={
-          state === 'attached' ? (
-            <StatusPill tone="info">DNS pending</StatusPill>
-          ) : (
-            <StatusPill tone="neutral">Not connected</StatusPill>
-          )
-        }
+        meta={connectionPill}
       />
       <div className="grid gap-4 p-4">
         <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={onSubmit}>
@@ -131,6 +149,16 @@ export function DomainConnector({
               <DnsRecordCard key={`${record.type}:${record.name}`} record={record} />
             ))}
           </div>
+        ) : null}
+
+        {attachedDomain ? (
+          <VerificationStatus
+            hubId={hubId}
+            initialDomainVerified={domainVerified}
+            initialSslReady={sslReady}
+            initialLiveUrl={initialLiveUrl}
+            startedAtIso={statusStartedAtIso}
+          />
         ) : null}
       </div>
     </Panel>

@@ -40,6 +40,8 @@ export default async function ProjectDomainPage({
       customDomain: hub.customDomain,
       domainVerified: deployment.domainVerified,
       sslReady: deployment.sslReady,
+      liveUrl: deployment.liveUrl,
+      createdAt: deployment.createdAt,
     })
     .from(hub)
     .leftJoin(deployment, eq(deployment.hubId, hub.id))
@@ -69,7 +71,14 @@ export default async function ProjectDomainPage({
         }
       />
 
-      <DomainConnector hubId={hubRow.id} initialDomain={hubRow.customDomain} />
+      <DomainConnector
+        hubId={hubRow.id}
+        initialDomain={hubRow.customDomain}
+        initialDomainVerified={hubRow.domainVerified ?? false}
+        initialSslReady={hubRow.sslReady ?? false}
+        initialLiveUrl={hubRow.liveUrl}
+        statusStartedAtIso={hubRow.createdAt?.toISOString() ?? null}
+      />
     </div>
   );
 }
