@@ -31,26 +31,22 @@ async function main() {
     throw new Error('Usage: tsx ./src/scripts/v2-cohort-report.ts <runId-1> ... <runId-N>');
   }
 
+  // Spawn node + tsx-cli.mjs directly to avoid Windows .cmd EINVAL +
+  // PATH-lookup issues. (Bare 'tsx' is not in PATH for spawnSync.)
+  const tsxCli = path.resolve(__dirname, '..', '..', 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const runValidator = (script: string, runId: string) => spawnSync(
+    process.execPath,
+    [tsxCli, path.join(__dirname, script), runId],
+    { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 },
+  );
+
   const results: PerCreatorStatus[] = [];
   for (const runId of runIds) {
     console.info(`[cohort] processing ${runId}…`);
-    // Run completeness + voice-mode + leak validators, capture outputs
-    const completeness = spawnSync(
-      'tsx', [path.join(__dirname, 'v2-completeness-report.ts'), runId],
-      { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 },
-    );
-    const voiceMode = spawnSync(
-      'tsx', [path.join(__dirname, 'check-voice-mode.ts'), runId],
-      { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 },
-    );
-    const leak = spawnSync(
-      'tsx', [path.join(__dirname, 'check-third-person-leak.ts'), runId],
-      { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 },
-    );
-    const workshops = spawnSync(
-      'tsx', [path.join(__dirname, 'validate-workshops.ts'), runId],
-      { encoding: 'utf8', maxBuffer: 5 * 1024 * 1024 },
-    );
+    const completeness = runValidator('v2-completeness-report.ts', runId);
+    const voiceMode = runValidator('check-voice-mode.ts', runId);
+    const leak = runValidator('check-third-person-leak.ts', runId);
+    const workshops = runValidator('validate-workshops.ts', runId);
 
     // Parse machine-readable METRIC lines emitted by each validator. The
     // validators print `[<tag>] METRIC <key>=<value>` lines for stable parsing.

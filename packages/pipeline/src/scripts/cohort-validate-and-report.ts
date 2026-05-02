@@ -42,10 +42,13 @@ async function main() {
         continue;
       }
       const t0 = Date.now();
-      const result = spawnSync('npx', ['tsx', validatorPath, runId], {
+      // Spawn node directly with tsx's cli.mjs to avoid Windows .cmd EINVAL
+      // (Node refuses to spawn .cmd shims without shell:true, and shell:true
+      // re-splits args on spaces — our path contains "CHANNEL ATLAS").
+      const tsxCli = path.resolve(__dirname, '..', '..', 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      const result = spawnSync(process.execPath, [tsxCli, validatorPath, runId], {
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024,
-        shell: true, // Windows: needs shell to resolve npx.cmd
       });
       const dt = Date.now() - t0;
       const logPath = path.join(outDir, `${runId}-${validator.replace('.ts', '.log')}`);
@@ -66,10 +69,10 @@ async function main() {
   // Now run cohort report
   console.info(`\n=== cohort report ===`);
   const cohortPath = path.join(__dirname, 'v2-cohort-report.ts');
-  const result = spawnSync('npx', ['tsx', cohortPath, ...runIds], {
+  const tsxCli = path.resolve(__dirname, '..', '..', 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const result = spawnSync(process.execPath, [tsxCli, cohortPath, ...runIds], {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
-    shell: true,
   });
   const cohortLogPath = path.join(outDir, 'cohort-report.log');
   fs.writeFileSync(cohortLogPath, (result.stdout || '') + '\n--- stderr ---\n' + (result.stderr || ''));
