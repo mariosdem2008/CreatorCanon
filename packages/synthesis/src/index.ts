@@ -51,6 +51,7 @@ export { composeFunnel } from './composers/funnel-composer';
 export {
   grant,
   consume,
+  getBalance,
   MemoryCreditLedger,
   DrizzleCreditLedger,
   InsufficientCreditsError,
@@ -65,4 +66,5 @@ export type {
   GrantArgs,
   ConsumeArgs,
   GrantResult,
+  BalanceMap,
 } from './credits';

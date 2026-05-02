@@ -5,6 +5,9 @@
 export { grant, consume } from './ledger';
 export type { GrantArgs, ConsumeArgs, GrantResult } from './ledger';
 
+export { getBalance } from './balance';
+export type { BalanceMap } from './balance';
+
 export { MemoryCreditLedger } from './memory-store';
 export { DrizzleCreditLedger } from './drizzle-store';
 
