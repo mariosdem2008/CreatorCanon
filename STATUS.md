@@ -51,4 +51,4 @@ Plus `9c727db` — fix synthesis→pipeline workspace cycle.
 
 ## Pull request
 
-Draft PR opened — see PR URL in commit message of A.12.
+Draft PR: https://github.com/mariosdem2008/CreatorCanon/pull/19
