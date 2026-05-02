@@ -26,6 +26,7 @@ import { runCodex } from './codex-runner';
 import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
 import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
+import { countCitations, citationFloor } from './citation-density';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 
@@ -255,6 +256,10 @@ function buildBodyPrompt(input: CanonBodyInput): string {
   lines.push(`  woven items by their CONTENT in your prose (e.g., "the dentist example"),`);
   lines.push(`  then echo back which «labels» you used in the used_*_ids output fields.`);
   lines.push('');
+  lines.push('# Citation density rule');
+  lines.push(`Use 5+ inline [<UUID>] citations from the source segments. Each citation should anchor a specific claim, not just decorate. Group related claims into the same citation when natural.`);
+  lines.push(`Specifically for ${input.type}: aim for at least ${citationFloor(input.type)} unique segment citations.`);
+  lines.push('');
   const voiceMode = input.voiceMode ?? 'first_person';
   lines.push(voiceRulesPrompt(voiceMode, input.creatorName));
   lines.push('');
@@ -323,6 +328,17 @@ export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs
       `codex refusal detected (${refusalWordCount} words): "${preview}..."`
     ) as Error & { partialResult?: CanonBodyResult };
     err.partialResult = result;  // preserve for orchestrator's catch
+    throw err;
+  }
+
+  // Phase 10 Task 10.2: citation density floor.
+  const cited_count = countCitations(body);
+  const floor = citationFloor(input.type);
+  if (cited_count < floor) {
+    const err = new Error(
+      `citation density too low: ${cited_count}/${floor} unique segment citations for ${input.type}`
+    ) as Error & { partialResult?: CanonBodyResult };
+    err.partialResult = result;
     throw err;
   }
 
@@ -408,6 +424,15 @@ export async function writeCanonBodiesParallel(
             `accepting at lower length to avoid blocking pipeline.`
           );
           out.set(input.id, lastResult);
+        } else if (lastErr.message.includes('citation density too low') && lastResult) {
+          // Phase 10 Task 10.2: prose may be fine, just under-cited — persist with
+          // _degraded marker rather than all-degrade (empty body is worse than sparse cites).
+          console.warn(
+            `[body] ${input.id} permanently under-cited after ${1 + maxRetries} attempts ` +
+            `(${countCitations(lastResult.body)}/${citationFloor(input.type)} cites); ` +
+            `accepting body with _degraded='low_citation_density' marker`
+          );
+          out.set(input.id, { ...lastResult, _degraded: 'low_citation_density' } as CanonBodyResult & { _degraded: string });
         } else {
           // Other failure modes (parse error, third-person leak, etc.) still hard-fail.
           console.error(`[body] ${input.id} permanently failed: ${lastErr.message.slice(0, 200)}`);
