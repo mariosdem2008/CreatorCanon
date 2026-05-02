@@ -62,6 +62,13 @@ export type {
   CaptionTrack,
   VideoDetails,
 } from './youtube/client';
+export { createPublicYouTubeClient } from './youtube/public-channel';
+export type {
+  PublicYouTubeChannel,
+  PublicYouTubeChannelInput,
+  PublicYouTubeClient,
+  PublicYouTubeVideo,
+} from './youtube/public-channel';
 
 // Resend
 export { createResendClient } from './resend/client';

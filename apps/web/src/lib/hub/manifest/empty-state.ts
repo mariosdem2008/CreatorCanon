@@ -1,43 +1,34 @@
 // apps/web/src/lib/hub/manifest/empty-state.ts
 //
-// Helpers that encode the renderer's empty-state contract from the design
-// spec (§ 5.5). Used everywhere a Citation, timestamp, or accent color may
-// be missing or malformed.
-
-import type { Citation, SourceVideo, Topic } from './schema';
+// Helpers that encode the renderer's empty-state contract. Used everywhere a
+// citation, timestamp, or accent color may be missing or malformed.
 
 export const ACCENT_COLORS = [
   'mint', 'peach', 'lilac', 'rose', 'blue', 'amber', 'sage', 'slate',
 ] as const;
 export type AccentColor = (typeof ACCENT_COLORS)[number];
 
+type CitationLike = {
+  url?: string;
+  timestampStart: number;
+};
+
+type SourceLike = {
+  youtubeId?: string | null;
+};
+
 /**
  * Returns the citation's URL, or synthesizes a YouTube watch URL with a
  * timestamp anchor when `citation.url` is missing.
  */
-export function citationUrl(
-  citation: Pick<Citation, 'url' | 'timestampStart'>,
-  video: Pick<SourceVideo, 'youtubeId'>,
-): string {
+export function citationUrl(citation: CitationLike, video: SourceLike): string {
   if (citation.url) return citation.url;
   const t = Math.floor(citation.timestampStart);
   return `https://www.youtube.com/watch?v=${video.youtubeId}&t=${t}s`;
 }
 
-export function safeCitationHref(
-  citation: Pick<Citation, 'url' | 'timestampStart'>,
-  video: Pick<SourceVideo, 'youtubeId'>,
-): string | null {
-  if (citation.url && !citation.url.includes('watch?v=null')) {
-    try {
-      const parsed = new URL(citation.url);
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-        return citation.url;
-      }
-    } catch {
-      // Fall through to synthesize a safe YouTube URL when possible.
-    }
-  }
+export function safeCitationHref(citation: CitationLike, video: SourceLike): string | null {
+  if (citation.url && !citation.url.includes('watch?v=null')) return citation.url;
   if (!video.youtubeId || video.youtubeId === 'null') return null;
   const t = Math.floor(citation.timestampStart);
   return `https://www.youtube.com/watch?v=${video.youtubeId}&t=${t}s`;
@@ -45,7 +36,7 @@ export function safeCitationHref(
 
 export function safeSourceTitle(rawTitle: string | null | undefined, ordinal: number): string {
   const title = (rawTitle ?? '').trim();
-  if (!title || /^untitled(\s+(source|video))?$/i.test(title) || /^source(?:\s*[·-]\s*\d+\s*min)?$/i.test(title)) {
+  if (!title || /^untitled(\s+(source|video))?$/i.test(title) || /^source(?:\s*(?:\u00b7|-)\s*\d+\s*min)?$/i.test(title)) {
     return `Source ${ordinal}`;
   }
   return title;
@@ -69,7 +60,7 @@ export function formatTimestampLabel(seconds: number): string {
  * Validates an accent color against the documented palette.
  * Falls back to `slate` for any unknown value.
  */
-export function resolveAccentColor(value: Topic['accentColor'] | undefined): AccentColor {
+export function resolveAccentColor(value: string | undefined): AccentColor {
   if (value && (ACCENT_COLORS as readonly string[]).includes(value)) {
     return value as AccentColor;
   }

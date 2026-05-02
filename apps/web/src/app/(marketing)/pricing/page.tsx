@@ -29,7 +29,7 @@ const INCLUDED: Array<{ title: string; body: string }> = [
   },
   {
     title: 'Three premium templates',
-    body: 'Editorial Atlas, Playbook OS, and Studio Vault — each tuned for a different reader.',
+    body: 'Creator Manual, Operator Manual, and Studio Manual - each tuned for a different reader.',
   },
   {
     title: 'Section-level review',

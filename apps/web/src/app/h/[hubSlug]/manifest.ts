@@ -5,13 +5,69 @@ import { createR2Client } from '@creatorcanon/adapters';
 import { eq, getDb } from '@creatorcanon/db';
 import { hub, release } from '@creatorcanon/db/schema';
 import { parseServerEnv } from '@creatorcanon/core';
-import { editorialAtlasManifestSchema, type EditorialAtlasManifest } from '@/lib/hub/manifest/schema';
+import { sampleCreatorManualManifest } from '@/lib/hub/creator-manual/sampleManifest';
+import {
+  hubManifestSchema,
+  isCreatorManualManifest,
+  type CreatorManualManifest,
+  type HubManifest as ParsedHubManifest,
+} from '@/lib/hub/manifest/schema';
 
-export type HubManifest = Awaited<ReturnType<typeof loadHubManifest>>;
+type HubRow = {
+  id: string;
+  subdomain: string;
+  theme: string | null;
+  liveReleaseId: string | null;
+  deletedAt: Date | null;
+};
+
+type ReleaseRow = {
+  id: string;
+  status: string;
+  manifestR2Key: string | null;
+  liveAt: Date | string | null;
+};
+
+export type LoadedHubManifest<TManifest extends ParsedHubManifest = ParsedHubManifest> = {
+  hub: HubRow;
+  release: ReleaseRow;
+  manifest: TManifest;
+};
+
+export type HubManifest = LoadedHubManifest;
+
+const CREATOR_MANUAL_PREVIEW_SLUG = 'creator-manual-preview';
+
+function canServeCreatorManualPreview() {
+  return process.env.NODE_ENV !== 'production' || process.env.CREATOR_MANUAL_PREVIEW_ENABLED === 'true';
+}
+
+function creatorManualPreviewResponse(hubSlug: string): LoadedHubManifest<CreatorManualManifest> {
+  return {
+    hub: {
+      id: 'hub_creator_manual_preview',
+      subdomain: hubSlug,
+      theme: null,
+      liveReleaseId: sampleCreatorManualManifest.releaseId,
+      deletedAt: null,
+    },
+    release: {
+      id: sampleCreatorManualManifest.releaseId,
+      status: 'live',
+      manifestR2Key: null,
+      liveAt: sampleCreatorManualManifest.generatedAt,
+    },
+    manifest: sampleCreatorManualManifest,
+  };
+}
 
 // React.cache dedupes within a single request — generateMetadata and the page
 // render both call loadHubManifest, but only one DB+R2 round-trip happens.
-export const loadHubManifest = cache(async (hubSlug: string) => {
+export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest> => {
+  if (hubSlug === CREATOR_MANUAL_PREVIEW_SLUG && canServeCreatorManualPreview()) {
+    return creatorManualPreviewResponse(hubSlug);
+  }
+
   const db = getDb();
   const hubs = await db
     .select({
@@ -47,11 +103,33 @@ export const loadHubManifest = cache(async (hubSlug: string) => {
   const r2 = createR2Client(parseServerEnv(process.env));
   const object = await r2.getObject(releaseRow.manifestR2Key);
   const decoded = new TextDecoder().decode(object.body);
-  const manifest: EditorialAtlasManifest = editorialAtlasManifestSchema.parse(JSON.parse(decoded));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decoded);
+  } catch (cause) {
+    throw new Error('Live hub manifest is not valid JSON.', { cause });
+  }
+
+  if (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    'schemaVersion' in parsed &&
+    (parsed as { schemaVersion?: unknown }).schemaVersion !== 'creator_manual_v1'
+  ) {
+    notFound();
+  }
+
+  const manifest = hubManifestSchema.parse(parsed);
 
   return {
     hub: hubRow,
     release: releaseRow,
     manifest,
   };
+});
+
+export const loadCreatorManualManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest<CreatorManualManifest>> => {
+  const loaded = await loadHubManifest(hubSlug);
+  if (!isCreatorManualManifest(loaded.manifest)) notFound();
+  return { ...loaded, manifest: loaded.manifest };
 });

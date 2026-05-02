@@ -1,14 +1,17 @@
 import { releaseKey, artifactKey, createR2Client } from '@creatorcanon/adapters';
-import { and, desc, eq, getDb } from '@creatorcanon/db';
+import { and, asc, desc, eq, getDb } from '@creatorcanon/db';
 import {
   generationRun,
   hub,
+  page,
   project,
   release,
 } from '@creatorcanon/db/schema';
 import { parseServerEnv } from '@creatorcanon/core';
 
-import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
+import { getAdapter } from './adapters';
+import type { CreatorManualManifest } from './adapters/creator-manual/manifest-types';
+import { parseCreatorManualManifest } from './adapters/creator-manual/schema';
 
 export interface PublishRunAsHubInput {
   workspaceId: string;
@@ -84,10 +87,20 @@ export async function getOrCreateHub(input: {
     .limit(1);
 
   if (existing[0]) {
+    const updates: Partial<typeof hub.$inferInsert> = { updatedAt: new Date() };
+    let shouldUpdate = false;
     if (existing[0].theme !== input.theme) {
+      updates.theme = input.theme;
+      shouldUpdate = true;
+    }
+    if (existing[0].templateKey !== 'creator_manual') {
+      updates.templateKey = 'creator_manual';
+      shouldUpdate = true;
+    }
+    if (shouldUpdate) {
       await db
         .update(hub)
-        .set({ theme: input.theme, updatedAt: new Date() })
+        .set(updates)
         .where(eq(hub.id, existing[0].id));
       const updated = await db.select().from(hub).where(eq(hub.id, existing[0].id)).limit(1);
       return updated[0]!;
@@ -105,6 +118,7 @@ export async function getOrCreateHub(input: {
     projectId: input.projectId,
     subdomain,
     theme: input.theme,
+    templateKey: 'creator_manual',
     accessMode: 'public',
     freePreview: 'all',
     createdAt: now,
@@ -115,26 +129,35 @@ export async function getOrCreateHub(input: {
   return rows[0]!;
 }
 
-/** Minimal runtime validation that the adapt-stage produced an Editorial Atlas manifest. */
-export function assertEditorialAtlasManifest(value: unknown): asserts value is EditorialAtlasManifest {
-  const schemaVersion = (value as { schemaVersion?: unknown } | null)?.schemaVersion;
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    (schemaVersion !== 'editorial_atlas_v1' && schemaVersion !== 'editorial_atlas_v2')
-  ) {
-    throw new Error(
-      `publish: adapt-stage manifest has unexpected schemaVersion='${
-        schemaVersion ?? 'missing'
-      }'. Expected 'editorial_atlas_v1' or 'editorial_atlas_v2'.`,
-    );
-  }
-}
-
 type ReleaseMetadata = {
   actorUserId?: string;
   error?: string;
+  pageVersionIds?: string[];
 };
+
+async function getCurrentPageVersionIds(input: {
+  runId: string;
+  workspaceId: string;
+}): Promise<string[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ currentVersionId: page.currentVersionId })
+    .from(page)
+    .where(and(eq(page.runId, input.runId), eq(page.workspaceId, input.workspaceId)))
+    .orderBy(asc(page.position));
+
+  return rows
+    .map((row) => row.currentVersionId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+}
+
+function metadataPageVersionIdsMatch(metadata: unknown, currentPageVersionIds: string[]): boolean {
+  if (typeof metadata !== 'object' || metadata === null) return false;
+  const pageVersionIds = (metadata as ReleaseMetadata).pageVersionIds;
+  if (!Array.isArray(pageVersionIds)) return false;
+  if (pageVersionIds.length !== currentPageVersionIds.length) return false;
+  return pageVersionIds.every((id, index) => id === currentPageVersionIds[index]);
+}
 
 export async function publishRunAsHub(
   input: PublishRunAsHubInput,
@@ -163,16 +186,8 @@ export async function publishRunAsHub(
     throw new Error(`Cannot publish a run with status ${runRow.status}.`);
   }
 
-  const projectConfig = projectRow.config as ProjectConfigWithTheme | null;
-  const theme = normalizeHubTheme(projectConfig?.presentation_preset);
-  const hubRow = await getOrCreateHub({
-    workspaceId: input.workspaceId,
-    projectId: input.projectId,
-    title: projectRow.title,
-    theme,
-  });
-
-  // 1. Read the Editorial Atlas manifest written by the adapt stage.
+  // 1. Read and validate the creator_manual_v1 manifest written by the adapt
+  //    stage before mutating hub/release state.
   const r2 = createR2Client(parseServerEnv(process.env));
   const adaptManifestKey = artifactKey({
     workspaceId: input.workspaceId,
@@ -183,11 +198,24 @@ export async function publishRunAsHub(
 
   const manifestObject = await r2.getObject(adaptManifestKey);
   const rawManifest: unknown = JSON.parse(new TextDecoder().decode(manifestObject.body));
-  // Validate schema version before doing anything irreversible.
-  assertEditorialAtlasManifest(rawManifest);
-  const adaptManifest: EditorialAtlasManifest = rawManifest;
+  // Validate the full public contract before doing anything irreversible.
+  parseCreatorManualManifest(rawManifest, 'Adapt-stage manifest');
+  const currentPageVersionIds = await getCurrentPageVersionIds({
+    runId: input.runId,
+    workspaceId: input.workspaceId,
+  });
 
-  // 2. Idempotency: if there is already a live release for this exact run, return it.
+  const projectConfig = projectRow.config as ProjectConfigWithTheme | null;
+  const theme = normalizeHubTheme(projectConfig?.presentation_preset);
+  const hubRow = await getOrCreateHub({
+    workspaceId: input.workspaceId,
+    projectId: input.projectId,
+    title: projectRow.title,
+    theme,
+  });
+
+  // 2. Idempotency: return a live release for this run only when the editable
+  //    page snapshot has not changed since that release was built.
   const existingLive = await db
     .select()
     .from(release)
@@ -200,14 +228,21 @@ export async function publishRunAsHub(
     )
     .limit(1);
 
-  if (existingLive[0]?.manifestR2Key) {
+  if (
+    existingLive[0]?.manifestR2Key &&
+    metadataPageVersionIdsMatch(existingLive[0].metadata, currentPageVersionIds)
+  ) {
+    const existingManifestObject = await r2.getObject(existingLive[0].manifestR2Key);
+    const existingManifest = parseCreatorManualManifest(JSON.parse(
+      new TextDecoder().decode(existingManifestObject.body),
+    ), 'Existing live release manifest');
     return {
       hubId: hubRow.id,
       releaseId: existingLive[0].id,
       subdomain: hubRow.subdomain,
       publicPath: `/h/${hubRow.subdomain}`,
       manifestR2Key: existingLive[0].manifestR2Key,
-      pageCount: adaptManifest.pages.length,
+      pageCount: existingManifest.stats.nodeCount,
     };
   }
 
@@ -223,11 +258,18 @@ export async function publishRunAsHub(
 
   // 4. Stamp the real releaseId and publishedAt into the manifest, then write to
   //    the release-keyed R2 path.
-  const finalManifest: EditorialAtlasManifest = {
-    ...adaptManifest,
+  const adapter = getAdapter(hubRow.templateKey);
+  const currentManifest = await adapter({
+    runId: input.runId,
+    hubId: hubRow.id,
+    releaseId: 'unpublished',
+  });
+  const validatedCurrentManifest = parseCreatorManualManifest(currentManifest, 'Fresh adapter manifest');
+  const finalManifest: CreatorManualManifest = parseCreatorManualManifest({
+    ...validatedCurrentManifest,
     releaseId,
     publishedAt: now.toISOString(),
-  };
+  }, 'Final release manifest');
   const manifestR2Key = releaseKey({
     hubId: hubRow.id,
     releaseId,
@@ -236,38 +278,37 @@ export async function publishRunAsHub(
 
   const releaseMetadata: ReleaseMetadata = {
     actorUserId: input.actorUserId,
+    pageVersionIds: currentPageVersionIds,
   };
 
-  // 5. Insert the release row (status: 'building') — this is the only place a
-  //    release row is created for a given run.
-  await db.insert(release).values({
-    id: releaseId,
-    workspaceId: input.workspaceId,
-    hubId: hubRow.id,
-    runId: input.runId,
-    releaseNumber,
-    status: 'building',
-    metadata: releaseMetadata,
-    createdAt: now,
-    updatedAt: now,
+  // 5. Write the release-keyed manifest before promoting DB state. If the
+  //    transaction fails afterward, the old live release remains intact.
+  await r2.putObject({
+    key: manifestR2Key,
+    body: JSON.stringify(finalManifest, null, 2),
+    contentType: 'application/json',
   });
 
-  try {
-    // 6. Write the release-keyed manifest to R2.
-    await r2.putObject({
-      key: manifestR2Key,
-      body: JSON.stringify(finalManifest, null, 2),
-      contentType: 'application/json',
+  await db.transaction(async (tx) => {
+    // 6. Insert and promote the release atomically with hub/project/run updates.
+    await tx.insert(release).values({
+      id: releaseId,
+      workspaceId: input.workspaceId,
+      hubId: hubRow.id,
+      runId: input.runId,
+      releaseNumber,
+      status: 'building',
+      metadata: releaseMetadata,
+      createdAt: now,
+      updatedAt: now,
     });
 
-    // 7. Archive any prior live release for this hub.
-    await db
+    await tx
       .update(release)
       .set({ status: 'archived', archivedAt: now, updatedAt: now })
       .where(and(eq(release.hubId, hubRow.id), eq(release.status, 'live')));
 
-    // 8. Flip the new release to live.
-    await db
+    await tx
       .update(release)
       .set({
         status: 'live',
@@ -278,37 +319,21 @@ export async function publishRunAsHub(
       })
       .where(eq(release.id, releaseId));
 
-    // 9. Update hub.liveReleaseId.
-    await db
+    await tx
       .update(hub)
       .set({ liveReleaseId: releaseId, updatedAt: now })
       .where(eq(hub.id, hubRow.id));
 
-    // 10. Update project.publishedHubId.
-    await db
+    await tx
       .update(project)
       .set({ publishedHubId: hubRow.id, updatedAt: now })
       .where(eq(project.id, input.projectId));
 
-    // 11. Mark run as published.
-    await db
+    await tx
       .update(generationRun)
       .set({ status: 'published', updatedAt: now })
       .where(eq(generationRun.id, input.runId));
-  } catch (error) {
-    await db
-      .update(release)
-      .set({
-        status: 'failed',
-        metadata: {
-          ...releaseMetadata,
-          error: error instanceof Error ? error.message : 'Unknown publish error',
-        },
-        updatedAt: new Date(),
-      })
-      .where(eq(release.id, releaseId));
-    throw error;
-  }
+  });
 
   return {
     hubId: hubRow.id,
@@ -316,6 +341,6 @@ export async function publishRunAsHub(
     subdomain: hubRow.subdomain,
     publicPath: `/h/${hubRow.subdomain}`,
     manifestR2Key,
-    pageCount: finalManifest.pages.length,
+    pageCount: finalManifest.stats.nodeCount,
   };
 }

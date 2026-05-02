@@ -15,9 +15,9 @@ import {
 import { parseServerEnv } from '@creatorcanon/core';
 
 import { loadDefaultEnvFiles } from './env-files';
-import { assertEditorialAtlasManifest, publishRunAsHub } from './publish-run-as-hub';
+import { getOrCreateHub, publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
-import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
+import type { CreatorManualManifest } from './adapters/creator-manual/manifest-types';
 
 const REQUIRED_STAGES = [
   'import_selection_snapshot',
@@ -173,16 +173,17 @@ async function verifyPublishedManifest(input: {
   const manifestObject = await r2.getObject(manifestR2Key);
   const manifest = JSON.parse(
     new TextDecoder().decode(manifestObject.body),
-  ) as EditorialAtlasManifest;
-  const citationCount = manifest.pages?.reduce(
-    (sum, p) => sum + (p.citations?.length ?? 0),
-    0,
-  ) ?? 0;
+  ) as CreatorManualManifest;
 
-  assertEditorialAtlasManifest(manifest);
-  assert(manifest.pages.length > 0, 'Release manifest has no pages.');
+  assert(
+    manifest.schemaVersion === 'creator_manual_v1',
+    'Release manifest schemaVersion is not creator_manual_v1.',
+  );
+  assert(manifest.nodes.length > 0, 'Release manifest has no nodes.');
+  assert(manifest.sources.length > 0, 'Release manifest has no sources.');
+  const evidenceRefCount = manifest.nodes.reduce((sum, node) => sum + node.evidence.length, 0);
 
-  if (citationCount === 0) {
+  if (evidenceRefCount === 0) {
     const selectedVideoRows = await db
       .select({ videoId: videoSetItem.videoId })
       .from(videoSetItem)
@@ -202,14 +203,14 @@ async function verifyPublishedManifest(input: {
     const transcriptsForSelected = transcriptRows.length;
     if (transcriptsForSelected === 0) {
       console.warn(
-        '[smoke-alpha] WARN: Release manifest has 0 citations because none of the ' +
+        '[smoke-alpha] WARN: Release manifest has 0 source evidence refs because none of the ' +
           selectedIds.length +
           ' selected videos returned fetchable captions. Graceful no-caption path verified.',
       );
     } else {
       assert(
-        citationCount > 0,
-        'Release manifest has no citations despite ' + transcriptsForSelected + ' transcripts on the run. This is a real pipeline bug.',
+        evidenceRefCount > 0,
+        'Release manifest has no source evidence refs despite ' + transcriptsForSelected + ' transcripts on the run. This is a real pipeline bug.',
       );
     }
   }
@@ -219,8 +220,9 @@ async function verifyPublishedManifest(input: {
     manifestR2Key,
     publicPath,
     theme,
-    pageCount: manifest.pages.length,
-    citationCount,
+    nodeCount: manifest.stats.nodeCount,
+    sourceCount: manifest.stats.sourceCount,
+    evidenceRefCount,
   };
 }
 
@@ -266,6 +268,12 @@ async function main() {
       reason: 'Run was already published; smoke verified existing stage rows and release manifest.',
     };
   } else {
+    await getOrCreateHub({
+      workspaceId: run.workspaceId,
+      projectId: run.projectId,
+      title: run.projectTitle,
+      theme: normalizeTheme((run.projectConfig as { presentation_preset?: unknown } | null)?.presentation_preset),
+    });
     pipelineResult = await runGenerationPipeline({
       runId: run.id,
       projectId: run.projectId,

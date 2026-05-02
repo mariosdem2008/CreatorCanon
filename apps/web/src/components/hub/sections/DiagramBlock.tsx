@@ -14,7 +14,7 @@ export interface DiagramBlockProps {
  * cost. Renders to inline SVG. Falls back to a fenced code block if
  * Mermaid fails at render time.
  */
-export function DiagramBlock({ diagramType: _t, mermaidSrc, caption }: DiagramBlockProps) {
+export function DiagramBlock({ mermaidSrc, caption }: DiagramBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 

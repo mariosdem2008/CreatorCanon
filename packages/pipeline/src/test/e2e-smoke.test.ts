@@ -11,12 +11,25 @@ import { getDb, eq } from '@creatorcanon/db';
 import { hub } from '@creatorcanon/db/schema';
 import type { AgentProvider, ChatResponse } from '../agents/providers';
 import type { R2Client } from '@creatorcanon/adapters';
+import type { CreatorManualManifest } from '../adapters/creator-manual/manifest-types';
 
 function makeStubR2(): R2Client {
+  const objects = new Map<string, Uint8Array>();
   return {
     bucket: 'stub',
-    async putObject(input: any) { return { key: input.key, etag: 'stub' }; },
-    async getObject() { throw new Error('stub'); },
+    async putObject(input: any) {
+      const body = input.body instanceof Uint8Array
+        ? input.body
+        : new TextEncoder().encode(String(input.body));
+      objects.set(input.key, body);
+      return { key: input.key, etag: 'stub' };
+    },
+    async getObject(input: any) {
+      const key = typeof input === 'string' ? input : input.key;
+      const body = objects.get(key);
+      if (!body) throw new Error(`stub object not found: ${key}`);
+      return { body, contentType: 'application/json' };
+    },
     async getSignedUrl() { throw new Error('stub'); },
     async deleteObject() { throw new Error('stub'); },
     async headObject() { throw new Error('stub'); },
@@ -84,7 +97,7 @@ function buildArgsFor(toolName: string): Record<string, unknown> {
 
 const skipIfNoEnv = !process.env.DATABASE_URL || !process.env.GEMINI_API_KEY || !process.env.OPENAI_API_KEY;
 
-describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPENAI_API_KEY not set' : false }, () => {
+describe('e2e: Creator Manual pipeline (Phase 1–5 against scripted provider)', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPENAI_API_KEY not set' : false }, () => {
   let seed: SeedResult;
   let hubId: string;
 
@@ -104,7 +117,7 @@ describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)'
       ],
     });
 
-    // Create hub with templateKey='editorial_atlas'.
+    // Create hub with templateKey='creator_manual'.
     // The orchestrator no longer creates a release row; that is publish's responsibility.
     hubId = `hub_${seed.runId.slice(-6)}`;
     const db = getDb();
@@ -113,7 +126,7 @@ describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)'
       workspaceId: seed.workspaceId,
       projectId: seed.projectId,
       subdomain: `e2e-${seed.runId.slice(-6)}`,
-      templateKey: 'editorial_atlas',
+      templateKey: 'creator_manual',
       metadata: {} as any,
     });
   });
@@ -151,7 +164,14 @@ describe('e2e: editorial atlas pipeline (Phase 1–5 against scripted provider)'
 
     assert.ok(merge.pageCount >= 1, `expected at least 1 page; got ${merge.pageCount}`);
     assert.ok(adapt.manifestR2Key.includes('manifest.json'));
-    assert.equal(adapt.templateKey, 'editorial_atlas');
+    assert.equal(adapt.templateKey, 'creator_manual');
+    const manifestObject = await r2.getObject(adapt.manifestR2Key);
+    const manifest = JSON.parse(
+      new TextDecoder().decode(manifestObject.body),
+    ) as CreatorManualManifest;
+    assert.equal(manifest.schemaVersion, 'creator_manual_v1');
+    assert.ok(manifest.nodes.length >= 1, 'at least 1 node expected');
+    assert.ok(manifest.sources.length >= 1, 'at least 1 source expected');
     // The adapt-stage manifest uses 'unpublished' as a releaseId placeholder;
     // publishRunAsHub stamps the real ID when creating the release row.
   });

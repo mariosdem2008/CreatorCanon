@@ -18,7 +18,7 @@
  *      skipped. In production, Whisper transcription is the fallback path.
  *   4. Runs the full 6-stage generation pipeline
  *   5. Publishes the run as a public hub
- *   6. Verifies the release manifest includes source references
+ *   6. Verifies the release manifest includes Creator Manual source references
  *   7. Prints a JSON report
  *
  * Usage:
@@ -54,9 +54,9 @@ import {
 import { createR2Client, transcriptKey } from '@creatorcanon/adapters';
 import { parseServerEnv, PIPELINE_VERSION } from '@creatorcanon/core';
 
-import { assertEditorialAtlasManifest, publishRunAsHub } from './publish-run-as-hub';
+import { publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
-import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
+import type { CreatorManualManifest } from './adapters/creator-manual/manifest-types';
 
 // ── Env setup ──────────────────────────────────────────────────────────────
 // Load .env only — intentionally skip .env.local (contains local-smoke stubs).
@@ -129,6 +129,8 @@ function requireOperatorConfirmation() {
 
 const RUN_ID = 'alpha-e2e-fireship-run';
 const PROJECT_ID = 'alpha-e2e-fireship-project';
+const HUB_ID = 'alpha-e2e-fireship-hub';
+const HUB_SUBDOMAIN = 'alpha-e2e-fireship';
 const WORKSPACE_ID = 'alpha-e2e-workspace';
 const CHANNEL_DB_ID = 'alpha-e2e-fireship-channel';
 const VIDEO_SET_ID = 'alpha-e2e-video-set';
@@ -697,6 +699,32 @@ async function seedAlphaData(): Promise<{ userEmail: string; resolvedUserId: str
       },
     });
 
+  await db
+    .insert(hub)
+    .values({
+      id: HUB_ID,
+      workspaceId: WORKSPACE_ID,
+      projectId: PROJECT_ID,
+      subdomain: HUB_SUBDOMAIN,
+      theme: 'paper',
+      templateKey: 'creator_manual',
+      accessMode: 'public',
+      freePreview: 'all',
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: hub.projectId,
+      set: {
+        subdomain: HUB_SUBDOMAIN,
+        theme: 'paper',
+        templateKey: 'creator_manual',
+        accessMode: 'public',
+        updatedAt: now,
+      },
+    });
+
   // Run status 'queued' = payment already confirmed, ready to execute.
   await db
     .insert(generationRun)
@@ -806,7 +834,7 @@ async function main() {
     `  transcripts=${pipelineResult.transcriptsFetched}` +
     `  skipped=${pipelineResult.transcriptsSkipped}` +
     `  segments=${pipelineResult.segmentsCreated}` +
-    `  pages=${pipelineResult.pageCount}\n\n`,
+    `  pageBriefs=${pipelineResult.pageCount}\n\n`,
   );
 
   // 3. Publish
@@ -826,15 +854,16 @@ async function main() {
   const manifestObj = await r2.getObject(publishResult.manifestR2Key);
   const manifest = JSON.parse(
     new TextDecoder().decode(manifestObj.body),
-  ) as EditorialAtlasManifest;
-  const citationCount = manifest.pages?.reduce(
-    (sum, p) => sum + (p.citations?.length ?? 0),
-    0,
-  ) ?? 0;
+  ) as CreatorManualManifest;
 
-  assertEditorialAtlasManifest(manifest);
-  assert(manifest.pages.length > 0, 'Manifest has no pages.');
-  assert(citationCount > 0, 'Manifest has no citations.');
+  assert(
+    manifest.schemaVersion === 'creator_manual_v1',
+    `Manifest schemaVersion mismatch: ${manifest.schemaVersion}`,
+  );
+  assert(manifest.nodes.length > 0, 'Manifest has no nodes.');
+  assert(manifest.sources.length > 0, 'Manifest has no sources.');
+  const evidenceRefCount = manifest.nodes.reduce((sum, node) => sum + node.evidence.length, 0);
+  assert(evidenceRefCount > 0, 'Manifest has no source evidence references.');
 
   await closeDb();
 
@@ -853,7 +882,7 @@ async function main() {
           transcriptsFetched: pipelineResult.transcriptsFetched,
           transcriptsSkipped: pipelineResult.transcriptsSkipped,
           segmentsCreated: pipelineResult.segmentsCreated,
-          pageCount: pipelineResult.pageCount,
+          pageBriefCount: pipelineResult.pageCount,
           manifestR2Key: pipelineResult.manifestR2Key,
         },
         hub: {
@@ -862,8 +891,9 @@ async function main() {
           subdomain: publishResult.subdomain,
           publicPath: publishResult.publicPath,
           manifestR2Key: publishResult.manifestR2Key,
-          pageCount: manifest.pages.length,
-          citationCount,
+          nodeCount: manifest.stats.nodeCount,
+          sourceCount: manifest.stats.sourceCount,
+          evidenceRefCount,
         },
       },
       null,

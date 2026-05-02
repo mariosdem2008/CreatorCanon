@@ -12,9 +12,9 @@ import { parseServerEnv, PIPELINE_VERSION } from '@creatorcanon/core';
 
 import { closeDb } from '@creatorcanon/db/client';
 import { runGenerationPipeline } from './run-generation-pipeline';
-import { assertEditorialAtlasManifest, publishRunAsHub } from './publish-run-as-hub';
+import { getOrCreateHub, normalizeHubTheme, publishRunAsHub } from './publish-run-as-hub';
 import { loadDefaultEnvFiles } from './env-files';
-import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
+import type { CreatorManualManifest } from './adapters/creator-manual/manifest-types';
 
 const RUN_ID = 'local-smoke-run';
 const PROJECT_ID = 'local-smoke-project';
@@ -43,6 +43,23 @@ async function run() {
   process.env.ARTIFACT_STORAGE ??= 'local';
   process.env.LOCAL_ARTIFACT_DIR ??= '.local/artifacts';
 
+  const db = getDb();
+  const seededProjects = await db
+    .select({ title: project.title, config: project.config })
+    .from(project)
+    .where(and(eq(project.id, PROJECT_ID), eq(project.currentRunId, RUN_ID)))
+    .limit(1);
+  const seededProject = seededProjects[0];
+  assert(seededProject, 'Expected seeded project to point at the smoke run.');
+  await getOrCreateHub({
+    workspaceId: WORKSPACE_ID,
+    projectId: PROJECT_ID,
+    title: seededProject.title,
+    theme: normalizeHubTheme(
+      (seededProject.config as { presentation_preset?: unknown } | null)?.presentation_preset,
+    ),
+  });
+
   const result = await runGenerationPipeline({
     runId: RUN_ID,
     projectId: PROJECT_ID,
@@ -51,7 +68,6 @@ async function run() {
     pipelineVersion: PIPELINE_VERSION,
   });
 
-  const db = getDb();
   const runs = await db
     .select({
       id: generationRun.id,
@@ -143,13 +159,15 @@ async function run() {
   const manifestObject = await r2.getObject(releases[0].manifestR2Key);
   const manifest = JSON.parse(
     new TextDecoder().decode(manifestObject.body),
-  ) as EditorialAtlasManifest;
-  assertEditorialAtlasManifest(manifest);
-  const citationCount = manifest.pages?.reduce(
-    (sum, p) => sum + (p.citations?.length ?? 0),
-    0,
-  ) ?? 0;
-  assert(citationCount > 0, 'Expected release manifest to include citations.');
+  ) as CreatorManualManifest;
+  assert(
+    manifest.schemaVersion === 'creator_manual_v1',
+    `Expected creator_manual_v1 manifest, got ${manifest.schemaVersion}.`,
+  );
+  assert(manifest.nodes.length > 0, 'Expected release manifest to include nodes.');
+  assert(manifest.sources.length > 0, 'Expected release manifest to include sources.');
+  const evidenceRefCount = manifest.nodes.reduce((sum, node) => sum + node.evidence.length, 0);
+  assert(evidenceRefCount > 0, 'Expected release manifest to include source evidence refs.');
 
   const publishedProjects = await db
     .select({ publishedHubId: project.publishedHubId })
@@ -166,6 +184,9 @@ async function run() {
     videoCount: result.videoCount,
     segmentsCreated: result.segmentsCreated,
     pageCount: result.pageCount,
+    nodeCount: manifest.stats.nodeCount,
+    sourceCount: manifest.stats.sourceCount,
+    evidenceRefCount,
     manifestR2Key: result.manifestR2Key,
     publicPath: publishResult.publicPath,
     releaseManifestKey: publishResult.manifestR2Key,

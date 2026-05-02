@@ -204,9 +204,9 @@ async function assertSeededProject() {
 
 async function smokePublicTemplates(browser: BrowserController) {
   const cases: Array<{ theme: HubTheme; text: string }> = [
-    { theme: 'paper', text: 'Editorial Atlas' },
-    { theme: 'midnight', text: 'Playbook OS' },
-    { theme: 'field', text: 'Studio Vault' },
+    { theme: 'paper', text: 'Creator Manual' },
+    { theme: 'midnight', text: 'Operator Manual' },
+    { theme: 'field', text: 'Studio Manual' },
   ];
 
   try {

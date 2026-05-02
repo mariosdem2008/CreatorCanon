@@ -1,6 +1,6 @@
 // apps/web/src/app/h/[hubSlug]/loading.tsx
 //
-// Skeleton shown while a hub page renders. Matches the Editorial Atlas paper
+// Skeleton shown while a hub page renders. Matches the Creator Manual paper
 // canvas so the swap to real content is visually quiet.
 
 export default function HubLoading() {
