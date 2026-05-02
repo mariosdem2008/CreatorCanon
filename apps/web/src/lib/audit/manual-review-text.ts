@@ -66,6 +66,24 @@ export function buildParagraphRewritePrompt(input: RewritePromptInput): string {
   ].filter(Boolean).join('\n');
 }
 
+const PRESERVED_TOKEN_REGEX = /\[(?:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|(?:VM:)?vm_[A-Za-z0-9_-]+|cn_[A-Za-z0-9_-]+)\]/gi;
+
+function preservedTokens(text: string): string[] {
+  return [...new Set((text.match(PRESERVED_TOKEN_REGEX) ?? []).map((token) => token.trim()))];
+}
+
+export function findMissingPreservedTokens(original: string, rewritten: string): string[] {
+  const rewrittenTokens = new Set(preservedTokens(rewritten));
+  return preservedTokens(original).filter((token) => !rewrittenTokens.has(token));
+}
+
+export function assertRewrittenParagraphPreservesTokens(original: string, rewritten: string): void {
+  const missing = findMissingPreservedTokens(original, rewritten);
+  if (missing.length > 0) {
+    throw new Error(`Rewritten paragraph dropped preserved evidence token(s): ${missing.join(', ')}`);
+  }
+}
+
 export function updateCanonPayloadParagraph(
   payload: CanonPayloadWithManualReview,
   input: UpdateCanonPayloadParagraphInput,
@@ -81,6 +99,8 @@ export function updateCanonPayloadParagraph(
   }
 
   const rewrittenParagraph = input.rewrittenParagraph.trim();
+  assertRewrittenParagraphPreservesTokens(input.paragraph, rewrittenParagraph);
+
   const nextBody = [
     currentBody.slice(0, index),
     rewrittenParagraph,

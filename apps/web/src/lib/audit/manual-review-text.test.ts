@@ -2,7 +2,9 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  assertRewrittenParagraphPreservesTokens,
   buildParagraphRewritePrompt,
+  findMissingPreservedTokens,
   rewriteParagraphRequestSchema,
   splitManualReviewParagraphs,
   updateCanonPayloadParagraph,
@@ -78,5 +80,23 @@ describe('buildParagraphRewritePrompt', () => {
     assert.match(prompt, /rewrittenParagraph/);
     assert.match(prompt, /preserve citation tokens/i);
     assert.match(prompt, /Grand Slam Offer/);
+  });
+});
+
+describe('findMissingPreservedTokens', () => {
+  test('requires rewritten paragraphs to preserve evidence and visual tokens exactly', () => {
+    const original = 'Use the offer first [11111111-1111-4111-8111-111111111111] and show it [VM:vm_offer_1].';
+    const rewritten = 'Use the offer first [11111111-1111-4111-8111-111111111111] without losing proof.';
+
+    assert.deepEqual(findMissingPreservedTokens(original, rewritten), ['[VM:vm_offer_1]']);
+    assert.throws(() => assertRewrittenParagraphPreservesTokens(original, rewritten));
+  });
+
+  test('passes when all preserved tokens remain unchanged', () => {
+    const original = 'Proof lives here [cn_c29bb69e-577] and here [VM:vm_offer_1].';
+    const rewritten = 'Proof still lives here [cn_c29bb69e-577] and here [VM:vm_offer_1].';
+
+    assert.deepEqual(findMissingPreservedTokens(original, rewritten), []);
+    assert.doesNotThrow(() => assertRewrittenParagraphPreservesTokens(original, rewritten));
   });
 });

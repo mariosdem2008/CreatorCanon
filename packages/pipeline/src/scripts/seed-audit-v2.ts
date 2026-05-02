@@ -880,7 +880,15 @@ async function main() {
       };
     });
 
-    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, { concurrency: 3 });
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, {
+      concurrency: 3,
+      canonShells: briefOnlyCanonRefs.map((c) => ({
+        id: c.id,
+        title: c.title,
+        type: c.type,
+        internal_summary: c.internal_summary,
+      })),
+    });
 
     for (const shell of briefShells) {
       const result = briefBodies.get(shell.pageId);
@@ -1686,7 +1694,15 @@ async function main() {
       };
     });
 
-    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, { concurrency: 3 });
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, {
+      concurrency: 3,
+      canonShells: briefCanonRefs.map((c) => ({
+        id: c.id,
+        title: c.title,
+        type: c.type,
+        internal_summary: c.internal_summary,
+      })),
+    });
 
     // Persist briefs (with bodies merged in).
     for (const shell of briefShells) {

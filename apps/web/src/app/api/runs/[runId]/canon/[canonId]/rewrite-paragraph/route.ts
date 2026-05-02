@@ -8,6 +8,7 @@ import {
   buildParagraphRewritePrompt,
   paragraphRewriteResponseSchema,
   rewriteParagraphRequestSchema,
+  assertRewrittenParagraphPreservesTokens,
   updateCanonPayloadParagraph,
   type CanonPayloadWithManualReview,
 } from '@/lib/audit/manual-review-text';
@@ -70,7 +71,11 @@ export async function POST(
   const canonRows = await db
     .select({ payload: canonNode.payload })
     .from(canonNode)
-    .where(and(eq(canonNode.runId, params.runId), eq(canonNode.id, params.canonId)))
+    .where(and(
+      eq(canonNode.runId, params.runId),
+      eq(canonNode.id, params.canonId),
+      eq(canonNode.workspaceId, run.workspaceId),
+    ))
     .limit(1);
   const canon = canonRows[0];
   if (!canon) {
@@ -92,6 +97,7 @@ export async function POST(
     });
     const parsed = paragraphRewriteResponseSchema.parse(JSON.parse(extractJsonFromCodexOutput(raw)));
     rewrittenParagraph = parsed.rewrittenParagraph;
+    assertRewrittenParagraphPreservesTokens(body.paragraph, rewrittenParagraph);
   } catch (err) {
     console.error('[manual-review] codex rewrite failed:', err);
     return NextResponse.json({ error: 'Rewrite failed' }, { status: 500 });
@@ -111,7 +117,11 @@ export async function POST(
   await db
     .update(canonNode)
     .set({ payload: updatedPayload })
-    .where(and(eq(canonNode.runId, params.runId), eq(canonNode.id, params.canonId)));
+    .where(and(
+      eq(canonNode.runId, params.runId),
+      eq(canonNode.id, params.canonId),
+      eq(canonNode.workspaceId, run.workspaceId),
+    ));
 
   return NextResponse.json({
     rewrittenParagraph,
