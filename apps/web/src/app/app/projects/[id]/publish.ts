@@ -10,6 +10,12 @@ import { project, workspaceMember } from '@creatorcanon/db/schema';
 import { publishRunAsHub } from '@creatorcanon/pipeline';
 
 import HubPublishedEmail from '@/emails/HubPublishedEmail';
+import { createVercelClientFromEnv } from '@/lib/vercel/client';
+import {
+  createDeployTriggerRepository,
+  readDeploymentTriggerEnv,
+} from '@/lib/vercel/deploy-trigger';
+import { triggerRedeployAfterPublish } from '@/lib/vercel/redeploy';
 
 export async function publishCurrentRun(projectId: string) {
   const session = await auth();
@@ -42,6 +48,20 @@ export async function publishCurrentRun(projectId: string) {
     runId: proj.currentRunId,
     actorUserId: session.user.id,
   });
+
+  try {
+    const redeploy = await triggerRedeployAfterPublish({
+      hubId: publishResult.hubId,
+      repository: createDeployTriggerRepository(db),
+      vercel: createVercelClientFromEnv(),
+      env: readDeploymentTriggerEnv(process.env),
+    });
+    if (!redeploy.triggered && redeploy.reason) {
+      console.warn('[publish] redeploy skipped:', redeploy.reason);
+    }
+  } catch (err) {
+    console.error('[publish] redeploy trigger failed (non-blocking):', err);
+  }
 
   // Fire the confirmation email. Wrapped in try/catch so email failures
   // never block a successful publish — the hub is live regardless.

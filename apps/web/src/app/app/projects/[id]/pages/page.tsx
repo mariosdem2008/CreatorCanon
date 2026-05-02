@@ -169,7 +169,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
     ? allPagesApproved
       ? 'Publish approved hub'
       : `Publish with ${selectedTemplate.name}`
-    : 'Publish updated hub';
+    : 'Save & republish';
 
   return (
     <div className="space-y-4">

@@ -107,6 +107,10 @@ export interface VercelDeployment {
   id: string;
   url?: string;
   readyState?: string;
+  alias?: string[];
+  userAliases?: string[];
+  aliasAssigned?: boolean;
+  aliasError?: { code?: string; message?: string } | string | null;
   errorCode?: string;
   errorMessage?: string;
   project?: {

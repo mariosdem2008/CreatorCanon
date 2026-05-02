@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { StatusPill } from '@/components/cc';
 import {
@@ -73,6 +73,7 @@ export function VerificationStatus({
   const [deployError, setDeployError] = useState<string | null>(
     initialDeploymentError,
   );
+  const deployPollInFlight = useRef(false);
 
   const step = useMemo<VerificationStep>(
     () =>
@@ -144,6 +145,8 @@ export function VerificationStatus({
 
     let cancelled = false;
     async function pollDeploy() {
+      if (deployPollInFlight.current) return;
+      deployPollInFlight.current = true;
       try {
         const response = await fetch(`/api/deploy/trigger/${hubId}`, {
           method: 'POST',
@@ -159,11 +162,12 @@ export function VerificationStatus({
         }
       } catch (cause) {
         if (!cancelled) {
-          setDeploymentStatus('failed');
           setDeployError(
             cause instanceof Error ? cause.message : 'Deployment trigger failed',
           );
         }
+      } finally {
+        deployPollInFlight.current = false;
       }
     }
 

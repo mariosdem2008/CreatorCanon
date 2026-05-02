@@ -2,13 +2,16 @@ import type { Metadata } from 'next';
 
 import { ChannelMark, Icon } from '@creatorcanon/ui';
 
+import { CreatorManualHome, CreatorManualShell } from '@/components/hub/CreatorManual';
 import { CTA } from '@/components/marketing/CTA';
 import { Features } from '@/components/marketing/Features';
 import { Hero } from '@/components/marketing/Hero';
 import { HowItWorks } from '@/components/marketing/HowItWorks';
 import { TrustGrid } from '@/components/marketing/TrustGrid';
+import { buildCreatorManualIndex } from '@/lib/hub/creator-manual/content';
+import { loadCreatorManualManifest } from '../h/[hubSlug]/manifest';
 
-export const metadata: Metadata = {
+const marketingMetadata: Metadata = {
   title: 'CreatorCanon — turn your videos into a premium business knowledge system',
   description:
     'CreatorCanon turns the lessons you keep repeating on YouTube into a structured, source-cited knowledge hub members can pay to use.',
@@ -25,6 +28,19 @@ export const metadata: Metadata = {
   },
 };
 
+export async function generateMetadata(): Promise<Metadata> {
+  if (isPerHubVercelProject()) {
+    const { manifest } = await loadCreatorManualManifest(null);
+    return {
+      title: manifest.title,
+      description: manifest.home.summary,
+      alternates: { canonical: '/' },
+    };
+  }
+
+  return marketingMetadata;
+}
+
 const OUTCOMES = [
   { n: 'Structured', l: 'Framework-first navigation' },
   { n: 'Cited', l: 'Source-linked lessons and answers' },
@@ -32,7 +48,17 @@ const OUTCOMES = [
   { n: 'Sellable', l: 'Member-only playbooks and templates' },
 ];
 
-export default function MarketingHomePage() {
+export default async function MarketingHomePage() {
+  if (isPerHubVercelProject()) {
+    const { manifest } = await loadCreatorManualManifest(null);
+    const index = buildCreatorManualIndex(manifest);
+    return (
+      <CreatorManualShell manifest={manifest} activeRouteKey="home">
+        <CreatorManualHome manifest={manifest} index={index} />
+      </CreatorManualShell>
+    );
+  }
+
   return (
     <>
       <Hero />
@@ -78,4 +104,8 @@ export default function MarketingHomePage() {
       <CTA />
     </>
   );
+}
+
+function isPerHubVercelProject(): boolean {
+  return Boolean(process.env.HUB_ID?.trim());
 }

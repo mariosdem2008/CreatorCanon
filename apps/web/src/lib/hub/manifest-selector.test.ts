@@ -12,9 +12,13 @@ describe('resolveHubManifestSelector', () => {
   });
 
   it('uses HUB_ID for per-creator Vercel projects', () => {
-    assert.deepEqual(resolveHubManifestSelector('demo', { HUB_ID: 'hub_123' }), {
+    assert.deepEqual(resolveHubManifestSelector(null, { HUB_ID: 'hub_123' }), {
       column: 'id',
       value: 'hub_123',
     });
+  });
+
+  it('requires a route slug when HUB_ID is not configured', () => {
+    assert.throws(() => resolveHubManifestSelector(null, {}), /Hub slug is required/);
   });
 });

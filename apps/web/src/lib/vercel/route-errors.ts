@@ -30,7 +30,10 @@ export function toVercelRouteError(error: unknown): VercelRouteError {
 
 export function unwrapVercelRouteError(error: unknown): NextResponse | never {
   if (error instanceof VercelRouteError) return error.response;
-  throw error;
+  if (error instanceof Error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
 }
 
 function mapVercelStatus(status: number): number {

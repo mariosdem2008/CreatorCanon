@@ -87,6 +87,10 @@ export function createDomainAttachmentRepository(
           domainVerified: input.domainVerified,
           sslReady: false,
           vercelCertId: null,
+          vercelDeploymentId: null,
+          status: 'pending',
+          liveUrl: null,
+          lastError: null,
           domainAttachedAt: now,
           updatedAt: now,
         })

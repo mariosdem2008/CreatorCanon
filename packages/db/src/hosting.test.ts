@@ -30,6 +30,11 @@ test('deployment schema exposes Phase G hosting fields', () => {
 test('Phase G migration creates the deployment table', () => {
   const migrationPath = path.resolve(__dirname, '../drizzle/out/0022_phase_g_hosting.sql');
   const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+  const followUpMigrationPath = path.resolve(
+    __dirname,
+    '../drizzle/out/0023_phase_g_deployment_last_error.sql',
+  );
+  const followUpMigrationSql = fs.readFileSync(followUpMigrationPath, 'utf8');
 
   assert.match(migrationSql, /CREATE TYPE "public"\."deployment_status"/);
   assert.match(migrationSql, /CREATE TABLE IF NOT EXISTS "deployment"/);
@@ -52,4 +57,8 @@ test('Phase G migration creates the deployment table', () => {
   );
   assert.match(migrationSql, /NEW\."custom_domain" := hub_domain/);
   assert.match(migrationSql, /hub_domain IS DISTINCT FROM NEW\."custom_domain"/);
+  assert.match(
+    followUpMigrationSql,
+    /ALTER TABLE "deployment" ADD COLUMN IF NOT EXISTS "last_error" text/,
+  );
 });

@@ -27,6 +27,7 @@ export interface DeploymentTriggerRecord {
 
 export interface DeploymentTriggerRepository {
   findDeploymentByHubId(hubId: string): Promise<DeploymentTriggerRecord | null>;
+  markDeploymentStarting?(input: { hubId: string }): Promise<boolean>;
   markDeploymentBuilding(input: {
     hubId: string;
     vercelDeploymentId: string;
@@ -91,7 +92,7 @@ export async function triggerHubDeployment(
   const record = await options.repository.findDeploymentByHubId(options.hubId);
   assertReadyToDeploy(record);
 
-  if (!options.force && record.status === 'live' && record.liveUrl) {
+  if (!options.force && record.status === 'live' && record.liveUrl === rootHubUrl(record)) {
     return toResult(record);
   }
 
@@ -104,6 +105,18 @@ export async function triggerHubDeployment(
     record,
     options.env ?? readDeploymentTriggerEnv(process.env),
   );
+  if (!options.force && options.repository.markDeploymentStarting) {
+    const claimed = await options.repository.markDeploymentStarting({ hubId: record.hubId });
+    if (!claimed) {
+      return {
+        hubId: record.hubId,
+        status: 'building',
+        vercelDeploymentId: record.vercelDeploymentId,
+        liveUrl: null,
+        lastError: null,
+      };
+    }
+  }
 
   try {
     const remote = await options.vercel.createDeployment(request);
@@ -196,6 +209,20 @@ export function createDeployTriggerRepository(
         .where(eq(deployment.hubId, input.hubId));
     },
 
+    async markDeploymentStarting(input) {
+      const rows = await db
+        .update(deployment)
+        .set({
+          status: 'building',
+          liveUrl: null,
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(deployment.hubId, input.hubId), eq(deployment.status, 'pending')))
+        .returning({ hubId: deployment.hubId });
+      return rows.length > 0;
+    },
+
     async markDeploymentLive(input) {
       await db
         .update(deployment)
@@ -237,8 +264,17 @@ async function persistDeploymentState(
   record: DeploymentTriggerRecord,
   remote: VercelDeployment,
 ): Promise<TriggerHubDeploymentResult> {
+  const customDomain = requireValue(record.customDomain, 'Custom domain is not attached yet.');
   if (remote.readyState === 'READY') {
-    const liveUrl = `https://${record.customDomain}`;
+    const aliasError = getAliasErrorMessage(remote);
+    if (aliasError) {
+      return markFailed(repository, record, remote, aliasError);
+    }
+    if (!remote.aliasAssigned || !deploymentAliases(remote).includes(customDomain)) {
+      return persistActiveDeployment(repository, record, remote);
+    }
+
+    const liveUrl = `https://${customDomain}`;
     await repository.markDeploymentLive({
       hubId: record.hubId,
       vercelDeploymentId: remote.id,
@@ -254,23 +290,40 @@ async function persistDeploymentState(
   }
 
   if (remote.readyState && ACTIVE_DEPLOYMENT_STATES.has(remote.readyState)) {
-    await repository.markDeploymentBuilding({
-      hubId: record.hubId,
-      vercelDeploymentId: remote.id,
-    });
-    return {
-      hubId: record.hubId,
-      status: 'building',
-      vercelDeploymentId: remote.id,
-      liveUrl: null,
-      lastError: null,
-    };
+    return persistActiveDeployment(repository, record, remote);
   }
 
   const message =
     remote.errorMessage ??
     remote.errorCode ??
     `Vercel deployment ended in ${remote.readyState ?? 'an unknown state'}.`;
+  return markFailed(repository, record, remote, message);
+}
+
+async function persistActiveDeployment(
+  repository: DeploymentTriggerRepository,
+  record: DeploymentTriggerRecord,
+  remote: VercelDeployment,
+): Promise<TriggerHubDeploymentResult> {
+  await repository.markDeploymentBuilding({
+    hubId: record.hubId,
+    vercelDeploymentId: remote.id,
+  });
+  return {
+    hubId: record.hubId,
+    status: 'building',
+    vercelDeploymentId: remote.id,
+    liveUrl: null,
+    lastError: null,
+  };
+}
+
+async function markFailed(
+  repository: DeploymentTriggerRepository,
+  record: DeploymentTriggerRecord,
+  remote: VercelDeployment,
+  message: string,
+): Promise<TriggerHubDeploymentResult> {
   await repository.markDeploymentFailed({
     hubId: record.hubId,
     vercelDeploymentId: remote.id,
@@ -283,6 +336,21 @@ async function persistDeploymentState(
     liveUrl: null,
     lastError: message,
   };
+}
+
+function rootHubUrl(record: DeploymentTriggerRecord): string {
+  return `https://${record.customDomain}`;
+}
+
+function getAliasErrorMessage(remote: VercelDeployment): string | null {
+  const aliasError = remote.aliasError;
+  if (!aliasError) return null;
+  if (typeof aliasError === 'string') return aliasError;
+  return aliasError.message ?? aliasError.code ?? 'Vercel alias assignment failed.';
+}
+
+function deploymentAliases(remote: VercelDeployment): string[] {
+  return [...(remote.alias ?? []), ...(remote.userAliases ?? [])];
 }
 
 function assertReadyToDeploy(

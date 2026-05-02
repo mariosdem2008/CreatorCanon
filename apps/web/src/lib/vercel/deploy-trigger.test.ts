@@ -140,6 +140,32 @@ describe('triggerHubDeployment', () => {
     assert.equal((vercelCalls[0] as { meta: Record<string, string> }).meta.hubId, 'hub_123');
   });
 
+  it('does not create a duplicate deployment when another request claimed the row', async () => {
+    const { calls, repository } = createRepository();
+    repository.markDeploymentStarting = async () => {
+      calls.push('starting:false');
+      return false;
+    };
+    const vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'> = {
+      async createDeployment() {
+        throw new Error('unexpected create');
+      },
+      async getDeployment() {
+        throw new Error('unexpected get');
+      },
+    };
+
+    const result = await triggerHubDeployment({
+      hubId: 'hub_123',
+      repository,
+      vercel,
+      env: { VERCEL_GIT_REPO_ID: '123456' },
+    });
+
+    assert.equal(result.status, 'building');
+    assert.deepEqual(calls, ['find', 'starting:false']);
+  });
+
   it('refreshes an in-flight deployment and marks it live once Vercel is ready', async () => {
     const { calls, repository } = createRepository(
       createReadyRecord({
@@ -156,6 +182,8 @@ describe('triggerHubDeployment', () => {
           id: 'dpl_123',
           url: 'creator-canon-demo.vercel.app',
           readyState: 'READY',
+          aliasAssigned: true,
+          alias: ['learn.example.com'],
         };
       },
     };
@@ -173,6 +201,74 @@ describe('triggerHubDeployment', () => {
       'find',
       'live:dpl_123:https://learn.example.com',
     ]);
+  });
+
+  it('keeps a ready deployment building until the custom domain alias is assigned', async () => {
+    const { calls, repository } = createRepository(
+      createReadyRecord({
+        status: 'building',
+        vercelDeploymentId: 'dpl_123',
+      }),
+    );
+    const vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'> = {
+      async createDeployment() {
+        throw new Error('unexpected create');
+      },
+      async getDeployment() {
+        return {
+          id: 'dpl_123',
+          url: 'creator-canon-demo.vercel.app',
+          readyState: 'READY',
+          aliasAssigned: false,
+          alias: [],
+        };
+      },
+    };
+
+    const result = await triggerHubDeployment({
+      hubId: 'hub_123',
+      repository,
+      vercel,
+      env: { VERCEL_GIT_REPO_ID: '123456' },
+    });
+
+    assert.equal(result.status, 'building');
+    assert.equal(result.liveUrl, null);
+    assert.deepEqual(calls, ['find', 'building:dpl_123']);
+  });
+
+  it('marks ready deployments failed when Vercel reports alias assignment errors', async () => {
+    const { calls, repository } = createRepository(
+      createReadyRecord({
+        status: 'building',
+        vercelDeploymentId: 'dpl_123',
+      }),
+    );
+    const vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'> = {
+      async createDeployment() {
+        throw new Error('unexpected create');
+      },
+      async getDeployment() {
+        return {
+          id: 'dpl_123',
+          url: 'creator-canon-demo.vercel.app',
+          readyState: 'READY',
+          aliasAssigned: false,
+          aliasError: { message: 'Domain alias failed' },
+        };
+      },
+    };
+
+    const result = await triggerHubDeployment({
+      hubId: 'hub_123',
+      repository,
+      vercel,
+      env: { VERCEL_GIT_REPO_ID: '123456' },
+    });
+
+    assert.equal(result.status, 'failed');
+    assert.equal(result.lastError, 'Domain alias failed');
+    assert.deepEqual(calls, ['find', 'failed:Domain alias failed']);
   });
 
   it('marks the deployment failed when Vercel rejects the build trigger', async () => {

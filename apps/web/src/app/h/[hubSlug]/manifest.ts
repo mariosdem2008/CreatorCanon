@@ -64,7 +64,7 @@ function creatorManualPreviewResponse(hubSlug: string): LoadedHubManifest<Creato
 
 // React.cache dedupes within a single request — generateMetadata and the page
 // render both call loadHubManifest, but only one DB+R2 round-trip happens.
-export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest> => {
+export const loadHubManifest = cache(async (hubSlug: string | null): Promise<LoadedHubManifest> => {
   if (hubSlug === CREATOR_MANUAL_PREVIEW_SLUG && canServeCreatorManualPreview()) {
     return creatorManualPreviewResponse(hubSlug);
   }
@@ -134,7 +134,7 @@ export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubM
   };
 });
 
-export const loadCreatorManualManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest<CreatorManualManifest>> => {
+export const loadCreatorManualManifest = cache(async (hubSlug: string | null): Promise<LoadedHubManifest<CreatorManualManifest>> => {
   const loaded = await loadHubManifest(hubSlug);
   if (!isCreatorManualManifest(loaded.manifest)) notFound();
   return { ...loaded, manifest: loaded.manifest };
