@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { notFound, permanentRedirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
 import { createR2Client } from '@creatorcanon/adapters';
 import { eq, getDb } from '@creatorcanon/db';
@@ -9,12 +9,9 @@ import { sampleCreatorManualManifest } from '@/lib/hub/creator-manual/sampleMani
 import {
   hubManifestSchema,
   isCreatorManualManifest,
-  isEditorialAtlasManifest,
   type CreatorManualManifest,
-  type EditorialAtlasManifest,
   type HubManifest as ParsedHubManifest,
 } from '@/lib/hub/manifest/schema';
-import { getPageRoute } from '@/lib/hub/routes';
 
 type HubRow = {
   id: string;
@@ -106,7 +103,23 @@ export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubM
   const r2 = createR2Client(parseServerEnv(process.env));
   const object = await r2.getObject(releaseRow.manifestR2Key);
   const decoded = new TextDecoder().decode(object.body);
-  const manifest = hubManifestSchema.parse(JSON.parse(decoded));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decoded);
+  } catch (cause) {
+    throw new Error('Live hub manifest is not valid JSON.', { cause });
+  }
+
+  if (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    'schemaVersion' in parsed &&
+    (parsed as { schemaVersion?: unknown }).schemaVersion !== 'creator_manual_v1'
+  ) {
+    notFound();
+  }
+
+  const manifest = hubManifestSchema.parse(parsed);
 
   return {
     hub: hubRow,
@@ -115,23 +128,8 @@ export const loadHubManifest = cache(async (hubSlug: string): Promise<LoadedHubM
   };
 });
 
-export const loadEditorialAtlasManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest<EditorialAtlasManifest>> => {
-  const loaded = await loadHubManifest(hubSlug);
-  if (!isEditorialAtlasManifest(loaded.manifest)) notFound();
-  return { ...loaded, manifest: loaded.manifest };
-});
-
 export const loadCreatorManualManifest = cache(async (hubSlug: string): Promise<LoadedHubManifest<CreatorManualManifest>> => {
   const loaded = await loadHubManifest(hubSlug);
   if (!isCreatorManualManifest(loaded.manifest)) notFound();
   return { ...loaded, manifest: loaded.manifest };
-});
-
-export const loadCreatorManualManifestOrLegacyRedirect = cache(async (
-  hubSlug: string,
-  legacySlug: string,
-): Promise<LoadedHubManifest<CreatorManualManifest>> => {
-  const loaded = await loadHubManifest(hubSlug);
-  if (isCreatorManualManifest(loaded.manifest)) return { ...loaded, manifest: loaded.manifest };
-  permanentRedirect(getPageRoute(hubSlug, legacySlug));
 });

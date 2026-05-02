@@ -103,7 +103,7 @@ describe('runAdaptStage', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPE
       workspaceId: seed.workspaceId,
       projectId: seed.projectId,
       subdomain: `adapt-${seed.runId.slice(-6)}`,
-      templateKey: 'editorial_atlas',
+      templateKey: 'creator_manual',
       accessMode: 'public',
       metadata: {} as any,
     });
@@ -128,7 +128,7 @@ describe('runAdaptStage', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPE
     assert.ok(
       output.manifestR2Key.startsWith(`workspaces/${seed.workspaceId}/runs/${seed.runId}/adapt/`),
     );
-    assert.equal(output.templateKey, 'editorial_atlas');
+    assert.equal(output.templateKey, 'creator_manual');
 
     // The blob should be stored in the mock R2.
     const stored = r2.stored.get(output.manifestR2Key);
@@ -136,9 +136,9 @@ describe('runAdaptStage', { skip: skipIfNoEnv ? 'DATABASE_URL/GEMINI_API_KEY/OPE
 
     // It should be valid JSON with the correct schema version and placeholder releaseId.
     const parsed = JSON.parse(new TextDecoder().decode(stored));
-    assert.equal(parsed.schemaVersion, 'editorial_atlas_v1');
+    assert.equal(parsed.schemaVersion, 'creator_manual_v1');
     assert.equal(parsed.releaseId, 'unpublished');
-    assert.ok(parsed.pages.length >= 2, 'at least 2 pages expected');
+    assert.ok(parsed.nodes.length >= 1, 'at least 1 node expected');
   });
 
   it('throws when hub is not found', async () => {

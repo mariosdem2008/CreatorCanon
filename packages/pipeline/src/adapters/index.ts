@@ -1,8 +1,8 @@
-import { adaptArchiveToEditorialAtlas } from './editorial-atlas';
+import { adaptArchiveToCreatorManual } from './creator-manual';
 import type { AdapterFn } from './types';
 
 export const ADAPTERS: Record<string, AdapterFn> = {
-  editorial_atlas: adaptArchiveToEditorialAtlas,
+  creator_manual: adaptArchiveToCreatorManual,
 };
 
 export function getAdapter(templateKey: string): AdapterFn {

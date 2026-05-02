@@ -130,7 +130,7 @@ export function ConfigureClient({
         </Panel>
 
         <Panel>
-          <PanelHeader title="Public template" meta="Editorial Atlas · Playbook OS · Studio Vault" />
+          <PanelHeader title="Public template" meta="Creator Manual - Operator Manual - Studio Manual" />
           <div
             className="grid gap-2.5 p-5 md:grid-cols-3"
             role="radiogroup"
@@ -347,9 +347,9 @@ function fmtDuration(seconds: number): string {
 // ---------------------------------------------------------------------------
 
 const TEMPLATE_LABEL: Record<TemplateId, string> = {
-  paper: 'Editorial Atlas',
-  midnight: 'Playbook OS',
-  field: 'Studio Vault',
+  paper: 'Creator Manual',
+  midnight: 'Operator Manual',
+  field: 'Studio Manual',
 };
 
 const TONE_BODY: Record<Tone, string> = {
@@ -432,7 +432,7 @@ function LivePreview({
               ['01', 'Start'],
               ['02', 'Tracks'],
               ['03', 'Lessons'],
-              ['04', 'Atlas'],
+              ['04', 'Manual'],
             ].map(([n, label], i) => (
               <div
                 key={n}
@@ -495,13 +495,13 @@ function LivePreview({
           <div className={`flex items-center justify-between gap-2 border-t px-4 py-2 ${styles.lessonBorder} ${styles.footerBg}`}>
             <span className={`text-[10px] ${styles.muted}`}>Grounded chat · members only</span>
             <span className={`text-[10px] font-semibold ${styles.accent}`}>
-              Ask Atlas →
+              Ask Manual →
             </span>
           </div>
         ) : null}
       </div>
       <p className="px-4 py-2.5 text-[11px] leading-[1.5] text-[var(--cc-ink-4)]">
-        Preview updates as you edit. Final hub rendering ships in a later release — Atlas + Playbook templates are reskinned for production in the next phase.
+        Preview updates as you edit. Creator Manual styles are brand skins that keep the same structure while changing the visual system.
       </p>
     </Panel>
   );

@@ -32,6 +32,32 @@ export interface HubMetadata {
     creationProcess?: { stepNumber: number; title: string; body: string }[];
     faq?: { question: string; answer: string }[];
   };
+  /** Creator Manual brand overrides merged by the hub adapter. */
+  brand?: {
+    name?: string;
+    tone?: string;
+    colors?: Partial<{
+      background: string;
+      foreground: string;
+      surface: string;
+      elevated: string;
+      border: string;
+      muted: string;
+      accent: string;
+      accentForeground: string;
+      warning: string;
+      success: string;
+    }>;
+    typography?: Partial<{
+      headingFamily: string;
+      bodyFamily: string;
+    }>;
+    assets?: Partial<{
+      logoUrl: string;
+      heroImageUrl: string;
+      patternImageUrl: string;
+    }>;
+  };
 }
 
 /**
@@ -56,7 +82,7 @@ export const hub = pgTable(
     subdomain: citext('subdomain').notNull(),
     customDomain: text('custom_domain'),
     theme: hubThemeEnum('theme').notNull().default('paper'),
-    templateKey: hubTemplateKeyEnum('template_key').notNull().default('editorial_atlas'),
+    templateKey: hubTemplateKeyEnum('template_key').notNull().default('creator_manual'),
     accessMode: hubAccessModeEnum('access_mode').notNull().default('public'),
     paywallPriceCents: integer('paywall_price_cents'),
     metadata: jsonb('metadata').$type<HubMetadata>().notNull().default({}),

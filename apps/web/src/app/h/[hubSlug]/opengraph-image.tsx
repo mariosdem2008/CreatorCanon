@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-import { loadHubManifest } from './manifest';
+import { loadCreatorManualManifest } from './manifest';
 import { normalizeHubTemplateId } from '@/components/hub/templates';
 
 // Node runtime: loadHubManifest imports @creatorcanon/adapters whose barrel
@@ -53,17 +53,9 @@ export default async function Image({
   let theme: ThemeKey = 'paper';
 
   try {
-    const { hub, manifest } = await loadHubManifest(params.hubSlug);
+    const { hub, manifest } = await loadCreatorManualManifest(params.hubSlug);
     title = manifest.title;
-    if (manifest.schemaVersion === 'editorial_atlas_v1') {
-      const overviewPage =
-        manifest.pages.find((p) => p.slug === 'overview') ?? manifest.pages[0];
-      description =
-        overviewPage?.summary ??
-        `A source-linked knowledge hub generated from the ${manifest.title} creator archive.`;
-    } else {
-      description = manifest.home.summary || manifest.tagline;
-    }
+    description = manifest.home.summary || manifest.tagline;
     theme = normalizeHubTemplateId(hub.theme) as ThemeKey;
   } catch {
     // Fall back to generic card — never throw from an OG image route.

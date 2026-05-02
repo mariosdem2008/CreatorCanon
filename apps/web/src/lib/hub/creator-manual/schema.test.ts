@@ -101,7 +101,7 @@ test('creator manual schema rejects public UUID and internal review language lea
 test('creator manual schema rejects invalid schema version', () => {
   const result = creatorManualManifestSchema.safeParse({
     ...sampleCreatorManualManifest,
-    schemaVersion: 'editorial_atlas_v1',
+    schemaVersion: 'wrong_version',
   });
 
   assert.equal(result.success, false);

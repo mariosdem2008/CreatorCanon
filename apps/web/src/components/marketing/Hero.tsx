@@ -88,7 +88,7 @@ function HubPreview() {
           <nav aria-hidden className="space-y-1.5 bg-paper-warm/60 p-3 text-[11px] text-ink-3">
             <div className="text-eyebrow uppercase text-ink-4">Tracks</div>
             {[
-              ['01', 'Operator playbooks'],
+              ['01', 'Operator manuals'],
               ['02', 'Pricing & offers'],
               ['03', 'Hiring & ops'],
               ['04', 'Sales motions'],
