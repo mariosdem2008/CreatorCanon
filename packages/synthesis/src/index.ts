@@ -37,6 +37,14 @@ export type {
   WorksheetComponent,
   WorksheetField,
   WorksheetFieldType,
+  // Phase H — science-explainer
+  DebunkingComponent,
+  DebunkingItem,
+  EvidenceCard,
+  EvidenceVerdict,
+  GlossaryComponent,
+  GlossaryEntry,
+  ReferenceComponent,
 } from './types';
 
 export { runSynthesis } from './runner';

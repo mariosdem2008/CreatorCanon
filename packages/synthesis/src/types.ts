@@ -208,6 +208,75 @@ export interface FunnelComponent {
   inlineCtas: FunnelInlineCta[];
 }
 
+// ---------- Reference (science-explainer, Phase H) ----------
+
+export type EvidenceVerdict =
+  | 'supported'
+  | 'partially_supported'
+  | 'contradicted'
+  | 'mixed';
+
+export interface EvidenceCard {
+  id: string;
+  /** "Linoleic acid is inflammatory" — short claim summary. */
+  claim: string;
+  verdict: EvidenceVerdict;
+  /** 1-2 sentence mechanism summary, why the evidence supports the verdict. */
+  mechanismExplanation: string;
+  /** Topic slug used for grouping cards in topicIndex. */
+  topic: string;
+  /** Canon node IDs that cite specific studies/data behind this card. */
+  studyEvidenceCanonIds: string[];
+  /** Caveats / nuance that qualifies the verdict. */
+  caveats: string[];
+  /** Optional counter-claim referenced by Debunking Forge. */
+  counterClaim?: string;
+  /** Pre-rendered shareable image; rendered by @vercel/og at runtime. */
+  shareableImageUrl?: string;
+}
+
+export interface ReferenceComponent {
+  cards: EvidenceCard[];
+  /** topic slug → ordered list of EvidenceCard ids. */
+  topicIndex: Record<string, string[]>;
+}
+
+// ---------- Debunking (science-explainer, Phase H) ----------
+
+export interface DebunkingItem {
+  id: string;
+  /** "Seed oils cause inflammation" — popular myth. */
+  myth: string;
+  /** 1-paragraph counter-narrative grounded in canon evidence. */
+  reality: string;
+  /** Canon nodes whose evidence backs the counter-narrative. */
+  primaryEvidenceCanonIds: string[];
+  /** Optional EvidenceCard id this debunking links to. */
+  evidenceCardId?: string;
+  /** Pre-rendered share-card image; @vercel/og pattern. */
+  shareableImageUrl?: string;
+}
+
+export interface DebunkingComponent {
+  items: DebunkingItem[];
+}
+
+// ---------- Glossary (science-explainer, Phase H) ----------
+
+export interface GlossaryEntry {
+  id: string;
+  /** "linoleic acid" — extracted mechanism / term. */
+  term: string;
+  /** 1-2 sentence definition. */
+  definition: string;
+  /** Canon ids that mention this term (cross-link). */
+  appearsInCanonIds: string[];
+}
+
+export interface GlossaryComponent {
+  entries: GlossaryEntry[];
+}
+
 // ---------- Bundle ----------
 
 export interface ProductBundle {
@@ -223,7 +292,9 @@ export interface ProductBundle {
     /** contemplative-thinker — filled in Phase I. */
     cards?: never;
     /** science-explainer — filled in Phase H. */
-    reference?: never;
+    reference?: ReferenceComponent;
+    debunking?: DebunkingComponent;
+    glossary?: GlossaryComponent;
     /** instructional-craft — filled in Phase J. */
     lessonSequence?: never;
     funnel: FunnelComponent;

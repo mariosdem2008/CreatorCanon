@@ -1,54 +1,31 @@
-# Phase A Executor Status — DONE
+# Phase H Executor Status — IN PROGRESS
 
-**Started:** 2026-05-02 (autonomous run, ~7h budget)
-**Branch:** `feat/phase-a-operator-coach-synthesis`
-**Worktree:** `SaaS/.worktrees/phase-a-execute`
+**Started:** 2026-05-02 (autonomous run, ~5-6h budget)
+**Branch:** `feat/phase-h-science-synthesis`
+**Worktree:** `SaaS/.worktrees/phase-h-execute`
 **Operator:** Claude Opus 4.7 (1M ctx) — autonomous
 
-## Status: COMPLETE
+## Status: IN PROGRESS
 
-All 12 tasks done. 14 commits + 1 cycle fix on the branch. Draft PR open.
+Building science-explainer product synthesis layer atop Phase A composer pattern.
 
 ## Task progress
 
-- [x] A.1 — Synthesis package scaffold + ProductBundle types (`c1d21b4`)
-- [x] A.2 — ActionPlan composer (`f645395`)
-- [x] A.3 — Worksheet Forge (`021352f`)
-- [x] A.4 — Calculator Forge (`7840c83`)
-- [x] A.5 — Diagnostic composer (`73ad3b7` + `16b1988`)
-- [x] A.6 — Funnel composer (`14fd569`)
-- [x] A.7 — Router + Runner (`2410e45`)
-- [x] A.8 — DB schema (migration 0017) (`d7dae7e`)
-- [x] A.9 — Synthesis API endpoints (`ec5b11a`)
-- [x] A.10 — CLI runner + fixture smoke (`408e326`)
-- [x] A.11 — Operator-coach shell (`09f8e0e`)
-- [x] A.12 — Results doc + draft PR (this commit)
-
-Plus `9c727db` — fix synthesis→pipeline workspace cycle.
-
-## Test results
-
-- `pnpm --filter @creatorcanon/synthesis test`: **52/52 pass**
-  - 5 composer suites + router + runner + fixture smoke
-- `pnpm typecheck` (turbo full graph): **20/20 successful**
+- [ ] H.1 — ReferenceComponent + DebunkingComponent + GlossaryComponent types
+- [ ] H.2 — Reference Composer (evidence cards from claims)
+- [ ] H.3 — Debunking Forge (myth → counter-narrative)
+- [ ] H.4 — Glossary Builder (mechanism extraction)
+- [ ] H.5 — ClaimSearchBar (semantic search w/ mock embedding for tests)
+- [ ] H.6 — Science-explainer shell (6 page types)
+- [ ] H.7 — Cohort smoke test (fixture-based, live deferred)
+- [ ] H.8 — Phase H results doc + Draft PR
 
 ## Notes
 
-- Smoke tests are fixture-only per directive; live cohort run is for Mario
-  to trigger via `tsx packages/pipeline/src/scripts/run-synthesis.ts <runId>`.
-- Codex CLI was NOT invoked in this session (no real prompts were run).
-  Composers used deterministic stub clients in tests; the production
-  CodexClient wraps `@creatorcanon/pipeline/dev-codex-runner` (already
-  wired into the API route + CLI script).
-- Hub route mounting was deferred to Phase B to avoid colliding with
-  Codex's Phase G work in `apps/web/src/app/h/[hubSlug]/...`.
-- Migration 0017 reserved + applied in `_journal.json`. Codex Phase G has
-  0022+ free per the meta-plan.
-
-## Results doc
-
-`docs/superpowers/plans/2026-05-02-phase-a-results.md`
-
-## Pull request
-
-Draft PR: https://github.com/mariosdem2008/CreatorCanon/pull/19
+- Live cohort run (Walker + Norton) DEFERRED per directive — fixture smoke
+  mirrors Phase A's pattern.
+- Real OpenAI embeddings deferred to production synthesis time;
+  ClaimSearchBar tests use a deterministic mock embedding (hash → vector).
+- Migration 0021 reserved but only created if a new table is needed;
+  evidence cards persist inside ProductBundle JSON like Phase A bundles.
+- Codex CLI not invoked here (deterministic stubs in tests).

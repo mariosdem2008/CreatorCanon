@@ -24,6 +24,17 @@ describe('routeComposers', () => {
     assert.ok(!set.has('actionPlan'));
   });
 
+  test('science-explainer gets reference + debunking + glossary + diagnostic + funnel', () => {
+    const set = routeComposers('science-explainer');
+    assert.ok(set.has('reference'));
+    assert.ok(set.has('debunking'));
+    assert.ok(set.has('glossary'));
+    assert.ok(set.has('diagnostic'));
+    assert.ok(set.has('funnel'));
+    assert.ok(!set.has('actionPlan'));
+    assert.ok(!set.has('worksheets'));
+  });
+
   test('_DEFAULT falls back to funnel-only', () => {
     const set = routeComposers('_DEFAULT');
     assert.equal(set.size, 1);
