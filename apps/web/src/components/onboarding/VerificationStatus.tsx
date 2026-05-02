@@ -16,16 +16,21 @@ interface VerificationStatusProps {
   initialLiveUrl?: string | null;
   startedAtIso?: string | null;
   pollIntervalMs?: number;
+  onStatusChange?: (status: { domainVerified: boolean; sslReady: boolean }) => void;
 }
 
 interface VerifyResponse {
   domainVerified: boolean;
   timedOut: boolean;
+  error?: string;
+  code?: string;
 }
 
 interface SslResponse {
   sslReady: boolean;
   misconfigured: boolean;
+  error?: string;
+  code?: string;
 }
 
 export function VerificationStatus({
@@ -35,6 +40,7 @@ export function VerificationStatus({
   initialLiveUrl = null,
   startedAtIso,
   pollIntervalMs = 10_000,
+  onStatusChange,
 }: VerificationStatusProps) {
   const [domainVerified, setDomainVerified] = useState(initialDomainVerified);
   const [sslReady, setSslReady] = useState(initialSslReady);
@@ -56,6 +62,10 @@ export function VerificationStatus({
   );
 
   useEffect(() => {
+    onStatusChange?.({ domainVerified, sslReady });
+  }, [domainVerified, onStatusChange, sslReady]);
+
+  useEffect(() => {
     if ((domainVerified && sslReady) || timedOut) return;
 
     let cancelled = false;
@@ -63,8 +73,10 @@ export function VerificationStatus({
       try {
         if (!domainVerified) {
           const response = await fetch(`/api/domains/verify/${hubId}`);
-          if (!response.ok) throw new Error('Verification check failed');
           const body = (await response.json()) as VerifyResponse;
+          if (!response.ok) {
+            throw new Error(body.error ?? 'Verification check failed');
+          }
           if (!cancelled) {
             setDomainVerified(body.domainVerified);
             setTimedOut(body.timedOut);
@@ -75,8 +87,10 @@ export function VerificationStatus({
 
         if (!sslReady) {
           const response = await fetch(`/api/domains/ssl-status/${hubId}`);
-          if (!response.ok) throw new Error('SSL check failed');
           const body = (await response.json()) as SslResponse;
+          if (!response.ok) {
+            throw new Error(body.error ?? 'SSL check failed');
+          }
           if (!cancelled) {
             setSslReady(body.sslReady);
             setError(body.misconfigured ? 'DNS is still misconfigured.' : null);
@@ -114,9 +128,26 @@ export function VerificationStatus({
         </p>
         <StatusPill tone={tone}>{labelForStep(step, timedOut)}</StatusPill>
       </div>
-      <p className="mt-2 text-[12px] leading-[1.6] text-[var(--cc-ink-3)]">
-        {messageForStep(step, timedOut, error)}
-      </p>
+      {timedOut ? (
+        <div className="mt-2 grid gap-2 text-[12px] leading-[1.6] text-[var(--cc-ink-3)]">
+          <p>
+            DNS has been pending for 24 hours. Check the record values at your
+            registrar, then contact support with this hub ID if the values match.
+          </p>
+          <a
+            className="font-semibold text-[var(--cc-accent)] underline-offset-4 hover:underline"
+            href={`mailto:hello@creatorcanon.com?subject=Domain%20verification%20help&body=Hub%20ID:%20${encodeURIComponent(
+              hubId,
+            )}`}
+          >
+            Contact support
+          </a>
+        </div>
+      ) : (
+        <p className="mt-2 text-[12px] leading-[1.6] text-[var(--cc-ink-3)]">
+          {messageForStep(step, error)}
+        </p>
+      )}
     </div>
   );
 }
@@ -132,12 +163,8 @@ function labelForStep(step: VerificationStep, timedOut: boolean): string {
 
 function messageForStep(
   step: VerificationStep,
-  timedOut: boolean,
   error: string | null,
 ): string {
-  if (timedOut) {
-    return 'DNS has been pending for 24 hours. Check the record values at your registrar or contact support.';
-  }
   if (error) return error;
   if (step === 'pending') {
     return 'Waiting for DNS propagation. This usually refreshes within a few minutes.';

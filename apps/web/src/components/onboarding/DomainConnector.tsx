@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useState, type FormEvent } from 'react';
 
 import { Button, Panel, PanelHeader, StatusPill } from '@/components/cc';
 import {
@@ -49,6 +49,13 @@ export function DomainConnector({
 
   const validation = useMemo(() => validateCustomDomain(domain), [domain]);
   const records = attachedDomain ? getDnsRecordsForDomain(attachedDomain) : [];
+  const handleStatusChange = useCallback(
+    (status: { domainVerified: boolean; sslReady: boolean }) => {
+      setDomainVerified(status.domainVerified);
+      setSslReady(status.sslReady);
+    },
+    [],
+  );
   const connectionPill = attachedDomain ? (
     sslReady ? (
       <StatusPill tone="success">SSL ready</StatusPill>
@@ -158,6 +165,7 @@ export function DomainConnector({
             initialSslReady={sslReady}
             initialLiveUrl={initialLiveUrl}
             startedAtIso={statusStartedAtIso}
+            onStatusChange={handleStatusChange}
           />
         ) : null}
       </div>

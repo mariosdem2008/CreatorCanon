@@ -7,6 +7,10 @@ import {
   refreshDomainVerificationStatus,
 } from '@/lib/vercel/domain-attach';
 import { createVercelClientFromEnv } from '@/lib/vercel/client';
+import {
+  toVercelRouteError,
+  unwrapVercelRouteError,
+} from '@/lib/vercel/route-errors';
 import { getHubForDeploymentAccess } from '@/lib/vercel/hub-access';
 import { isVerificationTimedOut } from '@/lib/vercel/verification-status';
 
@@ -37,17 +41,23 @@ export async function GET(
     );
   }
 
-  const status = await refreshDomainVerificationStatus({
-    hubId: hubRow.id,
-    vercel: createVercelClientFromEnv(),
-    repository,
-  });
+  try {
+    const status = await refreshDomainVerificationStatus({
+      hubId: hubRow.id,
+      vercel: createVercelClientFromEnv(),
+      repository,
+    }).catch((error) => {
+      throw toVercelRouteError(error);
+    });
 
-  return NextResponse.json({
-    hubId: status.hubId,
-    customDomain: status.customDomain,
-    domainVerified: status.domainVerified,
-    verification: status.verification ?? [],
-    timedOut: isVerificationTimedOut(status.createdAt.toISOString()),
-  });
+    return NextResponse.json({
+      hubId: status.hubId,
+      customDomain: status.customDomain,
+      domainVerified: status.domainVerified,
+      verification: status.verification ?? [],
+      timedOut: isVerificationTimedOut(status.domainAttachedAt?.toISOString() ?? null),
+    });
+  } catch (error) {
+    return unwrapVercelRouteError(error);
+  }
 }

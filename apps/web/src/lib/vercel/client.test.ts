@@ -190,6 +190,43 @@ describe('createVercelClient', () => {
     );
   });
 
+  it('issues and reads managed certificates', async () => {
+    const responses = [
+      jsonResponse({
+        id: 'cert_123',
+        createdAt: 1777718400000,
+        expiresAt: 1785494400000,
+        autoRenew: true,
+        cns: ['learn.example.com'],
+      }),
+      jsonResponse({
+        id: 'cert_123',
+        createdAt: 1777718400000,
+        expiresAt: 1785494400000,
+        autoRenew: true,
+        cns: ['learn.example.com'],
+      }),
+    ];
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const fetchStub: VercelFetch = async (input, init) => {
+      calls.push({ url: String(input), init: init ?? {} });
+      return responses.shift()?.clone() ?? new Response(null, { status: 500 });
+    };
+    const client = createVercelClient({ token: 'vc_test', fetch: fetchStub });
+
+    const issued = await client.issueCert(['learn.example.com']);
+    const cert = await client.getCertById(issued.id);
+
+    assert.equal(cert.id, 'cert_123');
+    assert.equal(calls[0]?.url, 'https://api.vercel.com/v8/certs');
+    assert.equal(calls[0]?.init.method, 'POST');
+    assert.deepEqual(JSON.parse(String(calls[0]?.init.body)), {
+      cns: ['learn.example.com'],
+    });
+    assert.equal(calls[1]?.url, 'https://api.vercel.com/v8/certs/cert_123');
+    assert.equal(calls[1]?.init.method, 'GET');
+  });
+
   it('creates a production deployment for a project', async () => {
     const { calls, fetchStub } = createFetchStub(
       jsonResponse({ id: 'dpl_123', url: 'creator-canon-demo.vercel.app', readyState: 'QUEUED' }),

@@ -41,7 +41,7 @@ export default async function ProjectDomainPage({
       domainVerified: deployment.domainVerified,
       sslReady: deployment.sslReady,
       liveUrl: deployment.liveUrl,
-      createdAt: deployment.createdAt,
+      domainAttachedAt: deployment.domainAttachedAt,
     })
     .from(hub)
     .leftJoin(deployment, eq(deployment.hubId, hub.id))
@@ -77,7 +77,7 @@ export default async function ProjectDomainPage({
         initialDomainVerified={hubRow.domainVerified ?? false}
         initialSslReady={hubRow.sslReady ?? false}
         initialLiveUrl={hubRow.liveUrl}
-        statusStartedAtIso={hubRow.createdAt?.toISOString() ?? null}
+        statusStartedAtIso={hubRow.domainAttachedAt?.toISOString() ?? null}
       />
     </div>
   );

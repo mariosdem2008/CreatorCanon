@@ -17,11 +17,13 @@ test('deployment schema exposes Phase G hosting fields', () => {
   assert.equal(columns.hubId.name, 'hub_id');
   assert.equal(columns.vercelProjectId.name, 'vercel_project_id');
   assert.equal(columns.vercelDeploymentId.name, 'vercel_deployment_id');
+  assert.equal(columns.vercelCertId.name, 'vercel_cert_id');
   assert.equal(columns.status.name, 'status');
   assert.equal(columns.liveUrl.name, 'live_url');
   assert.equal(columns.customDomain.name, 'custom_domain');
   assert.equal(columns.domainVerified.name, 'domain_verified');
   assert.equal(columns.sslReady.name, 'ssl_ready');
+  assert.equal(columns.domainAttachedAt.name, 'domain_attached_at');
 });
 
 test('Phase G migration creates the deployment table', () => {
@@ -32,9 +34,11 @@ test('Phase G migration creates the deployment table', () => {
   assert.match(migrationSql, /CREATE TABLE IF NOT EXISTS "deployment"/);
   assert.match(migrationSql, /"hub_id" text NOT NULL/);
   assert.match(migrationSql, /"vercel_project_id" varchar\(64\)/);
+  assert.match(migrationSql, /"vercel_cert_id" varchar\(64\)/);
   assert.match(migrationSql, /"status" "deployment_status" DEFAULT 'pending' NOT NULL/);
   assert.match(migrationSql, /"domain_verified" boolean DEFAULT false/);
   assert.match(migrationSql, /"ssl_ready" boolean DEFAULT false/);
+  assert.match(migrationSql, /"domain_attached_at" timestamp with time zone/);
   assert.match(migrationSql, /CREATE UNIQUE INDEX IF NOT EXISTS "deployment_custom_domain_unique"/);
   assert.match(migrationSql, /CREATE OR REPLACE FUNCTION deployment_custom_domain_matches_hub/);
   assert.match(migrationSql, /CREATE OR REPLACE FUNCTION sync_deployment_custom_domain_from_hub/);

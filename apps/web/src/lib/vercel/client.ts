@@ -75,6 +75,14 @@ export interface VercelDomainConfig {
   misconfigured: boolean;
 }
 
+export interface VercelCert {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+  autoRenew: boolean;
+  cns: string[];
+}
+
 export interface VercelCreateDeploymentRequest {
   name: string;
   project: string;
@@ -160,6 +168,8 @@ export interface VercelClient {
     domain: string,
     options?: { projectIdOrName?: string; strict?: boolean },
   ): Promise<VercelDomainConfig>;
+  issueCert(commonNames: string[]): Promise<VercelCert>;
+  getCertById(id: string): Promise<VercelCert>;
   createDeployment(
     requestBody: VercelCreateDeploymentRequest,
   ): Promise<VercelDeployment>;
@@ -282,6 +292,19 @@ export function createVercelClient(options: VercelClientOptions): VercelClient {
           },
         },
       );
+    },
+
+    issueCert(commonNames) {
+      return request<VercelCert>('/v8/certs', {
+        method: 'POST',
+        body: JSON.stringify({ cns: commonNames }),
+      });
+    },
+
+    getCertById(id) {
+      return request<VercelCert>(`/v8/certs/${encodeURIComponent(id)}`, {
+        method: 'GET',
+      });
     },
 
     createDeployment(requestBody) {

@@ -3,6 +3,7 @@ import { deployment, hub } from '@creatorcanon/db/schema';
 
 import {
   VercelApiError,
+  type VercelCert,
   type VercelClient,
   type VercelProjectDomain,
 } from './client';
@@ -12,6 +13,7 @@ export interface DomainAttachmentRepository {
     hubId: string;
     customDomain: string;
     domainVerified: boolean;
+    attachedAt?: Date;
   }): Promise<void>;
 }
 
@@ -21,8 +23,10 @@ export interface DeploymentDomainStatus {
   customDomain: string | null;
   domainVerified: boolean;
   sslReady: boolean;
+  vercelCertId: string | null;
   liveUrl: string | null;
   status: string;
+  domainAttachedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +40,7 @@ export interface DomainStatusRepository {
   updateSslStatus(input: {
     hubId: string;
     sslReady: boolean;
+    vercelCertId?: string | null;
   }): Promise<void>;
 }
 
@@ -70,18 +75,22 @@ export function createDomainAttachmentRepository(
 ): DomainAttachmentRepository & DomainStatusRepository {
   return {
     async updateDomainState(input) {
+      const now = input.attachedAt ?? new Date();
+      await db
+        .update(hub)
+        .set({ customDomain: input.customDomain, updatedAt: now })
+        .where(eq(hub.id, input.hubId));
       await db
         .update(deployment)
         .set({
           customDomain: input.customDomain,
           domainVerified: input.domainVerified,
-          updatedAt: new Date(),
+          sslReady: false,
+          vercelCertId: null,
+          domainAttachedAt: now,
+          updatedAt: now,
         })
         .where(eq(deployment.hubId, input.hubId));
-      await db
-        .update(hub)
-        .set({ customDomain: input.customDomain, updatedAt: new Date() })
-        .where(eq(hub.id, input.hubId));
     },
 
     async findDomainStatusByHubId(hubId) {
@@ -92,8 +101,10 @@ export function createDomainAttachmentRepository(
           customDomain: deployment.customDomain,
           domainVerified: deployment.domainVerified,
           sslReady: deployment.sslReady,
+          vercelCertId: deployment.vercelCertId,
           liveUrl: deployment.liveUrl,
           status: deployment.status,
+          domainAttachedAt: deployment.domainAttachedAt,
           createdAt: deployment.createdAt,
           updatedAt: deployment.updatedAt,
         })
@@ -118,6 +129,7 @@ export function createDomainAttachmentRepository(
         .update(deployment)
         .set({
           sslReady: input.sslReady,
+          vercelCertId: input.vercelCertId ?? null,
           updatedAt: new Date(),
         })
         .where(eq(deployment.hubId, input.hubId));
@@ -127,7 +139,7 @@ export function createDomainAttachmentRepository(
 
 export async function refreshDomainVerificationStatus(options: {
   hubId: string;
-  vercel: Pick<VercelClient, 'getProjectDomain'>;
+  vercel: Pick<VercelClient, 'getProjectDomain' | 'verifyProjectDomain'>;
   repository: DomainStatusRepository;
 }): Promise<DeploymentDomainStatus & { verification?: VercelProjectDomain['verification'] }> {
   const current = await options.repository.findDomainStatusByHubId(options.hubId);
@@ -135,7 +147,8 @@ export async function refreshDomainVerificationStatus(options: {
     throw new Error('Deployment does not have a Vercel project domain to verify.');
   }
 
-  const remote = await options.vercel.getProjectDomain(
+  const remote = await getOrVerifyProjectDomain(
+    options.vercel,
     current.vercelProjectId,
     current.customDomain,
   );
@@ -155,9 +168,11 @@ export async function refreshDomainVerificationStatus(options: {
 
 export async function refreshSslStatus(options: {
   hubId: string;
-  vercel: Pick<VercelClient, 'getDomainConfig'>;
+  vercel: Pick<VercelClient, 'getDomainConfig' | 'issueCert' | 'getCertById'>;
   repository: DomainStatusRepository;
-}): Promise<DeploymentDomainStatus & { misconfigured: boolean }> {
+}): Promise<
+  DeploymentDomainStatus & { misconfigured: boolean; cert: VercelCert | null }
+> {
   const current = await options.repository.findDomainStatusByHubId(options.hubId);
   if (!current?.vercelProjectId || !current.customDomain) {
     throw new Error('Deployment does not have a Vercel project domain to inspect.');
@@ -167,15 +182,64 @@ export async function refreshSslStatus(options: {
     projectIdOrName: current.vercelProjectId,
     strict: true,
   });
-  const sslReady = current.domainVerified && !config.misconfigured;
-  if (sslReady !== current.sslReady) {
+  if (!current.domainVerified || config.misconfigured) {
+    if (current.sslReady || current.vercelCertId) {
+      await options.repository.updateSslStatus({
+        hubId: current.hubId,
+        sslReady: false,
+        vercelCertId: null,
+      });
+    }
+    return { ...current, sslReady: false, misconfigured: config.misconfigured, cert: null };
+  }
+
+  const customDomain = current.customDomain;
+  const cert = await getOrIssueCert(options.vercel, {
+    ...current,
+    customDomain,
+  });
+  const sslReady = cert.cns.includes(customDomain);
+  if (sslReady !== current.sslReady || cert.id !== current.vercelCertId) {
     await options.repository.updateSslStatus({
       hubId: current.hubId,
       sslReady,
+      vercelCertId: cert.id,
     });
   }
 
-  return { ...current, sslReady, misconfigured: config.misconfigured };
+  return {
+    ...current,
+    sslReady,
+    vercelCertId: cert.id,
+    misconfigured: config.misconfigured,
+    cert,
+  };
+}
+
+async function getOrVerifyProjectDomain(
+  vercel: Pick<VercelClient, 'getProjectDomain' | 'verifyProjectDomain'>,
+  projectId: string,
+  domain: string,
+): Promise<VercelProjectDomain> {
+  const remote = await vercel.getProjectDomain(projectId, domain);
+  if (remote.verified) return remote;
+
+  try {
+    return await vercel.verifyProjectDomain(projectId, domain);
+  } catch (error) {
+    if (isPendingVerificationError(error)) return remote;
+    throw error;
+  }
+}
+
+async function getOrIssueCert(
+  vercel: Pick<VercelClient, 'issueCert' | 'getCertById'>,
+  current: DeploymentDomainStatus & { customDomain: string },
+): Promise<VercelCert> {
+  if (current.vercelCertId) {
+    return vercel.getCertById(current.vercelCertId);
+  }
+  return vercel.issueCert([current.customDomain]);
 }
 
 async function addOrReuseProjectDomain(
@@ -196,4 +260,15 @@ async function addOrReuseProjectDomain(
 function isIdempotentDomainConflict(error: unknown): boolean {
   if (!(error instanceof VercelApiError)) return false;
   return error.status === 409 && error.code === 'domain_already_exists';
+}
+
+function isPendingVerificationError(error: unknown): boolean {
+  if (!(error instanceof VercelApiError)) return false;
+  if (error.status !== 400 && error.status !== 409) return false;
+  const code = error.code?.toLowerCase() ?? '';
+  return (
+    code.includes('verification') ||
+    code.includes('domain_not_verified') ||
+    code.includes('invalid_domain')
+  );
 }

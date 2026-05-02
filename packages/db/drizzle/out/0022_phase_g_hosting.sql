@@ -9,11 +9,13 @@ CREATE TABLE IF NOT EXISTS "deployment" (
 	"hub_id" text NOT NULL,
 	"vercel_project_id" varchar(64),
 	"vercel_deployment_id" varchar(64),
+	"vercel_cert_id" varchar(64),
 	"status" "deployment_status" DEFAULT 'pending' NOT NULL,
 	"live_url" text,
 	"custom_domain" varchar(255),
 	"domain_verified" boolean DEFAULT false NOT NULL,
 	"ssl_ready" boolean DEFAULT false NOT NULL,
+	"domain_attached_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );

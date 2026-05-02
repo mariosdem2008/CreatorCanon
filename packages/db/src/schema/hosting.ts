@@ -29,12 +29,17 @@ export const deployment = pgTable(
       .references(() => hub.id, { onDelete: 'cascade' }),
     vercelProjectId: varchar('vercel_project_id', { length: 64 }),
     vercelDeploymentId: varchar('vercel_deployment_id', { length: 64 }),
+    vercelCertId: varchar('vercel_cert_id', { length: 64 }),
     status: deploymentStatusEnum('status').notNull().default('pending'),
     liveUrl: text('live_url'),
     /** Mirrors `hub.custom_domain`; API writes keep both columns synchronized. */
     customDomain: varchar('custom_domain', { length: 255 }),
     domainVerified: boolean('domain_verified').notNull().default(false),
     sslReady: boolean('ssl_ready').notNull().default(false),
+    domainAttachedAt: timestamp('domain_attached_at', {
+      withTimezone: true,
+      mode: 'date',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
       .defaultNow()
       .notNull(),
