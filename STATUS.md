@@ -1,27 +1,54 @@
-# Phase A Executor Status
+# Phase A Executor Status — DONE
 
 **Started:** 2026-05-02 (autonomous run, ~7h budget)
 **Branch:** `feat/phase-a-operator-coach-synthesis`
 **Worktree:** `SaaS/.worktrees/phase-a-execute`
 **Operator:** Claude Opus 4.7 (1M ctx) — autonomous
 
-## Plan
-Reading PHASE_A_PLAN.md (1003 lines, 12 tasks A.1–A.12). Cohort smoke tests deferred per directive — fixture-only validation will be done.
+## Status: COMPLETE
+
+All 12 tasks done. 14 commits + 1 cycle fix on the branch. Draft PR open.
 
 ## Task progress
-- [ ] A.1 — Synthesis package scaffold + ProductBundle types  (in progress)
-- [ ] A.2 — ActionPlan composer
-- [ ] A.3 — Worksheet Forge
-- [ ] A.4 — Calculator Forge
-- [ ] A.5 — Diagnostic composer
-- [ ] A.6 — Funnel composer
-- [ ] A.7 — Router + Runner
-- [ ] A.8 — DB schema (migration 0017)
-- [ ] A.9 — Synthesis API endpoints
-- [ ] A.10 — CLI runner + fixture smoke
-- [ ] A.11 — Operator-coach shell
-- [ ] A.12 — Results doc + draft PR
+
+- [x] A.1 — Synthesis package scaffold + ProductBundle types (`c1d21b4`)
+- [x] A.2 — ActionPlan composer (`f645395`)
+- [x] A.3 — Worksheet Forge (`021352f`)
+- [x] A.4 — Calculator Forge (`7840c83`)
+- [x] A.5 — Diagnostic composer (`73ad3b7` + `16b1988`)
+- [x] A.6 — Funnel composer (`14fd569`)
+- [x] A.7 — Router + Runner (`2410e45`)
+- [x] A.8 — DB schema (migration 0017) (`d7dae7e`)
+- [x] A.9 — Synthesis API endpoints (`ec5b11a`)
+- [x] A.10 — CLI runner + fixture smoke (`408e326`)
+- [x] A.11 — Operator-coach shell (`09f8e0e`)
+- [x] A.12 — Results doc + draft PR (this commit)
+
+Plus `9c727db` — fix synthesis→pipeline workspace cycle.
+
+## Test results
+
+- `pnpm --filter @creatorcanon/synthesis test`: **52/52 pass**
+  - 5 composer suites + router + runner + fixture smoke
+- `pnpm typecheck` (turbo full graph): **20/20 successful**
 
 ## Notes
-- Smoke tests are fixture-only per directive; live cohort run is for Mario to trigger.
-- Codex CLI used where possible; will note any fallback to OpenAI API.
+
+- Smoke tests are fixture-only per directive; live cohort run is for Mario
+  to trigger via `tsx packages/pipeline/src/scripts/run-synthesis.ts <runId>`.
+- Codex CLI was NOT invoked in this session (no real prompts were run).
+  Composers used deterministic stub clients in tests; the production
+  CodexClient wraps `@creatorcanon/pipeline/dev-codex-runner` (already
+  wired into the API route + CLI script).
+- Hub route mounting was deferred to Phase B to avoid colliding with
+  Codex's Phase G work in `apps/web/src/app/h/[hubSlug]/...`.
+- Migration 0017 reserved + applied in `_journal.json`. Codex Phase G has
+  0022+ free per the meta-plan.
+
+## Results doc
+
+`docs/superpowers/plans/2026-05-02-phase-a-results.md`
+
+## Pull request
+
+Draft PR opened — see PR URL in commit message of A.12.
