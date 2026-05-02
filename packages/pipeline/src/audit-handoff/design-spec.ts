@@ -2,6 +2,8 @@ import { createOpenAIClient } from '@creatorcanon/adapters';
 import { parseServerEnv } from '@creatorcanon/core';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
+import { createCodexCliProvider } from '../agents/providers/codex-cli';
+import { resolveOpenAIProviderMode } from '../agents/providers/factory';
 import type { AuditReport } from '../audit';
 import {
   CREATOR_MANUAL_EDITABLE_KEYS,
@@ -250,6 +252,10 @@ function buildCreatorManualDesignSpecPrompt(auditReport: AuditReport): string {
 }
 
 function createEnvModelClient(): CreatorManualDesignSpecModelClient | null {
+  if (resolveOpenAIProviderMode(process.env) === 'codex_cli') {
+    return createCodexCliDesignSpecModelClient();
+  }
+
   if (!process.env.OPENAI_API_KEY) return null;
 
   return async ({ prompt, jsonSchema }) => {
@@ -276,6 +282,40 @@ function createEnvModelClient(): CreatorManualDesignSpecModelClient | null {
     });
 
     return completion.content;
+  };
+}
+
+function createCodexCliDesignSpecModelClient(): CreatorManualDesignSpecModelClient {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('PIPELINE_OPENAI_PROVIDER=codex_cli is disabled in production.');
+  }
+
+  const provider = createCodexCliProvider({
+    bin: process.env.CODEX_CLI_BIN,
+    model: process.env.CODEX_CLI_MODEL,
+    timeoutMs: process.env.CODEX_CLI_TIMEOUT_MS
+      ? Number(process.env.CODEX_CLI_TIMEOUT_MS)
+      : undefined,
+  });
+
+  return async ({ prompt, jsonSchema }) => {
+    const completion = await provider.chat({
+      modelId: process.env.CREATOR_MANUAL_DESIGN_SPEC_MODEL || 'gpt-5.5',
+      tools: [],
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Return a single JSON object matching the supplied Creator Manual design spec schema. No Markdown.',
+        },
+        {
+          role: 'user',
+          content: `${prompt}\n\nJSON schema:\n${JSON.stringify(jsonSchema)}`,
+        },
+      ],
+    });
+
+    return completion.message.content;
   };
 }
 

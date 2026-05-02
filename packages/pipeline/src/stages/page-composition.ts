@@ -12,7 +12,7 @@ import {
 } from '@creatorcanon/db/schema';
 import { getDb } from '@creatorcanon/db';
 import { selectModel } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import { createOpenAICompatibleProvider } from '../agents/providers/factory';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import { SPECIALISTS } from '../agents/specialists';
@@ -73,7 +73,15 @@ export async function runPageCompositionStage(
     .where(eq(pageBrief.runId, input.runId))
     .orderBy(pageBrief.position);
   if (briefs.length === 0) {
-    return { pageCount: 0, studioPagesAuthored: 0, pagesWithDiagram: 0, pagesWithRoadmap: 0, pagesWithExample: 0, pagesWithMistakes: 0, costCents: 0 };
+    return {
+      pageCount: 0,
+      studioPagesAuthored: 0,
+      pagesWithDiagram: 0,
+      pagesWithRoadmap: 0,
+      pagesWithExample: 0,
+      pagesWithMistakes: 0,
+      costCents: 0,
+    };
   }
 
   // Load channel profile (whole-run shared input).
@@ -101,7 +109,10 @@ export async function runPageCompositionStage(
     .where(eq(project.id, projectId))
     .limit(1);
   const projectConfig = projectRows[0]?.config as { voiceMode?: VoiceMode } | null;
-  const voiceMode: VoiceMode = projectConfig?.voiceMode === 'creator_first_person' ? 'creator_first_person' : 'reader_second_person';
+  const voiceMode: VoiceMode =
+    projectConfig?.voiceMode === 'creator_first_person'
+      ? 'creator_first_person'
+      : 'reader_second_person';
 
   // Load total selected videos (for atlasMeta.sourceCoveragePercent).
   const setRows = await db
@@ -119,7 +130,10 @@ export async function runPageCompositionStage(
     for (const id of p.supportingCanonNodeIds ?? []) nodeIds.add(id);
   }
   const nodes = nodeIds.size
-    ? await db.select().from(canonNode).where(and(eq(canonNode.runId, input.runId), inArray(canonNode.id, [...nodeIds])))
+    ? await db
+        .select()
+        .from(canonNode)
+        .where(and(eq(canonNode.runId, input.runId), inArray(canonNode.id, [...nodeIds])))
     : [];
   const nodeById = new Map(nodes.map((n) => [n.id, n as Record<string, unknown>]));
 
@@ -127,13 +141,27 @@ export async function runPageCompositionStage(
   const segIds = new Set<string>();
   for (const n of nodes) for (const id of n.evidenceSegmentIds) segIds.add(id);
   const segs = segIds.size
-    ? await db.select({ id: segment.id, videoId: segment.videoId, text: segment.text, startMs: segment.startMs, endMs: segment.endMs }).from(segment).where(and(eq(segment.runId, input.runId), inArray(segment.id, [...segIds])))
+    ? await db
+        .select({
+          id: segment.id,
+          videoId: segment.videoId,
+          text: segment.text,
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+        })
+        .from(segment)
+        .where(and(eq(segment.runId, input.runId), inArray(segment.id, [...segIds])))
     : [];
   const validSegmentIds = new Set(segs.map((s) => s.id));
 
   // Sibling-brief snapshot for the strategist (lets it avoid duplication).
   const siblingBriefs = briefs.map((b) => {
-    const p = b.payload as { pageTitle?: string; audienceQuestion?: string; primaryCanonNodeIds?: string[]; slug?: string };
+    const p = b.payload as {
+      pageTitle?: string;
+      audienceQuestion?: string;
+      primaryCanonNodeIds?: string[];
+      slug?: string;
+    };
     return {
       id: b.id,
       pageTitle: p.pageTitle ?? '',
@@ -145,10 +173,19 @@ export async function runPageCompositionStage(
 
   // Provider factory.
   const makeProvider = (name: 'openai' | 'gemini'): AgentProvider => {
-    if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
+    if (name === 'openai') return createOpenAICompatibleProvider(process.env);
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   };
-  const ctxFor = (agent: 'page_strategist' | 'prose_author' | 'roadmap_author' | 'example_author' | 'diagram_author' | 'mistakes_author' | 'critic'): SpecialistContext => {
+  const ctxFor = (
+    agent:
+      | 'page_strategist'
+      | 'prose_author'
+      | 'roadmap_author'
+      | 'example_author'
+      | 'diagram_author'
+      | 'mistakes_author'
+      | 'critic',
+  ): SpecialistContext => {
     const cfg = SPECIALISTS[agent];
     const model = selectModel(agent, process.env);
     return {
@@ -164,15 +201,28 @@ export async function runPageCompositionStage(
     };
   };
 
-  let pagesWithDiagram = 0, pagesWithRoadmap = 0, pagesWithExample = 0, pagesWithMistakes = 0;
+  let pagesWithDiagram = 0,
+    pagesWithRoadmap = 0,
+    pagesWithExample = 0,
+    pagesWithMistakes = 0;
   let studioPagesAuthored = 0;
   let totalCostCents = 0;
   let position = 0;
 
   for (const brief of briefs) {
-    const briefPayload = brief.payload as { primaryCanonNodeIds?: string[]; supportingCanonNodeIds?: string[]; pageType?: string; pageTitle?: string; slug?: string };
-    const primary = (briefPayload.primaryCanonNodeIds ?? []).map((id) => nodeById.get(id)).filter((n): n is Record<string, unknown> => Boolean(n));
-    const supporting = (briefPayload.supportingCanonNodeIds ?? []).map((id) => nodeById.get(id)).filter((n): n is Record<string, unknown> => Boolean(n));
+    const briefPayload = brief.payload as {
+      primaryCanonNodeIds?: string[];
+      supportingCanonNodeIds?: string[];
+      pageType?: string;
+      pageTitle?: string;
+      slug?: string;
+    };
+    const primary = (briefPayload.primaryCanonNodeIds ?? [])
+      .map((id) => nodeById.get(id))
+      .filter((n): n is Record<string, unknown> => Boolean(n));
+    const supporting = (briefPayload.supportingCanonNodeIds ?? [])
+      .map((id) => nodeById.get(id))
+      .filter((n): n is Record<string, unknown> => Boolean(n));
     if (primary.length === 0) continue;
 
     // 1. Strategist
@@ -196,12 +246,26 @@ export async function runPageCompositionStage(
     // 2. Specialists in parallel
     const allArtifactNodes = [...primary, ...supporting];
     const segmentExcerpts = segs
-      .filter((s) => allArtifactNodes.some((n) => (n.evidenceSegmentIds as string[]).includes(s.id)))
-      .map((s) => ({ segmentId: s.id, videoId: s.videoId, text: s.text, startMs: s.startMs, endMs: s.endMs }));
+      .filter((s) =>
+        allArtifactNodes.some((n) => (n.evidenceSegmentIds as string[]).includes(s.id)),
+      )
+      .map((s) => ({
+        segmentId: s.id,
+        videoId: s.videoId,
+        text: s.text,
+        startMs: s.startMs,
+        endMs: s.endMs,
+      }));
 
     const wantsKind = (k: ArtifactKind) => plan.artifacts.some((a) => a.kind === k);
 
-    const proseInput = { ctx: ctxFor('prose_author'), plan, canonNodes: allArtifactNodes, segmentExcerpts, channelProfilePayload };
+    const proseInput = {
+      ctx: ctxFor('prose_author'),
+      plan,
+      canonNodes: allArtifactNodes,
+      segmentExcerpts,
+      channelProfilePayload,
+    };
     const roadmapInput = wantsKind('roadmap')
       ? { ctx: ctxFor('roadmap_author'), plan, canonNodes: allArtifactNodes, channelProfilePayload }
       : undefined;
@@ -212,7 +276,13 @@ export async function runPageCompositionStage(
       ? { ctx: ctxFor('diagram_author'), plan, canonNodes: allArtifactNodes, channelProfilePayload }
       : undefined;
     const mistakesInput = wantsKind('common_mistakes')
-      ? { ctx: ctxFor('mistakes_author'), plan, canonNodes: allArtifactNodes, vicMistakes: [], channelProfilePayload }
+      ? {
+          ctx: ctxFor('mistakes_author'),
+          plan,
+          canonNodes: allArtifactNodes,
+          vicMistakes: [],
+          channelProfilePayload,
+        }
       : undefined;
 
     const [proseRes, roadmapRes, exampleRes, diagramRes, mistakesRes] = await Promise.all([
@@ -230,15 +300,22 @@ export async function runPageCompositionStage(
       diagram: diagramRes ?? undefined,
       mistakes: mistakesRes ?? undefined,
     };
-    totalCostCents += proseRes.costCents
-      + (roadmapRes?.costCents ?? 0)
-      + (exampleRes?.costCents ?? 0)
-      + (diagramRes?.costCents ?? 0)
-      + (mistakesRes?.costCents ?? 0);
+    totalCostCents +=
+      proseRes.costCents +
+      (roadmapRes?.costCents ?? 0) +
+      (exampleRes?.costCents ?? 0) +
+      (diagramRes?.costCents ?? 0) +
+      (mistakesRes?.costCents ?? 0);
 
     // 3. Critic
     const criticCtx = ctxFor('critic');
-    const critic = await runCritic({ ctx: criticCtx, plan, artifacts: bundle, canonNodes: allArtifactNodes, channelProfilePayload });
+    const critic = await runCritic({
+      ctx: criticCtx,
+      plan,
+      artifacts: bundle,
+      canonNodes: allArtifactNodes,
+      channelProfilePayload,
+    });
     totalCostCents += critic.costCents;
 
     // 4. Revise pass (if any non-trivial notes)
@@ -253,18 +330,26 @@ export async function runPageCompositionStage(
         diagramInput,
         mistakesInput,
         contextByKind: (k) =>
-          k === 'cited_prose' ? ctxFor('prose_author') :
-          k === 'roadmap' ? ctxFor('roadmap_author') :
-          k === 'hypothetical_example' ? ctxFor('example_author') :
-          k === 'diagram' ? ctxFor('diagram_author') :
-          ctxFor('mistakes_author'),
+          k === 'cited_prose'
+            ? ctxFor('prose_author')
+            : k === 'roadmap'
+              ? ctxFor('roadmap_author')
+              : k === 'hypothetical_example'
+                ? ctxFor('example_author')
+                : k === 'diagram'
+                  ? ctxFor('diagram_author')
+                  : ctxFor('mistakes_author'),
       });
       bundle = revised;
     }
 
     // 5. Assemble + persist
-    const evidenceSegmentIds = [...new Set(allArtifactNodes.flatMap((n) => n.evidenceSegmentIds as string[]))];
-    const distinctSourceVideos = new Set(allArtifactNodes.flatMap((n) => n.sourceVideoIds as string[])).size;
+    const evidenceSegmentIds = [
+      ...new Set(allArtifactNodes.flatMap((n) => n.evidenceSegmentIds as string[])),
+    ];
+    const distinctSourceVideos = new Set(
+      allArtifactNodes.flatMap((n) => n.sourceVideoIds as string[]),
+    ).size;
     const tree = assembleBlockTree({
       plan,
       bundle,
@@ -272,7 +357,8 @@ export async function runPageCompositionStage(
       evidenceSegmentIds,
       distinctSourceVideos,
       totalSelectedVideos,
-      evidenceQuality: ((primary[0]?.evidenceQuality as 'strong' | 'moderate' | 'limited' | undefined) ?? 'limited'),
+      evidenceQuality:
+        (primary[0]?.evidenceQuality as 'strong' | 'moderate' | 'limited' | undefined) ?? 'limited',
     });
 
     if (bundle.diagram) pagesWithDiagram += 1;

@@ -1,9 +1,14 @@
 import { eq } from '@creatorcanon/db';
-import { canonNode, videoIntelligenceCard, channelProfile, visualMoment } from '@creatorcanon/db/schema';
+import {
+  canonNode,
+  videoIntelligenceCard,
+  channelProfile,
+  visualMoment,
+} from '@creatorcanon/db/schema';
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import { createOpenAICompatibleProvider } from '../agents/providers/factory';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import type { AgentProvider } from '../agents/providers';
@@ -44,7 +49,7 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
 
   const makeProvider = (name: 'openai' | 'gemini'): AgentProvider => {
     if (input.providerOverride) return input.providerOverride(name);
-    if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
+    if (name === 'openai') return createOpenAICompatibleProvider(process.env);
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   };
 
@@ -118,7 +123,9 @@ export async function runCanonStage(input: CanonStageInput): Promise<CanonStageO
   if (finalNodes.length === 0) {
     // Agent ran but produced zero canon_nodes — fail loudly so the cache
     // doesn't pin this empty state.
-    throw new Error('canon stage produced 0 canon_node rows; agent likely hit a quota or schema-validation error');
+    throw new Error(
+      'canon stage produced 0 canon_node rows; agent likely hit a quota or schema-validation error',
+    );
   }
   return { ok: true, nodeCount: finalNodes.length, costCents: summary.costCents, summary };
 }
@@ -128,6 +135,9 @@ export async function validateCanonMaterialization(
   ctx: StageContext,
 ): Promise<boolean> {
   const db = getDb();
-  const r = await db.select({ id: canonNode.id }).from(canonNode).where(eq(canonNode.runId, ctx.runId));
+  const r = await db
+    .select({ id: canonNode.id })
+    .from(canonNode)
+    .where(eq(canonNode.runId, ctx.runId));
   return r.length > 0;
 }

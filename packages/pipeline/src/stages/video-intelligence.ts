@@ -1,9 +1,14 @@
 import { eq, inArray } from '@creatorcanon/db';
-import { segment, videoIntelligenceCard, transcriptAsset, channelProfile } from '@creatorcanon/db/schema';
+import {
+  segment,
+  videoIntelligenceCard,
+  transcriptAsset,
+  channelProfile,
+} from '@creatorcanon/db/schema';
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import { createOpenAICompatibleProvider } from '../agents/providers/factory';
 import { createGeminiCache, createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import type { AgentProvider } from '../agents/providers';
@@ -46,7 +51,7 @@ export async function runVideoIntelligenceStage(
 
   const makeProvider = (name: 'openai' | 'gemini'): AgentProvider => {
     if (input.providerOverride) return input.providerOverride(name);
-    if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
+    if (name === 'openai') return createOpenAICompatibleProvider(process.env);
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   };
 
@@ -66,7 +71,7 @@ export async function runVideoIntelligenceStage(
   if (videoIds.length > CANON_LIMITS.maxSelectedVideos) {
     throw new Error(
       `canon_v1 caps at ${CANON_LIMITS.maxSelectedVideos} videos; this run has ${videoIds.length}. ` +
-      `Reduce videoSet or set PIPELINE_CONTENT_ENGINE=findings_v1.`,
+        `Reduce videoSet or set PIPELINE_CONTENT_ENGINE=findings_v1.`,
     );
   }
 
@@ -130,7 +135,9 @@ export async function runVideoIntelligenceStage(
       console.info(`[video-intelligence] gemini cache created: ${cacheName}`);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn(`[video-intelligence] gemini cache create failed, falling back to non-cached calls: ${(err as Error).message}`);
+      console.warn(
+        `[video-intelligence] gemini cache create failed, falling back to non-cached calls: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -154,7 +161,11 @@ export async function runVideoIntelligenceStage(
     const fallbacks = buildFallbacks(model, makeProvider);
 
     // Pre-load every read the agent would otherwise make.
-    const { segments: videoSegments, visualMoments } = await loadVideoContext(db, input.runId, videoId);
+    const { segments: videoSegments, visualMoments } = await loadVideoContext(
+      db,
+      input.runId,
+      videoId,
+    );
     if (videoSegments.length === 0) {
       return { videoId, ok: false, summary: null, error: 'no segments for video' };
     }

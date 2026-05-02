@@ -3,7 +3,7 @@ import { canonNode, channelProfile, pageBrief, visualMoment } from '@creatorcano
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import { createOpenAICompatibleProvider } from '../agents/providers/factory';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import type { AgentProvider } from '../agents/providers';
@@ -33,7 +33,9 @@ export interface PageBriefsStageOutput {
   error?: string;
 }
 
-export async function runPageBriefsStage(input: PageBriefsStageInput): Promise<PageBriefsStageOutput> {
+export async function runPageBriefsStage(
+  input: PageBriefsStageInput,
+): Promise<PageBriefsStageOutput> {
   ensureToolsRegistered();
   const env = parseServerEnv(process.env);
   const r2 = input.r2Override ?? createR2Client(env);
@@ -44,7 +46,7 @@ export async function runPageBriefsStage(input: PageBriefsStageInput): Promise<P
 
   const makeProvider = (name: 'openai' | 'gemini'): AgentProvider => {
     if (input.providerOverride) return input.providerOverride(name);
-    if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
+    if (name === 'openai') return createOpenAICompatibleProvider(process.env);
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   };
 
@@ -75,7 +77,9 @@ export async function runPageBriefsStage(input: PageBriefsStageInput): Promise<P
     .where(and(eq(canonNode.runId, input.runId), gte(canonNode.pageWorthinessScore, 60)));
 
   if (nodes.length === 0) {
-    throw new Error('page-briefs stage cannot run: no canon_node rows with pageWorthinessScore >= 60 in this run');
+    throw new Error(
+      'page-briefs stage cannot run: no canon_node rows with pageWorthinessScore >= 60 in this run',
+    );
   }
 
   // High-score visual moments only — keep the prompt focused on assets the
@@ -119,7 +123,9 @@ export async function runPageBriefsStage(input: PageBriefsStageInput): Promise<P
     .from(pageBrief)
     .where(eq(pageBrief.runId, input.runId));
   if (finalBriefs.length === 0) {
-    throw new Error('page-briefs stage produced 0 page_brief rows; agent likely hit a quota or schema-validation error');
+    throw new Error(
+      'page-briefs stage produced 0 page_brief rows; agent likely hit a quota or schema-validation error',
+    );
   }
   return { ok: true, briefCount: finalBriefs.length, costCents: summary.costCents, summary };
 }

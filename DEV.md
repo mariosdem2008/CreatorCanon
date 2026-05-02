@@ -24,6 +24,21 @@
    TRIGGER_SECRET_KEY=tr_dev_...   # from Trigger.dev dashboard, OR see "Trigger.dev setup" below
    ```
 
+For local hub-generation cost control, you can route OpenAI-compatible pipeline
+agents through your logged-in Codex CLI account instead of the OpenAI API:
+
+```bash
+PIPELINE_OPENAI_PROVIDER=codex_cli
+# optional:
+CODEX_CLI_MODEL=gpt-5.5
+CODEX_CLI_TIMEOUT_MS=900000
+```
+
+This is development-only and is blocked when `NODE_ENV=production`. It only
+replaces OpenAI-compatible agent calls in the hub generation pipeline. Public
+archive audit generation, transcription, embeddings, and production runs still
+use API-key clients.
+
 ## One-time setup
 
 ```bash
@@ -39,11 +54,11 @@ pnpm dev
 
 This spins up three parallel processes via Turbo + concurrently:
 
-| Label | What | Port |
-|---|---|---|
-| `web` | Next.js dev server (the SaaS app) | 3000 |
-| `queue` | Worker queue runner (in-process pipeline executor) | — |
-| `trigger` | Trigger.dev local dev runtime (handles upload-transcription tasks) | — |
+| Label     | What                                                               | Port |
+| --------- | ------------------------------------------------------------------ | ---- |
+| `web`     | Next.js dev server (the SaaS app)                                  | 3000 |
+| `queue`   | Worker queue runner (in-process pipeline executor)                 | —    |
+| `trigger` | Trigger.dev local dev runtime (handles upload-transcription tasks) | —    |
 
 Open `http://localhost:3000` and click through the flow:
 
@@ -55,6 +70,7 @@ Open `http://localhost:3000` and click through the flow:
 6. **`/h/<hubSlug>`** → the rendered hub (loads a `creator_manual_v1` manifest from R2)
 
 Inspect what landed for any run:
+
 ```bash
 pnpm inspect:run --runId <runId>
 ```
@@ -62,6 +78,7 @@ pnpm inspect:run --runId <runId>
 ## Trigger.dev setup (first time)
 
 Manual upload transcription requires Trigger.dev. If you don't have an account:
+
 1. Sign up at https://trigger.dev (free tier)
 2. Create a project
 3. Copy `TRIGGER_SECRET_KEY` (and `TRIGGER_PROJECT_ID` if shown) into your `.env`
@@ -79,21 +96,22 @@ pnpm -C apps/worker dev:queue  # in another
 ```
 
 If you only want the web UI (mockManifest fallback for renderer testing):
+
 ```bash
 pnpm -C apps/web dev
 ```
 
 ## Common one-offs
 
-| What | Command |
-|---|---|
-| Reset the dev DB | `pnpm dev:db:reset` |
-| Apply pending migrations | `pnpm db:migrate` |
-| Seed local fixtures | `pnpm dev:seed` |
-| Repo-wide typecheck | `pnpm typecheck` |
-| Repo-wide tests | `pnpm test` (DB + API integration tests skip without `DATABASE_URL`; Gemini stage tests skip without `GEMINI_API_KEY`) |
-| Format | `pnpm format` |
-| Inspect any run's findings + cost | `pnpm inspect:run --runId <id>` |
+| What                              | Command                                                                                                                |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Reset the dev DB                  | `pnpm dev:db:reset`                                                                                                    |
+| Apply pending migrations          | `pnpm db:migrate`                                                                                                      |
+| Seed local fixtures               | `pnpm dev:seed`                                                                                                        |
+| Repo-wide typecheck               | `pnpm typecheck`                                                                                                       |
+| Repo-wide tests                   | `pnpm test` (DB + API integration tests skip without `DATABASE_URL`; Gemini stage tests skip without `GEMINI_API_KEY`) |
+| Format                            | `pnpm format`                                                                                                          |
+| Inspect any run's findings + cost | `pnpm inspect:run --runId <id>`                                                                                        |
 
 ## Gotchas
 

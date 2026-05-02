@@ -3,7 +3,7 @@ import { channelProfile } from '@creatorcanon/db/schema';
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import { createOpenAICompatibleProvider } from '../agents/providers/factory';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import { listVideosTool } from '../agents/tools/universal';
@@ -41,7 +41,7 @@ export async function runChannelProfileStage(
 
   const makeProvider = (name: 'openai' | 'gemini'): AgentProvider => {
     if (input.providerOverride) return input.providerOverride(name);
-    if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
+    if (name === 'openai') return createOpenAICompatibleProvider(process.env);
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   };
 
@@ -56,14 +56,17 @@ export async function runChannelProfileStage(
   };
   const videos = await listVideosTool.handler({}, bootstrapCtx);
   if (videos.length === 0) {
-    return { ok: false, costCents: 0, summary: null, error: 'No videos in run; cannot build channel profile.' };
+    return {
+      ok: false,
+      costCents: 0,
+      summary: null,
+      error: 'No videos in run; cannot build channel profile.',
+    };
   }
 
   const bootstrap =
     `Archive: ${videos.length} videos.\n\n` +
-    videos
-      .map((v) => `- ${v.id}: ${v.title} (${Math.round(v.durationSec / 60)} min)`)
-      .join('\n') +
+    videos.map((v) => `- ${v.id}: ${v.title} (${Math.round(v.durationSec / 60)} min)`).join('\n') +
     `\n\nProduce one channel profile. Sample 3-5 videos via getSegmentedTranscript before deciding.`;
 
   const cfg = SPECIALISTS.channel_profiler;

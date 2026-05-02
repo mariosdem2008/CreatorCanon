@@ -3,7 +3,7 @@ import { archiveFinding, type ArchiveFinding } from '@creatorcanon/db/schema';
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel, type AgentName } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import { createOpenAICompatibleProvider } from '../agents/providers/factory';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import type { AgentProvider } from '../agents/providers';
@@ -11,8 +11,16 @@ import { parseServerEnv } from '@creatorcanon/core';
 import { getDb } from '@creatorcanon/db';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 
-type SynthesisAgent = Extract<AgentName, 'playbook_extractor' | 'source_ranker' | 'quote_finder' | 'aha_moment_detector'>;
-const SYNTHESIS_AGENTS: SynthesisAgent[] = ['playbook_extractor', 'source_ranker', 'quote_finder', 'aha_moment_detector'];
+type SynthesisAgent = Extract<
+  AgentName,
+  'playbook_extractor' | 'source_ranker' | 'quote_finder' | 'aha_moment_detector'
+>;
+const SYNTHESIS_AGENTS: SynthesisAgent[] = [
+  'playbook_extractor',
+  'source_ranker',
+  'quote_finder',
+  'aha_moment_detector',
+];
 const CONCURRENCY = SYNTHESIS_AGENTS.length;
 
 const FINDING_TYPES = {
@@ -34,7 +42,12 @@ export interface SynthesisStageOutput {
   specialistsCompleted: number;
   findingCount: number;
   costCents: number;
-  perAgent: Array<{ agent: SynthesisAgent; modelId: string; summary: RunAgentSummary | null; error?: string }>;
+  perAgent: Array<{
+    agent: SynthesisAgent;
+    modelId: string;
+    summary: RunAgentSummary | null;
+    error?: string;
+  }>;
 }
 
 export async function runSynthesisStage(input: SynthesisStageInput): Promise<SynthesisStageOutput> {
@@ -46,7 +59,7 @@ export async function runSynthesisStage(input: SynthesisStageInput): Promise<Syn
 
   function makeProvider(name: 'openai' | 'gemini'): AgentProvider {
     if (input.providerOverride) return input.providerOverride(name);
-    if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
+    if (name === 'openai') return createOpenAICompatibleProvider(process.env);
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   }
 
@@ -94,14 +107,22 @@ export async function runSynthesisStage(input: SynthesisStageInput): Promise<Syn
   };
 }
 
-async function runWithConcurrency<T, U>(items: T[], concurrency: number, fn: (item: T) => Promise<U>): Promise<U[]> {
+async function runWithConcurrency<T, U>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<U>,
+): Promise<U[]> {
   const out: U[] = [];
   let i = 0;
-  await Promise.all(Array(Math.min(concurrency, items.length)).fill(0).map(async () => {
-    while (i < items.length) {
-      const idx = i++;
-      out[idx] = await fn(items[idx]!);
-    }
-  }));
+  await Promise.all(
+    Array(Math.min(concurrency, items.length))
+      .fill(0)
+      .map(async () => {
+        while (i < items.length) {
+          const idx = i++;
+          out[idx] = await fn(items[idx]!);
+        }
+      }),
+  );
   return out;
 }

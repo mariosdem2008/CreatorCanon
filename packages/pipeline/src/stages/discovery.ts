@@ -1,7 +1,7 @@
 import { runAgent, type RunAgentSummary } from '../agents/harness';
 import { SPECIALISTS } from '../agents/specialists';
 import { selectModel, type AgentName } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import { createOpenAICompatibleProvider } from '../agents/providers/factory';
 import { createGeminiProvider } from '../agents/providers/gemini';
 import { ensureToolsRegistered } from '../agents/tools/registry';
 import { listVideosTool } from '../agents/tools/universal';
@@ -11,8 +11,15 @@ import { parseServerEnv } from '@creatorcanon/core';
 import { getDb } from '@creatorcanon/db';
 import { createR2Client, type R2Client } from '@creatorcanon/adapters';
 
-type DiscoveryAgent = Extract<AgentName, 'topic_spotter' | 'framework_extractor' | 'lesson_extractor'>;
-const DISCOVERY_AGENTS: DiscoveryAgent[] = ['topic_spotter', 'framework_extractor', 'lesson_extractor'];
+type DiscoveryAgent = Extract<
+  AgentName,
+  'topic_spotter' | 'framework_extractor' | 'lesson_extractor'
+>;
+const DISCOVERY_AGENTS: DiscoveryAgent[] = [
+  'topic_spotter',
+  'framework_extractor',
+  'lesson_extractor',
+];
 const CONCURRENCY = DISCOVERY_AGENTS.length;
 
 export interface DiscoveryStageInput {
@@ -28,7 +35,12 @@ export interface DiscoveryStageOutput {
   specialistsCompleted: number;
   findingCount: number;
   costCents: number;
-  perAgent: Array<{ agent: DiscoveryAgent; modelId: string; summary: RunAgentSummary | null; error?: string }>;
+  perAgent: Array<{
+    agent: DiscoveryAgent;
+    modelId: string;
+    summary: RunAgentSummary | null;
+    error?: string;
+  }>;
 }
 
 export async function runDiscoveryStage(input: DiscoveryStageInput): Promise<DiscoveryStageOutput> {
@@ -39,7 +51,7 @@ export async function runDiscoveryStage(input: DiscoveryStageInput): Promise<Dis
 
   function makeProvider(name: 'openai' | 'gemini'): AgentProvider {
     if (input.providerOverride) return input.providerOverride(name);
-    if (name === 'openai') return createOpenAIProvider(env.OPENAI_API_KEY ?? '');
+    if (name === 'openai') return createOpenAICompatibleProvider(process.env);
     return createGeminiProvider(env.GEMINI_API_KEY ?? '');
   }
 
@@ -54,8 +66,13 @@ export async function runDiscoveryStage(input: DiscoveryStageInput): Promise<Dis
   };
   const videos = await listVideosTool.handler({}, bootstrapCtx);
   const shown = videos.slice(0, 50);
-  const moreSuffix = videos.length > 50 ? ` (showing first 50; ${videos.length - 50} more available via listVideos)` : '';
-  const bootstrap = `Archive: ${videos.length} videos${moreSuffix}.\n\n` + shown.map((v) => `- ${v.id}: ${v.title} (${Math.round(v.durationSec / 60)} min)`).join('\n');
+  const moreSuffix =
+    videos.length > 50
+      ? ` (showing first 50; ${videos.length - 50} more available via listVideos)`
+      : '';
+  const bootstrap =
+    `Archive: ${videos.length} videos${moreSuffix}.\n\n` +
+    shown.map((v) => `- ${v.id}: ${v.title} (${Math.round(v.durationSec / 60)} min)`).join('\n');
 
   // Fan out specialists with bounded concurrency.
   const summaries = await runWithConcurrency(DISCOVERY_AGENTS, CONCURRENCY, async (agent) => {
@@ -89,14 +106,22 @@ export async function runDiscoveryStage(input: DiscoveryStageInput): Promise<Dis
   };
 }
 
-async function runWithConcurrency<T, U>(items: T[], concurrency: number, fn: (item: T) => Promise<U>): Promise<U[]> {
+async function runWithConcurrency<T, U>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<U>,
+): Promise<U[]> {
   const out: U[] = [];
   let i = 0;
-  await Promise.all(Array(Math.min(concurrency, items.length)).fill(0).map(async () => {
-    while (i < items.length) {
-      const idx = i++;
-      out[idx] = await fn(items[idx]!);
-    }
-  }));
+  await Promise.all(
+    Array(Math.min(concurrency, items.length))
+      .fill(0)
+      .map(async () => {
+        while (i < items.length) {
+          const idx = i++;
+          out[idx] = await fn(items[idx]!);
+        }
+      }),
+  );
   return out;
 }

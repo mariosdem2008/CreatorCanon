@@ -1,12 +1,21 @@
 import { and, eq, getDb } from '@creatorcanon/db';
-import { archiveFinding, archiveRelation, page, pageVersion, segment } from '@creatorcanon/db/schema';
+import {
+  archiveFinding,
+  archiveRelation,
+  page,
+  pageVersion,
+  segment,
+} from '@creatorcanon/db/schema';
 import { composePage, type ComposedPage } from '../mergers/page-composer';
 import { aggregateEvidence } from '../mergers/evidence-aggregator';
 import { dedupeLessonFramework } from '../mergers/dedup';
 import { collectHighlights } from '../mergers/highlights-collector';
 import type { AgentProvider } from '../agents/providers';
 import { selectModel } from '../agents/providers/selectModel';
-import { createOpenAIProvider } from '../agents/providers/openai';
+import {
+  createOpenAICompatibleProvider,
+  resolveOpenAIProviderMode,
+} from '../agents/providers/factory';
 import { parseServerEnv } from '@creatorcanon/core';
 
 function nano(): string {
@@ -53,10 +62,11 @@ export async function runMergeStage(input: MergeStageInput): Promise<MergeStageO
     .where(eq(archiveRelation.runId, input.runId));
 
   // Clear prior dedup relations for idempotency before re-running.
-  await db.delete(archiveRelation).where(and(
-    eq(archiveRelation.runId, input.runId),
-    eq(archiveRelation.agent, 'page_composer_dedup'),
-  ));
+  await db
+    .delete(archiveRelation)
+    .where(
+      and(eq(archiveRelation.runId, input.runId), eq(archiveRelation.agent, 'page_composer_dedup')),
+    );
 
   // Dedup lesson↔framework.
   const dedup = dedupeLessonFramework(allFindings);
@@ -101,7 +111,10 @@ export async function runMergeStage(input: MergeStageInput): Promise<MergeStageO
     // Build from env.
     try {
       const env = parseServerEnv(process.env);
-      polishProvider = env.OPENAI_API_KEY ? createOpenAIProvider(env.OPENAI_API_KEY) : null;
+      polishProvider =
+        env.OPENAI_API_KEY || resolveOpenAIProviderMode(process.env) === 'codex_cli'
+          ? createOpenAICompatibleProvider(process.env)
+          : null;
     } catch {
       polishProvider = null;
     }
