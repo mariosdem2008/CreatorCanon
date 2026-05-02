@@ -33,8 +33,8 @@ describe('extractAudienceJobs', () => {
     const jobs = extractAudienceJobs({
       _index_audience_jobs: [
         { id: 'good', label: 'Good label' },
-        // @ts-expect-error intentional malformed entry
-        { malformed: true },
+        // Intentionally malformed entry — extractor must tolerate.
+        { malformed: true } as unknown as { id: string; label: string },
       ],
     });
     assert.equal(jobs.length, 1);
