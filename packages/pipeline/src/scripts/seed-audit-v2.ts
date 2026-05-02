@@ -67,7 +67,7 @@
 
 import crypto from 'node:crypto';
 
-import { and, asc, closeDb, eq, getDb, inArray, sql } from '@creatorcanon/db';
+import { and, asc, closeDb, ensureDbHealthy, eq, getDb, inArray, sql } from '@creatorcanon/db';
 import {
   canonNode,
   channelProfile,
@@ -648,6 +648,10 @@ async function generateCanonShellsV2(
 async function main() {
   const runId = process.argv[2];
   if (!runId) throw new Error('Usage: tsx ./src/scripts/seed-audit-v2.ts <runId>');
+
+  // Wake up Neon serverless and clear any stale pool connections from a prior
+  // process. Retries up to 4 times with exponential backoff on ECONNRESET etc.
+  await ensureDbHealthy();
 
   const regenChannel = process.argv.includes('--regen-channel');
   const regenVic = process.argv.includes('--regen-vic');

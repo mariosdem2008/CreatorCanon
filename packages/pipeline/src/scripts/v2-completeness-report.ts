@@ -21,7 +21,7 @@
  *   tsx ./src/scripts/v2-completeness-report.ts <runId>
  */
 
-import { closeDb, eq, getDb } from '@creatorcanon/db';
+import { closeDb, ensureDbHealthy, eq, getDb } from '@creatorcanon/db';
 import {
   canonNode,
   channelProfile,
@@ -71,6 +71,7 @@ async function main() {
   const runId = process.argv[2];
   if (!runId) throw new Error('Usage: tsx ./src/scripts/v2-completeness-report.ts <runId>');
 
+  await ensureDbHealthy();
   const db = getDb();
 
   // Channel profile.
