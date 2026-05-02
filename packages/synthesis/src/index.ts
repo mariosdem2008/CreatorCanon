@@ -60,3 +60,12 @@ export {
   classifyVerdictFromCanon,
   topicSlugFromCanon,
 } from './composers/reference-composer';
+export {
+  composeDebunking,
+  detectDebunkingCanon,
+} from './composers/debunking-forge';
+export {
+  composeGlossary,
+  extractCandidateTerms,
+  termSlug,
+} from './composers/glossary-builder';

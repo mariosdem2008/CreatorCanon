@@ -36,6 +36,8 @@ import { composeCalculators } from './composers/calculator-forge';
 import { composeDiagnostic } from './composers/diagnostic-composer';
 import { composeFunnel } from './composers/funnel-composer';
 import { composeReference } from './composers/reference-composer';
+import { composeDebunking } from './composers/debunking-forge';
+import { composeGlossary } from './composers/glossary-builder';
 
 export interface RunSynthesisInput {
   runId: string;
@@ -96,32 +98,46 @@ export async function runSynthesis(input: RunSynthesisInput): Promise<ProductBun
 
   const selected = routeComposers(archetype);
 
-  const [actionPlan, worksheets, calculators, diagnostic, reference, funnel] =
-    await Promise.all([
-      selected.has('actionPlan')
-        ? composeActionPlan(baseInput, { codex: input.codex })
-        : undefined,
-      selected.has('worksheets')
-        ? composeWorksheets(baseInput, { codex: input.codex })
-        : undefined,
-      selected.has('calculators')
-        ? composeCalculators(baseInput, { codex: input.codex })
-        : undefined,
-      selected.has('diagnostic')
-        ? composeDiagnostic(baseInput, { codex: input.codex })
-        : undefined,
-      selected.has('reference')
-        ? composeReference(baseInput, { codex: input.codex })
-        : undefined,
-      composeFunnel(
-        {
-          ...baseInput,
-          productGoal: input.productGoal,
-          creatorConfig: input.creatorConfig,
-        },
-        { codex: input.codex },
-      ),
-    ]);
+  const [
+    actionPlan,
+    worksheets,
+    calculators,
+    diagnostic,
+    reference,
+    debunking,
+    glossary,
+    funnel,
+  ] = await Promise.all([
+    selected.has('actionPlan')
+      ? composeActionPlan(baseInput, { codex: input.codex })
+      : undefined,
+    selected.has('worksheets')
+      ? composeWorksheets(baseInput, { codex: input.codex })
+      : undefined,
+    selected.has('calculators')
+      ? composeCalculators(baseInput, { codex: input.codex })
+      : undefined,
+    selected.has('diagnostic')
+      ? composeDiagnostic(baseInput, { codex: input.codex })
+      : undefined,
+    selected.has('reference')
+      ? composeReference(baseInput, { codex: input.codex })
+      : undefined,
+    selected.has('debunking')
+      ? composeDebunking(baseInput, { codex: input.codex })
+      : undefined,
+    selected.has('glossary')
+      ? composeGlossary(baseInput, { codex: input.codex })
+      : undefined,
+    composeFunnel(
+      {
+        ...baseInput,
+        productGoal: input.productGoal,
+        creatorConfig: input.creatorConfig,
+      },
+      { codex: input.codex },
+    ),
+  ]);
 
   const bundle: ProductBundle = {
     archetype,
@@ -134,6 +150,8 @@ export async function runSynthesis(input: RunSynthesisInput): Promise<ProductBun
       ...(calculators ? { calculators } : {}),
       ...(diagnostic ? { diagnostic } : {}),
       ...(reference ? { reference } : {}),
+      ...(debunking ? { debunking } : {}),
+      ...(glossary ? { glossary } : {}),
       funnel,
     },
     generatedAt: new Date().toISOString(),
