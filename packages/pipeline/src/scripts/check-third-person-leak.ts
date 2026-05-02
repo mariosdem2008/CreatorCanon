@@ -41,6 +41,8 @@ import {
   videoIntelligenceCard,
 } from '@creatorcanon/db/schema';
 
+import { isVoiceMode, type VoiceMode } from './util/voice-mode';
+
 import { loadDefaultEnvFiles } from '../env-files';
 
 loadDefaultEnvFiles();
@@ -117,13 +119,39 @@ async function main() {
     .from(channelProfile)
     .where(eq(channelProfile.runId, runId));
   const cp = cpRows[0]?.payload as { schemaVersion?: string; creatorName?: string;
-    hub_title?: string; hub_tagline?: string; hero_candidates?: string[] } | undefined;
+    hub_title?: string; hub_tagline?: string; hero_candidates?: string[];
+    _index_voice_mode?: string } | undefined;
 
   if (!cp || cp.schemaVersion !== 'v2') {
     console.info(`[3p-leak] runId=${runId} — channel profile is not v2 (skipping)`);
     await closeDb();
     process.exit(0);
   }
+
+  // Phase 9 F2: skip when voice mode is editorial/hybrid — the third-person-leak
+  // detector is calibrated for first_person bodies. For editorial mode,
+  // topic-as-subject phrasing IS the assigned register, not a leak. For hybrid
+  // mode, blockquoted first-person aphorisms are intentional inserts.
+  const voiceMode: VoiceMode = isVoiceMode(cp._index_voice_mode) ? cp._index_voice_mode : 'first_person';
+
+  if (voiceMode === 'third_person_editorial') {
+    console.info(`[3p-leak] runId=${runId} voiceMode=third_person_editorial — leak check N/A, skipping (editorial mode subjects ARE the topic, not leaks)`);
+    console.info(`[3p-leak] METRIC voice_mode=${voiceMode}`);
+    console.info(`[3p-leak] METRIC third_person_leaks=0`);
+    await closeDb();
+    return;
+  }
+
+  if (voiceMode === 'hybrid') {
+    console.info(`[3p-leak] runId=${runId} voiceMode=hybrid — skipping (blockquoted first-person aphorisms are intentional)`);
+    console.info(`[3p-leak] METRIC voice_mode=${voiceMode}`);
+    console.info(`[3p-leak] METRIC third_person_leaks=0`);
+    await closeDb();
+    return;
+  }
+
+  console.info(`[3p-leak] runId=${runId} voiceMode=${voiceMode} — running first-person leak check`);
+  // Existing leak-detection logic continues below...
 
   const creatorName = cp.creatorName ?? null;
   const patterns = buildPatterns(creatorName);
@@ -234,7 +262,8 @@ async function main() {
   }
   console.info(`[3p-leak] report written: ${outPath}`);
 
-  // Machine-readable METRIC line for v2-cohort-report stable parsing.
+  // Machine-readable METRIC lines for v2-cohort-report stable parsing.
+  console.info(`[3p-leak] METRIC voice_mode=${voiceMode}`);
   console.info(`[3p-leak] METRIC third_person_leaks=${allHits.length}`);
 
   await closeDb();
