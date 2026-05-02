@@ -19,7 +19,8 @@ async function main() {
   // Group by transcribeStatus
   const byStatus = new Map<string, number>();
   for (const v of recentVids) {
-    byStatus.set(v.transcribeStatus, (byStatus.get(v.transcribeStatus) ?? 0) + 1);
+    const status = v.transcribeStatus ?? 'null';
+    byStatus.set(status, (byStatus.get(status) ?? 0) + 1);
   }
   console.info(`Total manual_upload videos: ${recentVids.length}`);
   console.info(`Status breakdown:`);
@@ -31,7 +32,9 @@ async function main() {
   for (const v of last50) {
     const segCountRow = await db.select({ c: sql<number>`count(*)::int` }).from(segment).where(eq(segment.videoId, v.id));
     const c = segCountRow[0]?.c ?? 0;
-    console.info(`  ${v.transcribeStatus.padEnd(12)} ${String(c).padStart(4)} segs ${v.id} ${v.title.slice(0, 60)}`);
+    const status = (v.transcribeStatus ?? 'null').padEnd(12);
+    const title = (v.title ?? '<no title>').slice(0, 60);
+    console.info(`  ${status} ${String(c).padStart(4)} segs ${v.id} ${title}`);
   }
 
   await closeDb();

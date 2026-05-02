@@ -4,7 +4,7 @@ import { loadDefaultEnvFiles } from '../env-files';
 
 loadDefaultEnvFiles();
 
-const RUNS = [
+const RUNS: Array<[string, string]> = [
   ['Jordan', 'a8a05629-d400-4f71-a231-99614615521c'],
   ['Walker', 'cf6ee665-e7a8-48dd-bf1b-2b045bbc2fce'],
   ['Hormozi', '037458ae-1439-4e56-a8da-aa967f2f5e1b'],
