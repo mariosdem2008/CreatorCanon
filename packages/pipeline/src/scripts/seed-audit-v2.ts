@@ -884,7 +884,7 @@ async function main() {
 
     for (const shell of briefShells) {
       const result = briefBodies.get(shell.pageId);
-      const finalShell = { ...shell, body: result?.body ?? '' };
+      const finalShell = { ...(result?.brief ?? shell), body: result?.body ?? '' };
       await db.insert(pageBrief).values({
         id: `pb_${crypto.randomUUID().slice(0, 12)}`,
         workspaceId: briefOnlyRun.workspaceId,
@@ -1692,7 +1692,7 @@ async function main() {
     for (const shell of briefShells) {
       const result = briefBodies.get(shell.pageId);
       const finalShell = {
-        ...shell,
+        ...(result?.brief ?? shell),
         body: result?.body ?? '',
       };
       await db.insert(pageBrief).values({

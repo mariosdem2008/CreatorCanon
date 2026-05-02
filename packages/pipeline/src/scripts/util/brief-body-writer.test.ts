@@ -28,11 +28,12 @@ describe('BriefBodyResult shape', () => {
     // We simulate what the orchestrator emits in the three degraded paths.
     const noFallbackCanon: BriefBodyResult = { body: '', cited_segment_ids: [], _degraded: 'no_primary_canon_for_fallback' };
     const refused: BriefBodyResult = { body: '', cited_segment_ids: [], _degraded: 'brief_writer_refused' };
-    const healthy: BriefBodyResult = { body: 'Some real body text.', cited_segment_ids: [] };
+    const healthy: BriefBodyResult = { body: 'Some real body text.', cited_segment_ids: [], brief: undefined };
 
     assert.equal(noFallbackCanon._degraded, 'no_primary_canon_for_fallback');
     assert.equal(refused._degraded, 'brief_writer_refused');
     assert.equal(healthy._degraded, undefined);
+    assert.equal(healthy.brief, undefined);
   });
 });
 
