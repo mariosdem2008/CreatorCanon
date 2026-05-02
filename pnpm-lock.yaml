@@ -44,6 +44,9 @@ importers:
       '@creatorcanon/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
+      '@creatorcanon/synthesis':
+        specifier: workspace:*
+        version: link:../../packages/synthesis
       '@creatorcanon/ui':
         specifier: workspace:*
         version: link:../../packages/ui
