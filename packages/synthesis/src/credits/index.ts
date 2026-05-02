@@ -8,6 +8,14 @@ export type { GrantArgs, ConsumeArgs, GrantResult } from './ledger';
 export { getBalance } from './balance';
 export type { BalanceMap } from './balance';
 
+export { getEntitlements } from './entitlements';
+export type {
+  Entitlements,
+  EntitlementSlot,
+  EntitlementsByKind,
+  GetEntitlementsArgs,
+} from './entitlements';
+
 export {
   allocateTierCredits,
   addAddonCredit,

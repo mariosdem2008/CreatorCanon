@@ -67,6 +67,7 @@ export {
   consumeBuilderCredit,
   consumeChatCredit,
   consumeOnSuccess,
+  getEntitlements,
   reconcile,
   runReconciliation,
   MemoryCreditLedger,
@@ -94,4 +95,8 @@ export type {
   ReconcileResult,
   DriftReport,
   RunReconciliationOptions,
+  Entitlements,
+  EntitlementSlot,
+  EntitlementsByKind,
+  GetEntitlementsArgs,
 } from './credits';
