@@ -61,7 +61,7 @@
 
 import crypto from 'node:crypto';
 
-import { and, asc, closeDb, eq, getDb, inArray } from '@creatorcanon/db';
+import { and, asc, closeDb, eq, getDb, inArray, sql } from '@creatorcanon/db';
 import {
   canonNode,
   channelProfile,
@@ -869,6 +869,8 @@ async function main() {
   for (const arr of segByVideo.values()) for (const s of arr) segById.set(s.segmentId, s);
 
   // Build per-canon body inputs.
+  const degradedNoSegmentsCanonIds = new Set<string>();
+
   const bodyInputs: CanonBodyInput[] = canonShells.map((shell, i) => {
     const id = canonShellIds.get(shell.title) ?? `cn_temp_${i}`;
     const sel = selections.get(id) ?? { example_ids: [], story_ids: [], mistake_ids: [], contrarian_take_ids: [] };
@@ -899,6 +901,14 @@ async function main() {
     for (const segId of [...segIdsForBody].slice(0, 18)) {
       const s = segById.get(segId);
       if (s) segments.push({ segmentId: s.segmentId, timestamp: formatTs(s.startMs), text: s.text });
+    }
+
+    // Phase 9 G1: skip body write entirely for canons with zero source segments.
+    // Codex would refuse — better to mark _degraded upfront than to burn a Codex call.
+    if (segments.length === 0) {
+      console.warn(`[v2] Stage 4 weaver: canon ${id} (${shell.title}) has 0 source segments — marking _degraded='no_source_segments', skipping body write`);
+      degradedNoSegmentsCanonIds.add(id);
+      return null;
     }
 
     // Build woven items by ID lookup.
@@ -949,7 +959,7 @@ async function main() {
       channelAudience: profile._internal_audience,
       voiceMode: resolvedVoiceMode,
     };
-  });
+  }).filter((x): x is CanonBodyInput => x !== null);
 
   // Skip canon already with body unless regenBodies.
   const bodiesToWrite = regenBodies
@@ -961,6 +971,16 @@ async function main() {
 
   console.info(`[v2] writing ${bodiesToWrite.length} bodies (${bodyInputs.length - bodiesToWrite.length} resumed with existing bodies)`);
   const bodyResults = await writeCanonBodiesParallel(bodiesToWrite, { concurrency: 3, timeoutMs: 10 * 60 * 1000 });
+
+  // Phase 9 G1: persist _degraded='no_source_segments' for skipped canons.
+  if (degradedNoSegmentsCanonIds.size > 0) {
+    console.info(`[v2] Stage 5: persisting _degraded='no_source_segments' for ${degradedNoSegmentsCanonIds.size} skipped canons`);
+    for (const canonId of degradedNoSegmentsCanonIds) {
+      await db.update(canonNode)
+        .set({ payload: sql`payload || '{"body":"","_degraded":"no_source_segments"}'::jsonb` })
+        .where(eq(canonNode.id, canonId));
+    }
+  }
 
   // Merge bodies into shells + persist.
   for (const shell of canonShells) {

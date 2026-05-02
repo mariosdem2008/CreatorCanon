@@ -95,6 +95,31 @@ export interface CanonBodyResult {
 
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
 
+/** Codex sometimes refuses to write a canon body when its source section is
+ *  empty (e.g., Stage 4 weaver assembled woven items but no segment UUIDs).
+ *  Its refusal text lands in `parsed.body` and gets persisted. We detect this
+ *  via a combination of refusal-pattern matching and an under-length guard.
+ *
+ *  See: docs/superpowers/plans/2026-05-02-phase-8-results.md G1 finding. */
+const REFUSAL_PATTERNS: RegExp[] = [
+  /\bi can'?t (produce|write|generate|provide)\b/i,
+  /\bi cannot (produce|write|generate|provide)\b/i,
+  /the source section is empty/i,
+  /no transcript segment uuids?/i,
+  /no transcript segment ids? were provided/i,
+];
+
+/** Bodies under this word count are treated as suspect (likely Codex refusal
+ *  output, not real prose). Combined with refusal-pattern detection. */
+export const MIN_BODY_WORDS_FALLBACK = 100;
+
+export function detectRefusalPattern(body: string | undefined | null): boolean {
+  if (!body) return true;
+  const wordCount = body.split(/\s+/).filter(Boolean).length;
+  if (wordCount < MIN_BODY_WORDS_FALLBACK) return true;
+  return REFUSAL_PATTERNS.some((re) => re.test(body));
+}
+
 /** Read the archetype's HUB_SOURCE_VOICE section from disk. Cached on first read. */
 const archetypeCache = new Map<ArchetypeSlug, string>();
 function loadArchetypeVoice(archetype: ArchetypeSlug): string {
@@ -289,6 +314,18 @@ export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs
   };
 
   // Quality gates — throw to trigger retry-on-failure in the orchestrator.
+
+  // Phase 9 G1: catch Codex refusal output before it ships as a real body.
+  if (detectRefusalPattern(body)) {
+    const refusalWordCount = body.split(/\s+/).filter(Boolean).length;
+    const preview = body.slice(0, 80).replace(/\s+/g, ' ');
+    const err = new Error(
+      `codex refusal detected (${refusalWordCount} words): "${preview}..."`
+    ) as Error & { partialResult?: CanonBodyResult };
+    err.partialResult = result;  // preserve for orchestrator's catch
+    throw err;
+  }
+
   const minWords = minWordCount(input.type);
   if (wordCount < minWords) {
     const err = new Error(`body too short: ${wordCount} words < ${minWords} min for ${input.type}`) as Error & { partialResult?: CanonBodyResult };
@@ -347,6 +384,21 @@ export async function writeCanonBodiesParallel(
         }
       }
       if (!out.has(input.id) && lastErr) {
+        const refusalErr = lastErr.message.includes('codex refusal detected');
+        if (refusalErr) {
+          // Don't accept refusal output — fall back to all-degraded so caller can
+          // decide whether to skip this canon entirely or retry with different inputs.
+          console.error(`[body] ${input.id} permanently refused: ${lastErr.message.slice(0, 200)}`);
+          out.set(input.id, {
+            body: '',
+            cited_segment_ids: [],
+            used_example_ids: [],
+            used_story_ids: [],
+            used_mistake_ids: [],
+            used_contrarian_take_ids: [],
+          });
+          continue;  // skip to next worker iteration
+        }
         const wordCountErr = lastErr.message.includes('body too short');
         if (wordCountErr && lastResult) {
           // Accept the under-length body; log + continue rather than degraded-fallback
