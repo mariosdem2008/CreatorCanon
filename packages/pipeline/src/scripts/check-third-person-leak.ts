@@ -234,6 +234,9 @@ async function main() {
   }
   console.info(`[3p-leak] report written: ${outPath}`);
 
+  // Machine-readable METRIC line for v2-cohort-report stable parsing.
+  console.info(`[3p-leak] METRIC third_person_leaks=${allHits.length}`);
+
   await closeDb();
   if (allHits.length > 0) process.exit(2);
 }

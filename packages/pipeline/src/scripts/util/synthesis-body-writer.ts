@@ -30,6 +30,7 @@ import { extractJsonFromCodexOutput } from '../../agents/providers/codex-extract
 import { runCodex } from './codex-runner';
 import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
+import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
@@ -107,6 +108,7 @@ export interface SynthesisBodyInput {
   creatorName: string;
   archetype: ArchetypeSlug;
   voiceFingerprint: VoiceFingerprint;
+  voiceMode?: VoiceMode;
 
   /** Channel context. */
   channelDominantTone?: string;
@@ -332,11 +334,7 @@ function buildBodyPrompt(input: SynthesisBodyInput): string {
     `- DO NOT use [<startMs>ms-<endMs>ms] ranges`,
     `- DO NOT spam (3+ in one sentence)`,
     '',
-    `# Voice rules (HARD-FAIL otherwise)`,
-    `- First-person only. NEVER "the creator", "${creatorName}", "she/he says", "in this episode"`,
-    `- Reference children by their TITLES, not by phrases like "the lesson on X"`,
-    `- Verbatim preserveTerms`,
-    `- Markdown allowed: ## subheadings, **bold**, lists, blockquotes`,
+    voiceRulesPrompt(input.voiceMode ?? 'first_person', input.creatorName),
     '',
     `# Naming requirement`,
     `Every child title above MUST appear in your body, case-insensitive. Echo the IDs back in named_child_ids.`,

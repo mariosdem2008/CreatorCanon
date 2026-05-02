@@ -81,6 +81,28 @@ interface ChannelProfile_v2 {
   _index_content_formats: string[];
   _index_archetype: 'operator-coach' | 'science-explainer' | 'instructional-craft' | 'contemplative-thinker' | '_DEFAULT';
   _index_expertise_category: string;
+  /** Voice register for body fields. Phase 8+. */
+  _index_voice_mode: VoiceMode;
+}
+```
+
+### `_index_voice_mode` (Phase 8+)
+
+Voice register for body fields produced by the audit pipeline. Defaults from
+`_index_archetype` if not set:
+
+- `operator-coach` + `instructional-craft` → `'first_person'`
+- `science-explainer` → `'third_person_editorial'`
+- `contemplative-thinker` → `'hybrid'`
+- `_DEFAULT` → `'first_person'`
+
+```ts
+type VoiceMode = 'first_person' | 'third_person_editorial' | 'hybrid';
+
+interface ChannelProfile_v2 {
+  // ... existing fields ...
+  /** Voice register for body fields. Phase 8+. */
+  _index_voice_mode: VoiceMode;
 }
 ```
 

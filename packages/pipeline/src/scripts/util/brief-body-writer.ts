@@ -41,6 +41,7 @@ import { extractJsonFromCodexOutput } from '../../agents/providers/codex-extract
 import { runCodex } from './codex-runner';
 import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
+import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 const UUID_REGEX = /\[([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\]/g;
@@ -123,6 +124,7 @@ export interface BriefBodyInput {
   creatorName: string;
   archetype: ArchetypeSlug;
   voiceFingerprint: VoiceFingerprint;
+  voiceMode?: VoiceMode;
   channelDominantTone?: string;
   channelAudience?: string;
 }
@@ -426,12 +428,7 @@ function buildBodyPrompt(input: BriefBodyInput): string {
     `- DO NOT cite in the opening sentence`,
     `- DO NOT use [<startMs>ms-<endMs>ms] ranges`,
     '',
-    `# Voice rules (HARD-FAIL otherwise)`,
-    `- First-person only. NEVER "the creator", "${creatorName}", "she/he says"`,
-    `- DO NOT render _internal_audience_question as an H1 or opening line`,
-    `- Reference the primary canon by its TITLE (case-insensitive substring match required)`,
-    `- Verbatim preserveTerms`,
-    `- Markdown allowed but lean — this is intro copy`,
+    voiceRulesPrompt(input.voiceMode ?? 'first_person', input.creatorName),
     '',
     `# Output format`,
     `ONE JSON object. First char \`{\`, last char \`}\`.`,

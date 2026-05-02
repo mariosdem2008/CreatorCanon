@@ -25,6 +25,7 @@ import { extractJsonFromCodexOutput } from '../../agents/providers/codex-extract
 import { runCodex } from './codex-runner';
 import { type ArchetypeSlug } from '../../agents/skills/archetype-detector';
 import { SKILL_ROOT_PATH } from '../../agents/skills/skill-loader';
+import { type VoiceMode, voiceRulesPrompt } from './voice-mode';
 
 const ARCHETYPE_DIR = path.join(SKILL_ROOT_PATH, 'creator-archetypes');
 
@@ -72,6 +73,7 @@ export interface CanonBodyInput {
 
   /** Voice. */
   creatorName: string;
+  voiceMode?: VoiceMode;
   archetype: ArchetypeSlug;
   voiceFingerprint: VoiceFingerprint;
 
@@ -132,13 +134,13 @@ function formatWoven(item: WovenItem): string {
 /** Length budget in words by canon type. Longer for procedural, shorter for definitions. */
 function targetWordCount(type: string): { min: number; max: number } {
   switch (type) {
-    case 'framework': return { min: 600, max: 1200 };
-    case 'playbook': return { min: 800, max: 1500 };
-    case 'principle': case 'topic': return { min: 400, max: 1000 };
-    case 'lesson': case 'pattern': case 'tactic': return { min: 400, max: 900 };
-    case 'definition': case 'aha_moment': case 'quote': return { min: 200, max: 500 };
-    case 'example': return { min: 300, max: 700 };
-    default: return { min: 400, max: 1000 };
+    case 'framework': return { min: 700, max: 1500 };
+    case 'playbook': return { min: 1000, max: 1800 };
+    case 'principle': case 'topic': return { min: 500, max: 1200 };
+    case 'lesson': case 'pattern': case 'tactic': return { min: 450, max: 1000 };
+    case 'definition': case 'aha_moment': case 'quote': return { min: 250, max: 600 };
+    case 'example': return { min: 350, max: 800 };
+    default: return { min: 500, max: 1200 };
   }
 }
 
@@ -228,12 +230,10 @@ function buildBodyPrompt(input: CanonBodyInput): string {
   lines.push(`  woven items by their CONTENT in your prose (e.g., "the dentist example"),`);
   lines.push(`  then echo back which «labels» you used in the used_*_ids output fields.`);
   lines.push('');
-  lines.push(`# Voice rules (HARD-FAIL otherwise)`);
-  lines.push(`- First-person only. NEVER "the creator", "${input.creatorName}", "she/he says", "the speaker"`);
-  lines.push(`- Verbatim preserveTerms — do not rephrase named concepts`);
-  lines.push(`- profanityAllowed governs body language; respect it`);
-  lines.push(`- Markdown allowed: ## subheadings, **bold**, lists, blockquotes`);
+  const voiceMode = input.voiceMode ?? 'first_person';
+  lines.push(voiceRulesPrompt(voiceMode, input.creatorName));
   lines.push('');
+
   lines.push(`# Weaving requirement`);
   lines.push(`The woven items above MUST appear in your body — paraphrased or directly. Reference`);
   lines.push(`them BY CONTENT in your prose (e.g., "the dentist value-ladder example", "the £5,000`);
@@ -257,13 +257,13 @@ function buildBodyPrompt(input: CanonBodyInput): string {
 /** Minimum word count by canon type. Body writer retries on under-length output. */
 function minWordCount(type: string): number {
   switch (type) {
-    case 'definition': case 'aha_moment': case 'quote': return 200;
-    case 'example': return 250;
-    case 'lesson': case 'pattern': case 'tactic': return 350;
-    case 'principle': case 'topic': return 400;
-    case 'framework': return 500;
-    case 'playbook': return 600;
-    default: return 350;
+    case 'definition': case 'aha_moment': case 'quote': return 250;
+    case 'example': return 350;
+    case 'lesson': case 'pattern': case 'tactic': return 450;
+    case 'principle': case 'topic': return 500;
+    case 'framework': return 700;
+    case 'playbook': return 800;
+    default: return 450;
   }
 }
 
@@ -277,16 +277,9 @@ export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs
   const cited = (body.match(UUID_REGEX) ?? []).map((m) => m.replace(/[[\]]/g, ''));
   const wordCount = body.split(/\s+/).filter(Boolean).length;
 
-  // Quality gates — throw to trigger retry-on-failure in the orchestrator.
-  const minWords = minWordCount(input.type);
-  if (wordCount < minWords) {
-    throw new Error(`body too short: ${wordCount} words < ${minWords} min for ${input.type}`);
-  }
-  if (input.segments.length >= 3 && cited.length === 0) {
-    throw new Error(`body has 0 [<segmentId>] citations despite ${input.segments.length} source segments available`);
-  }
-
-  return {
+  // Build the result object BEFORE quality-gate checks so the orchestrator can
+  // capture it via BodyTooShortError even when validation throws.
+  const result: CanonBodyResult = {
     body,
     cited_segment_ids: [...new Set(cited)],
     used_example_ids: Array.isArray(parsed.used_example_ids) ? parsed.used_example_ids : [],
@@ -294,6 +287,19 @@ export async function writeCanonBody(input: CanonBodyInput, options: { timeoutMs
     used_mistake_ids: Array.isArray(parsed.used_mistake_ids) ? parsed.used_mistake_ids : [],
     used_contrarian_take_ids: Array.isArray(parsed.used_contrarian_take_ids) ? parsed.used_contrarian_take_ids : [],
   };
+
+  // Quality gates — throw to trigger retry-on-failure in the orchestrator.
+  const minWords = minWordCount(input.type);
+  if (wordCount < minWords) {
+    const err = new Error(`body too short: ${wordCount} words < ${minWords} min for ${input.type}`) as Error & { partialResult?: CanonBodyResult };
+    err.partialResult = result;
+    throw err;
+  }
+  if (input.segments.length >= 3 && cited.length === 0) {
+    throw new Error(`body has 0 [<segmentId>] citations despite ${input.segments.length} source segments available`);
+  }
+
+  return result;
 }
 
 /** Parallel orchestrator with retry-on-failure (max 2 retries per canon). */
@@ -314,6 +320,7 @@ export async function writeCanonBodiesParallel(
       cursor += 1;
       const input = inputs[i]!;
       let lastErr: Error | null = null;
+      let lastResult: CanonBodyResult | null = null;
       for (let attempt = 1; attempt <= 1 + maxRetries; attempt += 1) {
         try {
           const start = Date.now();
@@ -328,7 +335,11 @@ export async function writeCanonBodiesParallel(
           out.set(input.id, res);
           break;
         } catch (err) {
-          lastErr = err as Error;
+          lastErr = err as Error & { partialResult?: CanonBodyResult };
+          // Capture the partial result attached by writeCanonBody on word-count failure.
+          if ((lastErr as Error & { partialResult?: CanonBodyResult }).partialResult) {
+            lastResult = (lastErr as Error & { partialResult?: CanonBodyResult }).partialResult!;
+          }
           if (attempt <= maxRetries) {
             console.warn(`[body] ${input.id} attempt ${attempt} failed: ${lastErr.message.slice(0, 200)} — retrying`);
             await new Promise((r) => setTimeout(r, 5000 * attempt));
@@ -336,15 +347,27 @@ export async function writeCanonBodiesParallel(
         }
       }
       if (!out.has(input.id) && lastErr) {
-        console.error(`[body] ${input.id} permanently failed: ${lastErr.message.slice(0, 200)}`);
-        out.set(input.id, {
-          body: '',
-          cited_segment_ids: [],
-          used_example_ids: [],
-          used_story_ids: [],
-          used_mistake_ids: [],
-          used_contrarian_take_ids: [],
-        });
+        const wordCountErr = lastErr.message.includes('body too short');
+        if (wordCountErr && lastResult) {
+          // Accept the under-length body; log + continue rather than degraded-fallback
+          console.warn(
+            `[body] ${input.id} permanently under length after ${1 + maxRetries} attempts ` +
+            `(got ${lastResult.body.split(/\s+/).filter(Boolean).length} words, target ${minWordCount(input.type)}); ` +
+            `accepting at lower length to avoid blocking pipeline.`
+          );
+          out.set(input.id, lastResult);
+        } else {
+          // Other failure modes (parse error, third-person leak, etc.) still hard-fail.
+          console.error(`[body] ${input.id} permanently failed: ${lastErr.message.slice(0, 200)}`);
+          out.set(input.id, {
+            body: '',
+            cited_segment_ids: [],
+            used_example_ids: [],
+            used_story_ids: [],
+            used_mistake_ids: [],
+            used_contrarian_take_ids: [],
+          });
+        }
       }
     }
   }

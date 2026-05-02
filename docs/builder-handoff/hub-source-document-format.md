@@ -253,6 +253,23 @@ The audit page already runs a third-person leak detector (`tsx ./src/scripts/che
 
 ---
 
+## Voice mode (Phase 8+)
+
+`channelProfile._index_voice_mode` declares the register the audit's body
+fields were written in. Builders should respect this when generating
+wrapper copy (callouts, summaries, hover tooltips, suggested questions):
+
+- `'first_person'`: Match the body's first-person register. Wrapper copy
+  reads as if the creator wrote it.
+- `'third_person_editorial'`: Stay in third-person editorial register.
+  Quote the creator directly when needed; never paraphrase as the creator.
+- `'hybrid'`: Default to third-person framing; first-person aphorisms
+  should remain in blockquote markdown.
+
+If `_index_voice_mode` is missing, treat as `'first_person'` (Phase 5/7 default).
+
+---
+
 ## Tone, archetype, and design system hooks
 
 The channel profile carries:

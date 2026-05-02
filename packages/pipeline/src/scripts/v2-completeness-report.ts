@@ -373,6 +373,23 @@ async function main() {
 
   console.log(`════════════════════════════════════════════════════════════`);
 
+  // Machine-readable METRIC lines for v2-cohort-report stable parsing.
+  const layerStatuses = [
+    heroOk,
+    standardWithBody === standardCanon.length && standardCanon.length > 0,
+    synthesis.length >= 2 && synthesisWithBody === synthesis.length,
+    !!journey && journeyPhasesWithBody === journeyPhases.length && journeyPhases.length >= 3,
+    v2Briefs.length > 0 && briefsWithBody === v2Briefs.length,
+    evidenceLayerOk,
+    workshopOk,
+  ];
+  const layersGreen = layerStatuses.filter(Boolean).length;
+  const layersTotal = layerStatuses.length;
+  console.info(`[completeness] METRIC creator=${(cp?.creatorName ?? '?').replace(/\s+/g, '_')}`);
+  console.info(`[completeness] METRIC archetype=${cp?._index_archetype ?? '?'}`);
+  console.info(`[completeness] METRIC layers_green=${layersGreen}/${layersTotal}`);
+  console.info(`[completeness] METRIC verification_rate=${Math.round(verificationRate * 100)}`);
+
   await closeDb();
 }
 
