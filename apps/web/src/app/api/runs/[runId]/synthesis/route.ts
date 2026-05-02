@@ -1,9 +1,21 @@
 /**
  * GET /api/runs/[runId]/synthesis
  *
- * Returns the latest successful product_bundle for the run, plus the
- * status of the most recent synthesis_run. 404 when no synthesis has
- * succeeded yet.
+ * Response contract (consumed by Phase B/D — DO NOT change without a coordinated PR):
+ *
+ *   401 — caller not authenticated
+ *   404 — run not found OR caller is not a member of the run's workspace
+ *         OR no synthesis has been attempted yet for this run
+ *   200 { synthesisRun, bundle: null }
+ *         — at least one attempt exists but no successful bundle yet
+ *           (status may be 'running' / 'failed'). Polling-friendly.
+ *   200 { synthesisRun, bundle }
+ *         — bundle ready
+ *
+ * The 200-with-bundle:null shape is intentional. The plan said "404 if not
+ * complete" but a 404-vs-200 split would force callers to maintain two error
+ * paths for "still working" and "no run yet." Surfacing the synthesisRun
+ * status lets the dashboard render a progress UI from one happy path.
  */
 
 import { NextResponse } from 'next/server';

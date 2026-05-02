@@ -161,4 +161,81 @@ describe('composeCalculators (with mocked Codex)', () => {
     const calcs = await composeCalculators(input, { codex: makeMockCodex() });
     assert.equal(calcs.length, 0);
   });
+
+  test('rejects calculators whose variable id is __proto__ (prototype-pollution defense)', async () => {
+    // Codex output is non-deterministic; if it ever names a variable __proto__,
+    // assigning to defaults[id] would mutate Object.prototype. We must reject.
+    const malicious: CodexClient = {
+      run: async () =>
+        JSON.stringify({
+          title: 'Bad Calculator',
+          description: '',
+          variables: [
+            { id: '__proto__', label: 'x', type: 'currency', defaultValue: 1 },
+            { id: 'y', label: 'y', type: 'currency', defaultValue: 1 },
+          ],
+          formula: 'y',
+          outputLabel: 'out',
+          outputUnit: '$',
+          interpretation: '',
+        }),
+    };
+    const canons: CanonRef[] = [
+      {
+        id: 'c1',
+        payload: {
+          type: 'framework',
+          body:
+            'Average deal $5,000. Lifetime $50,000. CAC $2,000. 3:1 LTV to CAC. Payback 6 months payback. Premium tier $25,000.',
+        },
+      },
+    ];
+    const input: ComposeInput = {
+      runId: 'r-evil',
+      canons,
+      channelProfile: { creatorName: 'Test' },
+      voiceMode: 'first_person',
+      creatorName: 'Test',
+    };
+    const calcs = await composeCalculators(input, { codex: malicious });
+    assert.equal(calcs.length, 0, 'malicious calculator must be filtered out');
+    // Belt-and-braces: confirm Object.prototype was not polluted.
+    assert.equal(({} as any).__proto__?.['1'], undefined);
+  });
+
+  test('rejects calculators with non-identifier variable id', async () => {
+    const malicious: CodexClient = {
+      run: async () =>
+        JSON.stringify({
+          title: 'Bad Calculator',
+          description: '',
+          variables: [
+            { id: 'x.y', label: 'x', type: 'currency', defaultValue: 1 },
+          ],
+          formula: 'x',
+          outputLabel: 'out',
+          outputUnit: '$',
+          interpretation: '',
+        }),
+    };
+    const canons: CanonRef[] = [
+      {
+        id: 'c1',
+        payload: {
+          type: 'framework',
+          body:
+            'Average deal $5,000. Lifetime $50,000. CAC $2,000. 3:1 LTV to CAC. Payback 6 months payback. Premium tier $25,000.',
+        },
+      },
+    ];
+    const input: ComposeInput = {
+      runId: 'r-bad',
+      canons,
+      channelProfile: { creatorName: 'Test' },
+      voiceMode: 'first_person',
+      creatorName: 'Test',
+    };
+    const calcs = await composeCalculators(input, { codex: malicious });
+    assert.equal(calcs.length, 0);
+  });
 });

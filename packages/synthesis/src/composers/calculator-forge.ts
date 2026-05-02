@@ -317,6 +317,20 @@ interface RawCalculator {
   interpretation: string;
 }
 
+// Identifier regex matches the tokenizer in evaluateFormula. Reject anything
+// outside this character set — including dotted names, dunder names like
+// "__proto__" / "constructor", and special tokens.
+const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const FORBIDDEN_IDENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeVariable(v: RawCalculatorVariable): boolean {
+  if (typeof v?.id !== 'string') return false;
+  if (!IDENT_RE.test(v.id)) return false;
+  if (FORBIDDEN_IDENTS.has(v.id)) return false;
+  if (typeof v.defaultValue !== 'number' || !Number.isFinite(v.defaultValue)) return false;
+  return true;
+}
+
 function safeJsonParse<T>(raw: string): T | null {
   try {
     return JSON.parse(raw) as T;
@@ -369,9 +383,16 @@ async function authorCalculatorForCluster(
   const parsed = safeJsonParse<RawCalculator>(raw);
   if (!parsed) return null;
 
-  // Validate formula: defaults must evaluate to a finite number.
-  const defaults: Record<string, number> = {};
-  for (const v of parsed.variables ?? []) defaults[v.id] = v.defaultValue;
+  // Variable ids and default values come from non-deterministic LLM output.
+  // Reject anything that isn't a clean identifier — this both matches the
+  // tokenizer regex and blocks prototype-pollution paths like id="__proto__".
+  const variables = parsed.variables ?? [];
+  if (!variables.every(isSafeVariable)) return null;
+
+  // Object.create(null) ensures even if a future change loosens validation,
+  // assignment to "__proto__" doesn't reach Object.prototype.
+  const defaults: Record<string, number> = Object.create(null) as Record<string, number>;
+  for (const v of variables) defaults[v.id] = v.defaultValue;
   try {
     const test = evaluateFormula(parsed.formula, defaults);
     if (!Number.isFinite(test)) return null;
