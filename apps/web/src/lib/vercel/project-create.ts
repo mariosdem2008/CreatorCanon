@@ -45,7 +45,7 @@ export interface CreateHubVercelProjectOptions {
 }
 
 export type VercelProjectEnv = Partial<
-  Record<'DATABASE_URL' | 'NEXT_PUBLIC_APP_URL', string>
+  Record<'DATABASE_URL' | 'NEXT_PUBLIC_APP_URL' | 'NEXT_PUBLIC_HUB_ROOT_DOMAIN', string>
 >;
 
 export class MissingVercelProjectEnvError extends Error {
@@ -174,6 +174,7 @@ export function buildHubEnvironmentVariables(
     ['HUB_ID', hubId],
     ['DATABASE_URL', env.DATABASE_URL],
     ['NEXT_PUBLIC_APP_URL', env.NEXT_PUBLIC_APP_URL],
+    ['NEXT_PUBLIC_HUB_ROOT_DOMAIN', env.NEXT_PUBLIC_HUB_ROOT_DOMAIN],
   ];
 
   return variables

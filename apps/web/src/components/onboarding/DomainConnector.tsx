@@ -21,6 +21,7 @@ interface DomainConnectorProps {
   initialDeploymentStatus?: DeploymentUiStatus;
   initialDeploymentError?: string | null;
   statusStartedAtIso?: string | null;
+  fallbackUrl?: string | null;
 }
 
 interface AttachDomainResponse {
@@ -34,6 +35,10 @@ interface AttachDomainResponse {
 }
 
 type SubmitState = 'idle' | 'submitting' | 'attached' | 'error';
+type FallbackState = 'idle' | 'submitting' | 'deploying' | 'error';
+
+const FALLBACK_POLL_INTERVAL_MS = 10000;
+const FALLBACK_MAX_POLLS = 30;
 
 export function DomainConnector({
   hubId,
@@ -44,6 +49,7 @@ export function DomainConnector({
   initialDeploymentStatus = initialLiveUrl ? 'live' : 'pending',
   initialDeploymentError = null,
   statusStartedAtIso = null,
+  fallbackUrl = null,
 }: DomainConnectorProps) {
   const [domain, setDomain] = useState(initialDomain ?? '');
   const [attachedDomain, setAttachedDomain] = useState(initialDomain ?? '');
@@ -53,6 +59,7 @@ export function DomainConnector({
   const [deploymentStatus, setDeploymentStatus] =
     useState<DeploymentUiStatus>(initialDeploymentStatus);
   const [state, setState] = useState<SubmitState>('idle');
+  const [fallbackState, setFallbackState] = useState<FallbackState>('idle');
   const [message, setMessage] = useState<string | null>(null);
 
   const validation = useMemo(() => validateCustomDomain(domain), [domain]);
@@ -131,6 +138,104 @@ export function DomainConnector({
     );
   }
 
+  async function onUseFallback() {
+    setFallbackState('submitting');
+    setMessage(null);
+
+    const attachResponse = await fetch('/api/domains/attach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hubId }),
+    });
+    if (!attachResponse.ok) {
+      const body = (await attachResponse.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      setFallbackState('error');
+      setMessage(body?.error ?? 'Could not prepare the free subdomain.');
+      return;
+    }
+
+    let result: {
+      status: DeploymentUiStatus;
+      liveUrl: string | null;
+      lastError?: string | null;
+    };
+    try {
+      result = await triggerFallbackDeployment();
+    } catch (error) {
+      setFallbackState('error');
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not start the free subdomain deployment.',
+      );
+      return;
+    }
+    setDeploymentStatus(result.status);
+    setLiveUrl(result.liveUrl ?? fallbackUrl);
+    if (result.status === 'failed') {
+      setFallbackState('error');
+      setMessage(result.lastError ?? 'Free subdomain deployment failed.');
+      return;
+    }
+    setFallbackState(result.status === 'building' ? 'deploying' : 'idle');
+    setMessage(
+      result.status === 'live'
+        ? 'Free subdomain is live.'
+        : 'Free subdomain deployment started. It usually goes live in one to two minutes.',
+    );
+    if (result.status === 'building') {
+      void pollFallbackDeployment();
+    }
+  }
+
+  async function triggerFallbackDeployment() {
+    setFallbackState('deploying');
+    const deployResponse = await fetch(`/api/deploy/trigger/${hubId}`, {
+      method: 'POST',
+    });
+    if (!deployResponse.ok) {
+      const body = (await deployResponse.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(body?.error ?? 'Could not start the free subdomain deployment.');
+    }
+
+    return (await deployResponse.json()) as {
+      status: DeploymentUiStatus;
+      liveUrl: string | null;
+      lastError?: string | null;
+    };
+  }
+
+  async function pollFallbackDeployment() {
+    for (let attempt = 0; attempt < FALLBACK_MAX_POLLS; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, FALLBACK_POLL_INTERVAL_MS));
+      try {
+        const result = await triggerFallbackDeployment();
+        setDeploymentStatus(result.status);
+        setLiveUrl(result.liveUrl ?? fallbackUrl);
+        if (result.status === 'live') {
+          setFallbackState('idle');
+          setMessage('Free subdomain is live.');
+          return;
+        }
+        if (result.status === 'failed') {
+          setFallbackState('error');
+          setMessage(result.lastError ?? 'Free subdomain deployment failed.');
+          return;
+        }
+      } catch (error) {
+        setFallbackState('error');
+        setMessage(error instanceof Error ? error.message : 'Free subdomain polling failed.');
+        return;
+      }
+    }
+    setFallbackState('error');
+    setMessage('Free subdomain deployment is still running. Refresh this page to check again.');
+  }
+
   return (
     <Panel>
       <PanelHeader
@@ -169,6 +274,54 @@ export function DomainConnector({
         <div aria-live="polite" className="min-h-5 text-[12px] text-[var(--cc-ink-3)]">
           {message}
         </div>
+
+        {fallbackUrl && !attachedDomain ? (
+          <div className="grid gap-3 border-y border-[var(--cc-rule)] bg-[var(--cc-surface-2)]/55 px-4 py-4 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[13px] font-semibold text-[var(--cc-ink)]">
+                  CreatorCanon subdomain
+                </p>
+                {deploymentStatus === 'live' && liveUrl ? (
+                  <StatusPill tone="success">Live</StatusPill>
+                ) : deploymentStatus === 'building' || fallbackState === 'deploying' ? (
+                  <StatusPill tone="info">Deploying</StatusPill>
+                ) : (
+                  <StatusPill tone="neutral">Included</StatusPill>
+                )}
+              </div>
+              <a
+                className="mt-1 block truncate text-[12px] font-semibold text-[var(--cc-accent)] hover:underline"
+                href={liveUrl ?? fallbackUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {liveUrl ?? fallbackUrl}
+              </a>
+              <p className="mt-1 text-[12px] leading-[1.55] text-[var(--cc-ink-3)]">
+                Use this now and add a custom domain later without changing your hub.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={
+                fallbackState === 'submitting' ||
+                fallbackState === 'deploying' ||
+                (deploymentStatus === 'live' && Boolean(liveUrl))
+              }
+              onClick={onUseFallback}
+            >
+              {deploymentStatus === 'live' && liveUrl
+                ? 'Fallback live'
+                : fallbackState === 'submitting'
+                ? 'Preparing...'
+                : fallbackState === 'deploying'
+                  ? 'Deploying...'
+                  : 'Use fallback for now'}
+            </Button>
+          </div>
+        ) : null}
 
         {records.length > 0 ? (
           <div className="grid gap-2">

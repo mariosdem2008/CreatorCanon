@@ -20,7 +20,10 @@ export interface RedeployAfterPublishResult {
 export async function triggerRedeployAfterPublish(options: {
   hubId: string;
   repository: DeploymentTriggerRepository;
-  vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'>;
+  vercel: Pick<
+    VercelClient,
+    'createDeployment' | 'getDeployment' | 'addProjectDomain' | 'getProjectDomain'
+  >;
   env: DeploymentTriggerEnv;
 }): Promise<RedeployAfterPublishResult> {
   try {

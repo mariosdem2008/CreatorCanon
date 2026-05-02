@@ -42,6 +42,34 @@ function createRepository(status: 'ready' | 'not-ready' = 'ready') {
   return { calls, repository };
 }
 
+function createVercelClient(
+  overrides: Partial<
+    Pick<
+      VercelClient,
+      'createDeployment' | 'getDeployment' | 'addProjectDomain' | 'getProjectDomain'
+    >
+  > = {},
+): Pick<
+  VercelClient,
+  'createDeployment' | 'getDeployment' | 'addProjectDomain' | 'getProjectDomain'
+> {
+  return {
+    async createDeployment() {
+      throw new Error('unexpected create');
+    },
+    async getDeployment() {
+      throw new Error('unexpected get');
+    },
+    async addProjectDomain() {
+      throw new Error('unexpected add domain');
+    },
+    async getProjectDomain() {
+      throw new Error('unexpected get domain');
+    },
+    ...overrides,
+  };
+}
+
 describe('triggerRedeployAfterPublish', () => {
   it('forces a new deployment for a published hub with ready domain hosting', async () => {
     const { calls, repository } = createRepository();
@@ -49,7 +77,7 @@ describe('triggerRedeployAfterPublish', () => {
       calls.push('unexpected-starting-claim');
       return false;
     };
-    const vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'> = {
+    const vercel = createVercelClient({
       async createDeployment() {
         return {
           id: 'dpl_new',
@@ -57,10 +85,7 @@ describe('triggerRedeployAfterPublish', () => {
           readyState: 'QUEUED',
         };
       },
-      async getDeployment() {
-        throw new Error('unexpected get');
-      },
-    };
+    });
 
     const result = await triggerRedeployAfterPublish({
       hubId: 'hub_123',
@@ -76,14 +101,7 @@ describe('triggerRedeployAfterPublish', () => {
 
   it('skips without throwing when the hub has no ready custom-domain deployment', async () => {
     const { calls, repository } = createRepository('not-ready');
-    const vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'> = {
-      async createDeployment() {
-        throw new Error('unexpected create');
-      },
-      async getDeployment() {
-        throw new Error('unexpected get');
-      },
-    };
+    const vercel = createVercelClient();
 
     const result = await triggerRedeployAfterPublish({
       hubId: 'hub_123',
@@ -99,7 +117,7 @@ describe('triggerRedeployAfterPublish', () => {
 
   it('returns a failed result for Vercel trigger errors after persistence handles the failure', async () => {
     const { calls, repository } = createRepository();
-    const vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'> = {
+    const vercel = createVercelClient({
       async createDeployment() {
         throw new VercelApiError({
           status: 400,
@@ -108,10 +126,7 @@ describe('triggerRedeployAfterPublish', () => {
           responseBody: {},
         });
       },
-      async getDeployment() {
-        throw new Error('unexpected get');
-      },
-    };
+    });
 
     const result = await triggerRedeployAfterPublish({
       hubId: 'hub_123',

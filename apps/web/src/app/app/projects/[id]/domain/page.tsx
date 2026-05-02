@@ -6,6 +6,7 @@ import { deployment, hub, project } from '@creatorcanon/db/schema';
 
 import { PageHeader, StatusPill } from '@/components/cc';
 import { DomainConnector } from '@/components/onboarding/DomainConnector';
+import { buildHubSubdomainUrl } from '@/lib/hub/public-url';
 import { requireWorkspace } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +52,7 @@ export default async function ProjectDomainPage({
     .limit(1);
   const hubRow = hubRows[0];
   if (!hubRow) redirect(`/app/projects/${params.id}`);
+  const fallbackUrl = buildHubSubdomainUrl(hubRow.subdomain);
 
   return (
     <div className="space-y-4">
@@ -63,7 +65,9 @@ export default async function ProjectDomainPage({
         title="Domain"
         body="Connect the public hub to a domain you control. DNS propagation can take a few minutes or, in rare cases, up to 24 hours."
         actions={
-          hubRow.sslReady ? (
+          hubRow.liveUrl ? (
+            <StatusPill tone="success">Live</StatusPill>
+          ) : hubRow.sslReady ? (
             <StatusPill tone="success">SSL ready</StatusPill>
           ) : hubRow.domainVerified ? (
             <StatusPill tone="info">SSL provisioning</StatusPill>
@@ -82,6 +86,7 @@ export default async function ProjectDomainPage({
         initialDeploymentStatus={hubRow.deploymentStatus ?? 'pending'}
         initialDeploymentError={hubRow.lastError}
         statusStartedAtIso={hubRow.domainAttachedAt?.toISOString() ?? null}
+        fallbackUrl={fallbackUrl}
       />
     </div>
   );

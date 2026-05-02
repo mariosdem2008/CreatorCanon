@@ -20,6 +20,7 @@ import {
 } from '@/components/cc';
 import { EvidenceChips, type SourceReferenceView } from '@/components/hub/EvidenceChips';
 import { getHubTemplate } from '@/components/hub/templates';
+import { buildHubPublicUrl } from '@/lib/hub/public-url';
 import { requireWorkspace } from '@/lib/workspace';
 
 import { CopyUrlButton } from '../CopyUrlButton';
@@ -124,6 +125,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
         await db
           .select({
             subdomain: hub.subdomain,
+            customDomain: hub.customDomain,
             theme: hub.theme,
             liveReleaseId: hub.liveReleaseId,
           })
@@ -133,6 +135,12 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
       )[0]
     : undefined;
   const publishedTemplate = getHubTemplate(publishedHub?.theme ?? selectedTemplate.id);
+  const publicHubUrl = publishedHub
+    ? buildHubPublicUrl({
+        subdomain: publishedHub.subdomain,
+        customDomain: publishedHub.customDomain,
+      })
+    : null;
 
   const approvedCount = pages.filter((item) => item.status === 'approved').length;
   const reviewedCount = pages.filter((item) => item.status === 'reviewed').length;
@@ -204,7 +212,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
             </Link>
             {publishedHub?.subdomain ? (
               <Link
-                href={`/h/${publishedHub.subdomain}`}
+                href={publicHubUrl ?? `/h/${publishedHub.subdomain}`}
                 className="inline-flex h-9 items-center rounded-[8px] border border-[var(--cc-rule)] bg-white px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:border-[var(--cc-ink-4)]"
               >
                 Public hub
@@ -266,13 +274,13 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
         <NoticeBanner
           tone="success"
           badge="Live"
-          title={`/h/${publishedHub.subdomain}`}
+          title={publicHubUrl ?? `/h/${publishedHub.subdomain}`}
           body={`${publishedTemplate.name}${
             hasEditsSinceLiveRelease ? ' · unpublished edits exist' : ' · hub is current'
           }`}
           action={{
             label: 'Open hub',
-            href: `/h/${publishedHub.subdomain}`,
+            href: publicHubUrl ?? `/h/${publishedHub.subdomain}`,
           }}
         />
       ) : null}
@@ -505,7 +513,7 @@ export default async function ProjectPagesPage({ params }: { params: { id: strin
                     </p>
                     {publishedHub?.subdomain ? (
                       <CopyUrlButton
-                        url={`https://creatorcanon.com/h/${publishedHub.subdomain}`}
+                        url={publicHubUrl ?? `/h/${publishedHub.subdomain}`}
                       />
                     ) : null}
                   </div>

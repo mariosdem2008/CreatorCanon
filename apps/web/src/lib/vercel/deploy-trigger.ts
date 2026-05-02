@@ -10,6 +10,8 @@ import type {
   VercelCreateDeploymentRequest,
   VercelDeployment,
 } from './client';
+import { VercelApiError } from './client';
+import { buildHubSubdomainHostname } from '../hub/public-url';
 import { normalizeVercelProjectName } from './project-create';
 
 export interface DeploymentTriggerRecord {
@@ -48,12 +50,16 @@ export interface DeploymentTriggerEnv {
   VERCEL_GIT_REPO_ID?: string;
   VERCEL_GIT_REF?: string;
   VERCEL_GIT_SHA?: string;
+  NEXT_PUBLIC_HUB_ROOT_DOMAIN?: string;
 }
 
 export interface TriggerHubDeploymentOptions {
   hubId: string;
   repository: DeploymentTriggerRepository;
-  vercel: Pick<VercelClient, 'createDeployment' | 'getDeployment'>;
+  vercel: Pick<
+    VercelClient,
+    'createDeployment' | 'getDeployment' | 'addProjectDomain' | 'getProjectDomain'
+  >;
   env?: DeploymentTriggerEnv;
   force?: boolean;
 }
@@ -90,21 +96,20 @@ export async function triggerHubDeployment(
   options: TriggerHubDeploymentOptions,
 ): Promise<TriggerHubDeploymentResult> {
   const record = await options.repository.findDeploymentByHubId(options.hubId);
-  assertReadyToDeploy(record);
+  const env = options.env ?? readDeploymentTriggerEnv(process.env);
+  assertReadyToDeploy(record, env);
+  const target = resolveDeploymentTarget(record, env);
 
-  if (!options.force && record.status === 'live' && record.liveUrl === rootHubUrl(record)) {
+  if (!options.force && record.status === 'live' && record.liveUrl === rootHubUrl(target)) {
     return toResult(record);
   }
 
   if (record.status === 'building' && record.vercelDeploymentId) {
     const remote = await options.vercel.getDeployment(record.vercelDeploymentId);
-    return persistDeploymentState(options.repository, record, remote);
+    return persistDeploymentState(options.repository, record, target, remote);
   }
 
-  const request = buildHubDeploymentRequest(
-    record,
-    options.env ?? readDeploymentTriggerEnv(process.env),
-  );
+  const request = buildHubDeploymentRequest(record, env);
   if (!options.force && options.repository.markDeploymentStarting) {
     const claimed = await options.repository.markDeploymentStarting({ hubId: record.hubId });
     if (!claimed) {
@@ -119,8 +124,15 @@ export async function triggerHubDeployment(
   }
 
   try {
+    if (target.kind === 'fallback') {
+      await addOrReuseOwnedFallbackDomain(
+        options.vercel,
+        record.vercelProjectId,
+        target.domain,
+      );
+    }
     const remote = await options.vercel.createDeployment(request);
-    return persistDeploymentState(options.repository, record, remote);
+    return persistDeploymentState(options.repository, record, target, remote);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Deployment trigger failed';
     await options.repository.markDeploymentFailed({
@@ -138,6 +150,8 @@ export function buildHubDeploymentRequest(
   if (!env.VERCEL_GIT_REPO_ID) {
     throw new MissingDeploymentSourceError();
   }
+  const publicDomain =
+    record.customDomain ?? buildHubSubdomainHostname(record.hubSlug, env) ?? '';
 
   return {
     name: normalizeVercelProjectName(record.hubSlug),
@@ -156,6 +170,7 @@ export function buildHubDeploymentRequest(
     meta: {
       hubId: record.hubId,
       customDomain: record.customDomain ?? '',
+      publicDomain,
       trigger: 'creatorcanon-domain-ready',
     },
   };
@@ -168,6 +183,7 @@ export function readDeploymentTriggerEnv(
     VERCEL_GIT_REPO_ID: env.VERCEL_GIT_REPO_ID,
     VERCEL_GIT_REF: env.VERCEL_GIT_REF,
     VERCEL_GIT_SHA: env.VERCEL_GIT_SHA,
+    NEXT_PUBLIC_HUB_ROOT_DOMAIN: env.NEXT_PUBLIC_HUB_ROOT_DOMAIN,
   };
 }
 
@@ -262,19 +278,19 @@ export function createDeployTriggerRepository(
 async function persistDeploymentState(
   repository: DeploymentTriggerRepository,
   record: DeploymentTriggerRecord,
+  target: DeploymentTarget,
   remote: VercelDeployment,
 ): Promise<TriggerHubDeploymentResult> {
-  const customDomain = requireValue(record.customDomain, 'Custom domain is not attached yet.');
   if (remote.readyState === 'READY') {
     const aliasError = getAliasErrorMessage(remote);
     if (aliasError) {
       return markFailed(repository, record, remote, aliasError);
     }
-    if (!remote.aliasAssigned || !deploymentAliases(remote).includes(customDomain)) {
+    if (!remote.aliasAssigned || !deploymentAliases(remote).includes(target.domain)) {
       return persistActiveDeployment(repository, record, remote);
     }
 
-    const liveUrl = `https://${customDomain}`;
+    const liveUrl = rootHubUrl(target);
     await repository.markDeploymentLive({
       hubId: record.hubId,
       vercelDeploymentId: remote.id,
@@ -338,8 +354,29 @@ async function markFailed(
   };
 }
 
-function rootHubUrl(record: DeploymentTriggerRecord): string {
-  return `https://${record.customDomain}`;
+type DeploymentTarget =
+  | { kind: 'custom'; domain: string }
+  | { kind: 'fallback'; domain: string };
+
+function resolveDeploymentTarget(
+  record: DeploymentTriggerRecord & { vercelProjectId: string },
+  env: DeploymentTriggerEnv,
+): DeploymentTarget {
+  if (record.customDomain) {
+    return { kind: 'custom', domain: record.customDomain };
+  }
+
+  const fallbackDomain = buildHubSubdomainHostname(record.hubSlug, env);
+  if (!fallbackDomain) {
+    throw new DeploymentNotReadyError(
+      'Custom domain is not attached and NEXT_PUBLIC_HUB_ROOT_DOMAIN is not configured.',
+    );
+  }
+  return { kind: 'fallback', domain: fallbackDomain };
+}
+
+function rootHubUrl(target: DeploymentTarget): string {
+  return `https://${target.domain}`;
 }
 
 function getAliasErrorMessage(remote: VercelDeployment): string | null {
@@ -355,10 +392,8 @@ function deploymentAliases(remote: VercelDeployment): string[] {
 
 function assertReadyToDeploy(
   record: DeploymentTriggerRecord | null,
-): asserts record is DeploymentTriggerRecord & {
-  vercelProjectId: string;
-  customDomain: string;
-} {
+  env: DeploymentTriggerEnv,
+): asserts record is DeploymentTriggerRecord & { vercelProjectId: string } {
   if (!record) {
     throw new DeploymentNotReadyError('No deployment record exists for this hub.');
   }
@@ -366,7 +401,12 @@ function assertReadyToDeploy(
     throw new DeploymentNotReadyError('Vercel project has not been created yet.');
   }
   if (!record.customDomain) {
-    throw new DeploymentNotReadyError('Custom domain is not attached yet.');
+    if (!buildHubSubdomainHostname(record.hubSlug, env)) {
+      throw new DeploymentNotReadyError(
+        'Custom domain is not attached and NEXT_PUBLIC_HUB_ROOT_DOMAIN is not configured.',
+      );
+    }
+    return;
   }
   if (!record.domainVerified) {
     throw new DeploymentNotReadyError('Custom domain is not verified yet.');
@@ -389,4 +429,25 @@ function toResult(record: DeploymentTriggerRecord): TriggerHubDeploymentResult {
 function requireValue(value: string | null, message: string): string {
   if (!value) throw new DeploymentNotReadyError(message);
   return value;
+}
+
+async function addOrReuseOwnedFallbackDomain(
+  vercel: Pick<VercelClient, 'addProjectDomain' | 'getProjectDomain'>,
+  projectId: string,
+  domain: string,
+): Promise<void> {
+  try {
+    await vercel.addProjectDomain(projectId, domain);
+  } catch (error) {
+    if (isIdempotentDomainConflict(error)) {
+      await vercel.getProjectDomain(projectId, domain);
+      return;
+    }
+    throw error;
+  }
+}
+
+function isIdempotentDomainConflict(error: unknown): boolean {
+  if (!(error instanceof VercelApiError)) return false;
+  return error.status === 409 && error.code === 'domain_already_exists';
 }
