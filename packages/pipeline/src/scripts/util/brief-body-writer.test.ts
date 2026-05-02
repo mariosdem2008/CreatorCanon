@@ -14,6 +14,7 @@
 
 import { describe, test, mock, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import type { BriefBodyResult } from './brief-body-writer';
 
 // ── Pure helper tests (no mock needed) ──────────────────────────────────────
 
@@ -25,9 +26,9 @@ describe('BriefBodyResult shape', () => {
   test('_degraded field is optional on the result type', () => {
     // Type-level test: if this compiles, the interface is correct.
     // We simulate what the orchestrator emits in the three degraded paths.
-    const noFallbackCanon = { body: '', cited_segment_ids: [], _degraded: 'no_primary_canon_for_fallback' as const };
-    const refused = { body: '', cited_segment_ids: [], _degraded: 'brief_writer_refused' as const };
-    const healthy = { body: 'Some real body text.', cited_segment_ids: [] };
+    const noFallbackCanon: BriefBodyResult = { body: '', cited_segment_ids: [], _degraded: 'no_primary_canon_for_fallback' };
+    const refused: BriefBodyResult = { body: '', cited_segment_ids: [], _degraded: 'brief_writer_refused' };
+    const healthy: BriefBodyResult = { body: 'Some real body text.', cited_segment_ids: [] };
 
     assert.equal(noFallbackCanon._degraded, 'no_primary_canon_for_fallback');
     assert.equal(refused._degraded, 'brief_writer_refused');

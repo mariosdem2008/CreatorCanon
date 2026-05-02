@@ -143,10 +143,10 @@ export function filterCandidates(
 // Phase 10 Task 10.3: extracted as a pure helper so it's independently testable.
 // Orders: high > medium > needs_review. Drops low + unsupported entirely.
 // Returns [] if below min (caller must handle the skip).
-export function filterAndOrderCandidates(
-  candidates: Pick<ClipCandidate, 'confidence'>[],
+export function filterAndOrderCandidates<T extends Pick<ClipCandidate, 'confidence'>>(
+  candidates: T[],
   opts: { min: number; max: number },
-): typeof candidates {
+): T[] {
   const usable = candidates.filter((c) => USABLE_CONFIDENCE.has(c.confidence));
   if (usable.length < opts.min) return [];
   return [

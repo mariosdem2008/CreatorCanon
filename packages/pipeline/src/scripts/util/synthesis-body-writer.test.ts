@@ -1,0 +1,355 @@
+/**
+ * Unit tests for synthesis-body-writer (Task 10.4).
+ *
+ * Tests cover:
+ *   - countSynthesisLinks: UUID + cn_xxx token counting
+ *   - buildSynthesisBodyPrompt: cross-canon structure requirements in the prompt
+ *   - buildSynthesisFallbackPrompt: fallback prompt structure
+ *   - SYNTHESIS_CROSS_LINK_FLOOR constant
+ *
+ * No Codex calls are made — all tests are pure prompt/helper logic.
+ */
+
+import { describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  countSynthesisLinks,
+  buildSynthesisBodyPrompt,
+  buildSynthesisFallbackPrompt,
+  mergeSynthesisBodyResultIntoShell,
+  synthesisLinkFloor,
+  SYNTHESIS_CROSS_LINK_FLOOR,
+} from './synthesis-body-writer';
+import type { SynthesisBodyInput, SynthesisShell, ChildCanonRef } from './synthesis-body-writer';
+
+// ── Test fixtures ─────────────────────────────────────────────────────────
+
+const CHILD_A: ChildCanonRef = {
+  id: 'cn_abc123456789',
+  title: 'The Leverage Trap',
+  type: 'lesson',
+  body: 'Leverage without consistency destroys compounding. [a1b2c3d4-e5f6-7890-abcd-ef1234567890] This is real prose.',
+  internal_summary: 'Why leverage fails without consistent habits.',
+};
+
+const CHILD_B: ChildCanonRef = {
+  id: 'cn_def456789012',
+  title: 'High-Value Offers',
+  type: 'framework',
+  body: 'High-value offers are built on specificity. [b2c3d4e5-f6a7-8901-bcde-f12345678901] The mechanism matters.',
+  internal_summary: 'How to build offers that command premium prices.',
+};
+
+const CHILD_C: ChildCanonRef = {
+  id: 'cn_ghi789012345',
+  title: 'Volume Over Perfection',
+  type: 'principle',
+  body: 'Shipping fast beats polishing forever. [c3d4e5f6-a7b8-9012-cdef-123456789012] Get it out.',
+  internal_summary: 'Why volume compounds and perfection stalls.',
+};
+
+function makeShell(): SynthesisShell {
+  return {
+    schemaVersion: 'v2',
+    type: 'topic',
+    origin: 'derived',
+    kind: 'synthesis',
+    title: 'The Compounding System',
+    lede: 'I built this system over five years of watching leverage fail without the right substrate.',
+    _internal_summary: 'Three canons that together explain why compounding requires specific conditions.',
+    _internal_why_it_matters: 'Without this system, people optimise the wrong lever.',
+    _internal_unifying_thread: 'Leverage, offers, and volume only compound when they share a specific substrate: consistent repetition at the right tier of specificity.',
+    _index_cross_link_canon: ['cn_abc123456789', 'cn_def456789012', 'cn_ghi789012345'],
+    _index_evidence_segments: [],
+    _index_supporting_examples: [],
+    _index_supporting_stories: [],
+    _index_supporting_mistakes: [],
+    _index_supporting_contrarian_takes: [],
+    _index_source_video_ids: ['vid_001'],
+    confidenceScore: 80,
+    pageWorthinessScore: 85,
+    specificityScore: 75,
+    creatorUniquenessScore: 70,
+    evidenceQuality: 'high',
+  };
+}
+
+function makeInput(overrides: Partial<SynthesisBodyInput> = {}): SynthesisBodyInput {
+  return {
+    id: 'cn_synthesis001',
+    shell: makeShell(),
+    children: [CHILD_A, CHILD_B, CHILD_C],
+    creatorName: 'Alex Hormozi',
+    archetype: 'operator-coach' as const,
+    voiceFingerprint: {
+      profanityAllowed: true,
+      tonePreset: 'blunt-tactical',
+      preserveTerms: ['Grand Slam Offer', 'value equation'],
+    },
+    voiceMode: 'first_person',
+    channelDominantTone: 'blunt-tactical',
+    channelAudience: 'entrepreneurs scaling to $1M+',
+    ...overrides,
+  };
+}
+
+// ── countSynthesisLinks ───────────────────────────────────────────────────
+
+describe('countSynthesisLinks', () => {
+  test('counts UUID segment citation tokens', () => {
+    const body = 'The system works [a1b2c3d4-e5f6-7890-abcd-ef1234567890]. Here is why [b2c3d4e5-f6a7-8901-bcde-f12345678901].';
+    assert.equal(countSynthesisLinks(body), 2);
+  });
+
+  test('counts [cn_xxx] canon cross-link tokens', () => {
+    const body = 'This ties into [cn_abc123456789] and also [cn_def456789012] from the prior canon.';
+    assert.equal(countSynthesisLinks(body), 2);
+  });
+
+  test('counts both UUID and cn_xxx tokens together', () => {
+    const body = 'See [cn_abc123456789] for context. Evidence here [a1b2c3d4-e5f6-7890-abcd-ef1234567890].';
+    assert.equal(countSynthesisLinks(body), 2);
+  });
+
+  test('deduplicates repeated tokens', () => {
+    const body = 'First [cn_abc123456789]. Second [cn_abc123456789]. Third [cn_def456789012].';
+    assert.equal(countSynthesisLinks(body), 2);
+  });
+
+  test('returns 0 for body with no tokens', () => {
+    assert.equal(countSynthesisLinks('Plain prose with nothing.'), 0);
+  });
+
+  test('returns 0 for empty/null/undefined body', () => {
+    assert.equal(countSynthesisLinks(''), 0);
+    assert.equal(countSynthesisLinks(null), 0);
+    assert.equal(countSynthesisLinks(undefined), 0);
+  });
+
+  test('ignores non-UUID brackets like [ex_abc] or [mst_xxx]', () => {
+    const body = 'Woven items [ex_abc]. Mistakes [mst_xyz]. Real citation [a1b2c3d4-e5f6-7890-abcd-ef1234567890].';
+    assert.equal(countSynthesisLinks(body), 1);
+  });
+});
+
+// ── SYNTHESIS_CROSS_LINK_FLOOR ────────────────────────────────────────────
+
+describe('SYNTHESIS_CROSS_LINK_FLOOR', () => {
+  test('floor is 5', () => {
+    assert.equal(SYNTHESIS_CROSS_LINK_FLOOR, 5);
+  });
+
+  test('uses the shared citation floor for topic synthesis bodies', () => {
+    assert.equal(synthesisLinkFloor('topic'), 5);
+  });
+
+  test('uses the shared citation floor for framework synthesis bodies', () => {
+    assert.equal(synthesisLinkFloor('framework'), 7);
+  });
+});
+
+// ── buildSynthesisBodyPrompt ──────────────────────────────────────────────
+
+describe('buildSynthesisBodyPrompt', () => {
+  test('includes creator name in role declaration', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('Alex Hormozi'), 'should include creator name');
+  });
+
+  test('includes all child canon titles', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('The Leverage Trap'), 'should include child A title');
+    assert.ok(prompt.includes('High-Value Offers'), 'should include child B title');
+    assert.ok(prompt.includes('Volume Over Perfection'), 'should include child C title');
+  });
+
+  test('includes ## subheading structure requirement for each child', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('## The Leverage Trap'), 'should list child A subheading');
+    assert.ok(prompt.includes('## High-Value Offers'), 'should list child B subheading');
+    assert.ok(prompt.includes('## Volume Over Perfection'), 'should list child C subheading');
+  });
+
+  test('includes cross-link token list for each child canon id', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('[cn_abc123456789]'), 'should include child A id as cross-link token');
+    assert.ok(prompt.includes('[cn_def456789012]'), 'should include child B id as cross-link token');
+    assert.ok(prompt.includes('[cn_ghi789012345]'), 'should include child C id as cross-link token');
+  });
+
+  test('demands ≥ 5 total cross-link/citation tokens', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('≥ 5'), 'should mention ≥ 5 token requirement');
+  });
+
+  test('specifies 700-1200 word target', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('700-1200'), 'should specify 700-1200 word target');
+  });
+
+  test('includes the unifying thread meta-claim', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(
+      prompt.includes('Leverage, offers, and volume only compound'),
+      'should include unifying thread',
+    );
+  });
+
+  test('includes voice fingerprint', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('blunt-tactical'), 'should include tone preset');
+    assert.ok(prompt.includes('Grand Slam Offer'), 'should include preserveTerms');
+  });
+
+  test('includes output format JSON template', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(prompt.includes('"body"'), 'should include body field in output template');
+    assert.ok(prompt.includes('"named_child_ids"'), 'should include named_child_ids in output template');
+  });
+
+  test('includes voiceRulesPrompt content (first_person mode)', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput({ voiceMode: 'first_person' }));
+    // voiceRulesPrompt for first_person will mention first-person rules
+    assert.ok(
+      prompt.toLowerCase().includes('first') || prompt.toLowerCase().includes('voice'),
+      'should include voice rules',
+    );
+  });
+
+  test('includes child body excerpts', () => {
+    const prompt = buildSynthesisBodyPrompt(makeInput());
+    assert.ok(
+      prompt.includes('Leverage without consistency destroys compounding'),
+      'should include child A body excerpt',
+    );
+    assert.ok(
+      prompt.includes('High-value offers are built on specificity'),
+      'should include child B body excerpt',
+    );
+  });
+});
+
+// ── buildSynthesisFallbackPrompt ──────────────────────────────────────────
+
+describe('buildSynthesisFallbackPrompt', () => {
+  test('includes fallback word count range 400-600', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput());
+    assert.ok(prompt.includes('400-600'), 'should specify 400-600 word target');
+  });
+
+  test('includes all child canon ids as cross-link tokens', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput());
+    assert.ok(prompt.includes('[cn_abc123456789]'), 'should include child A cross-link');
+    assert.ok(prompt.includes('[cn_def456789012]'), 'should include child B cross-link');
+    assert.ok(prompt.includes('[cn_ghi789012345]'), 'should include child C cross-link');
+  });
+
+  test('includes child body excerpts as context', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput());
+    assert.ok(
+      prompt.includes('Leverage without consistency'),
+      'should include child A body excerpt',
+    );
+  });
+
+  test('states NO UUID citations required', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput());
+    assert.ok(
+      prompt.includes('NO inline UUID segment citations required'),
+      'should explicitly drop UUID citation requirement',
+    );
+  });
+
+  test('includes synthesis title and meta-claim', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput());
+    assert.ok(prompt.includes('The Compounding System'), 'should include synthesis title');
+    assert.ok(
+      prompt.includes('Leverage, offers, and volume only compound'),
+      'should include meta-claim',
+    );
+  });
+
+  test('specifies first-person voice for first_person mode', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput({ voiceMode: 'first_person' }));
+    assert.ok(prompt.includes('First-person voice'), 'should mention first-person voice label');
+  });
+
+  test('specifies third-person editorial label for third_person_editorial mode', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput({ voiceMode: 'third_person_editorial' }));
+    assert.ok(prompt.includes('Third-person editorial'), 'should mention third-person voice label');
+  });
+
+  test('specifies hybrid voice label for hybrid mode', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput({ voiceMode: 'hybrid' }));
+    assert.ok(prompt.includes('Hybrid'), 'should mention hybrid voice label');
+  });
+
+  test('output format is JSON object with body field', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput());
+    assert.ok(prompt.includes('"body"'), 'should have body field in output format');
+  });
+
+  test('tells writer to reference each child at least once', () => {
+    const prompt = buildSynthesisFallbackPrompt(makeInput());
+    assert.ok(
+      prompt.includes('Reference each child canon at least once'),
+      'should require at least one reference per child',
+    );
+  });
+});
+
+// ── Cross-compatibility: detectRefusalPattern (imported via canon-body-writer) ─
+
+describe('mergeSynthesisBodyResultIntoShell', () => {
+  test('merges a successful synthesis body into the persisted payload', () => {
+    const merged = mergeSynthesisBodyResultIntoShell(makeShell(), {
+      body: 'Synthesis body [cn_abc123456789].',
+      cited_segment_ids: ['a1b2c3d4-e5f6-7890-abcd-ef1234567890'],
+      named_child_ids: ['cn_abc123456789'],
+    });
+
+    assert.equal(merged.body, 'Synthesis body [cn_abc123456789].');
+    assert.deepEqual(merged._index_evidence_segments, ['a1b2c3d4-e5f6-7890-abcd-ef1234567890']);
+    assert.equal('_degraded' in merged, false);
+  });
+
+  test('preserves degraded fallback marker when persisting fallback body', () => {
+    const merged = mergeSynthesisBodyResultIntoShell(makeShell(), {
+      body: 'Fallback body [cn_abc123456789].',
+      cited_segment_ids: [],
+      named_child_ids: ['cn_abc123456789', 'cn_def456789012', 'cn_ghi789012345'],
+      _degraded: 'synthesis_writer_fallback',
+    });
+
+    assert.equal(merged._degraded, 'synthesis_writer_fallback');
+    assert.equal(merged.body, 'Fallback body [cn_abc123456789].');
+  });
+
+  test('preserves refused marker even when fallback body is empty', () => {
+    const merged = mergeSynthesisBodyResultIntoShell(makeShell(), {
+      body: '',
+      cited_segment_ids: [],
+      named_child_ids: [],
+      _degraded: 'synthesis_writer_refused',
+    });
+
+    assert.equal(merged._degraded, 'synthesis_writer_refused');
+    assert.equal(merged.body, '');
+  });
+});
+
+describe('detectRefusalPattern is available for synthesis gate', () => {
+  test('detectRefusalPattern is re-exported from canon-body-writer and importable', async () => {
+    // Test that the import works — the actual function behaviour is tested in
+    // canon-body-writer.test.ts. Here we just verify the import contract
+    // used by synthesis-body-writer is intact.
+    const { detectRefusalPattern } = await import('./canon-body-writer');
+    assert.equal(typeof detectRefusalPattern, 'function');
+    // Spot-check: refusal body triggers detection.
+    assert.equal(detectRefusalPattern("I can't produce a valid body."), true);
+    // Spot-check: normal prose passes.
+    const goodBody = 'I build systems. '.repeat(50);
+    assert.equal(detectRefusalPattern(goodBody), false);
+  });
+});
