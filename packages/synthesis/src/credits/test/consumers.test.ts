@@ -36,11 +36,15 @@ describe('credits/consumers — audit (hours)', () => {
     const store = new MemoryCreditLedger();
     await grant(store, { userId: USER, kind: 'hours', amount: 12, source: 'tier:pro:p1' });
 
-    await finalizeAuditHours(store, { userId: USER, actualHours: 4, runId: 'r_c' });
+    const r1 = await finalizeAuditHours(store, { userId: USER, actualHours: 4, runId: 'r_c' });
+    assert.equal(r1.inserted, true);
+    assert.equal(r1.consumed, 4);
+    assert.equal(r1.balance, 8);
     assert.equal(await store.getBalance(USER, 'hours'), 8);
 
     // Replay (e.g. retry after a transient post-success error): same result.
-    await finalizeAuditHours(store, { userId: USER, actualHours: 4, runId: 'r_c' });
+    const r2 = await finalizeAuditHours(store, { userId: USER, actualHours: 4, runId: 'r_c' });
+    assert.equal(r2.inserted, false, 'replay should report dedupe');
     assert.equal(await store.getBalance(USER, 'hours'), 8);
   });
 

@@ -51,6 +51,21 @@ export const generationRun = pgTable(
       cohesion?: number;
       [k: string]: unknown;
     }>(),
+    /**
+     * Phase N — credit ledger event ids tied to this run.
+     *
+     * Populated by Phase A's audit consumer (`finalizeAuditHours` returns the
+     * inserted credit_event id; the route handler appends to this array).
+     * Lets the dashboard show "this run cost N hours" precisely without
+     * re-querying the ledger.
+     *
+     * Shape: `string[]` (UUIDs of credit_event rows).
+     */
+    creditEventIds: jsonb('credit_event_ids').$type<string[]>().default([]).notNull(),
+    /** Phase N — estimated hours, captured at audit start for true-up math. */
+    estimatedHours: integer('estimated_hours'),
+    /** Phase N — actual hours consumed once the run completes. */
+    actualHours: integer('actual_hours'),
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
     completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })

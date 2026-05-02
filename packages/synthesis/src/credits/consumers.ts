@@ -62,19 +62,26 @@ export interface FinalizeAuditHoursArgs {
  * If the user no longer has enough credits at finalize time (rare race,
  * unlikely given the pre-check), this throws InsufficientCreditsError —
  * the run completed but the debit failed; ops needs to investigate.
+ *
+ * Returns `{ inserted, balance }`. Callers that maintain a per-run
+ * `credit_event_ids` array (Phase A audit row) can use `inserted` to
+ * decide whether to append the consume event reference.
  */
 export async function finalizeAuditHours(
   store: CreditLedgerStore,
   args: FinalizeAuditHoursArgs,
-): Promise<void> {
-  if (args.actualHours <= 0) return;
-  await consume(store, {
+): Promise<{ inserted: boolean; balance: number; consumed: number }> {
+  if (args.actualHours <= 0) {
+    return { inserted: false, balance: await store.getBalance(args.userId, 'hours'), consumed: 0 };
+  }
+  const r = await consume(store, {
     userId: args.userId,
     kind: 'hours',
     amount: args.actualHours,
     source: `audit:run_${args.runId}`,
     reference: `run_${args.runId}`,
   });
+  return { inserted: r.inserted, balance: r.balance, consumed: args.actualHours };
 }
 
 /**
