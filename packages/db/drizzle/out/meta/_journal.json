@@ -127,6 +127,13 @@
       "when": 1778198400000,
       "tag": "0017_phase_a_synthesis_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778371200000,
+      "tag": "0019_phase_n_credits",
+      "breakpoints": true
     }
   ]
 }

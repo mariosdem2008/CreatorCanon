@@ -52,3 +52,6 @@ export * from './inbox';
 
 // Phase A — product synthesis (composer-emitted ProductBundle persistence)
 export * from './synthesis';
+
+// Phase N — credit ledger (usage metering: hours / builder_credits / chat_credits)
+export * from './credits';
