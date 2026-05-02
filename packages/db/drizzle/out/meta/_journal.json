@@ -120,6 +120,13 @@
       "when": 1778112000000,
       "tag": "0016_repair_creator_manual_template_key",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778630400000,
+      "tag": "0022_phase_g_hosting",
+      "breakpoints": true
     }
   ]
 }
