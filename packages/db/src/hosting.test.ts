@@ -20,6 +20,7 @@ test('deployment schema exposes Phase G hosting fields', () => {
   assert.equal(columns.vercelCertId.name, 'vercel_cert_id');
   assert.equal(columns.status.name, 'status');
   assert.equal(columns.liveUrl.name, 'live_url');
+  assert.equal(columns.lastError.name, 'last_error');
   assert.equal(columns.customDomain.name, 'custom_domain');
   assert.equal(columns.domainVerified.name, 'domain_verified');
   assert.equal(columns.sslReady.name, 'ssl_ready');
@@ -36,6 +37,7 @@ test('Phase G migration creates the deployment table', () => {
   assert.match(migrationSql, /"vercel_project_id" varchar\(64\)/);
   assert.match(migrationSql, /"vercel_cert_id" varchar\(64\)/);
   assert.match(migrationSql, /"status" "deployment_status" DEFAULT 'pending' NOT NULL/);
+  assert.match(migrationSql, /"last_error" text/);
   assert.match(migrationSql, /"domain_verified" boolean DEFAULT false/);
   assert.match(migrationSql, /"ssl_ready" boolean DEFAULT false/);
   assert.match(migrationSql, /"domain_attached_at" timestamp with time zone/);

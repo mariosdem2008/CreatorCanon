@@ -268,6 +268,24 @@ describe('createVercelClient', () => {
     assert.equal(JSON.parse(String(call.init.body)).target, 'env_custom123');
   });
 
+  it('retrieves a deployment by id for status refreshes', async () => {
+    const { calls, fetchStub } = createFetchStub(
+      jsonResponse({ id: 'dpl_123', url: 'creator-canon-demo.vercel.app', readyState: 'READY' }),
+    );
+    const client = createVercelClient({ token: 'vc_test', fetch: fetchStub });
+
+    const result = await client.getDeployment('dpl_123', { withGitRepoInfo: true });
+
+    assert.equal(result.readyState, 'READY');
+    const call = calls[0];
+    assert.ok(call);
+    assert.equal(
+      call.url,
+      'https://api.vercel.com/v13/deployments/dpl_123?withGitRepoInfo=true',
+    );
+    assert.equal(call.init.method, 'GET');
+  });
+
   it('throws a typed error when Vercel returns a non-2xx response', async () => {
     const { fetchStub } = createFetchStub(
       jsonResponse(

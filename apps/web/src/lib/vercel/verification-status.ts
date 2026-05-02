@@ -2,13 +2,17 @@ export type VerificationStep =
   | 'pending'
   | 'verified'
   | 'ssl_provisioning'
+  | 'deploying'
   | 'live'
   | 'failed';
+
+export type DeploymentUiStatus = 'pending' | 'building' | 'live' | 'failed';
 
 export interface VerificationStatusInput {
   domainVerified: boolean;
   sslReady: boolean;
   liveUrl: string | null;
+  deploymentStatus?: DeploymentUiStatus;
   failed?: boolean;
 }
 
@@ -17,8 +21,16 @@ const DNS_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 export function resolveVerificationStep(
   input: VerificationStatusInput,
 ): VerificationStep {
-  if (input.failed) return 'failed';
-  if (input.domainVerified && input.sslReady && input.liveUrl) return 'live';
+  if (input.failed || input.deploymentStatus === 'failed') return 'failed';
+  if (
+    input.domainVerified &&
+    input.sslReady &&
+    input.liveUrl &&
+    input.deploymentStatus === 'live'
+  ) {
+    return 'live';
+  }
+  if (input.domainVerified && input.sslReady) return 'deploying';
   if (input.domainVerified && !input.sslReady) return 'ssl_provisioning';
   if (input.domainVerified) return 'verified';
   return 'pending';

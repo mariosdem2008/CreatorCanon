@@ -27,8 +27,21 @@ describe('verification status helpers', () => {
         domainVerified: true,
         sslReady: true,
         liveUrl: 'https://learn.example.com',
+        deploymentStatus: 'live',
       }),
       'live',
+    );
+  });
+
+  it('maps verified ssl domains without a live deployment to deploying', () => {
+    assert.equal(
+      resolveVerificationStep({
+        domainVerified: true,
+        sslReady: true,
+        liveUrl: null,
+        deploymentStatus: 'building',
+      }),
+      'deploying',
     );
   });
 

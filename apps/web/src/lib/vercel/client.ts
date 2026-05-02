@@ -107,6 +107,8 @@ export interface VercelDeployment {
   id: string;
   url?: string;
   readyState?: string;
+  errorCode?: string;
+  errorMessage?: string;
   project?: {
     id: string;
     name: string;
@@ -172,6 +174,10 @@ export interface VercelClient {
   getCertById(id: string): Promise<VercelCert>;
   createDeployment(
     requestBody: VercelCreateDeploymentRequest,
+  ): Promise<VercelDeployment>;
+  getDeployment(
+    idOrUrl: string,
+    options?: { withGitRepoInfo?: boolean },
   ): Promise<VercelDeployment>;
 }
 
@@ -312,6 +318,18 @@ export function createVercelClient(options: VercelClientOptions): VercelClient {
         method: 'POST',
         body: JSON.stringify(requestBody),
       });
+    },
+
+    getDeployment(idOrUrl, deploymentOptions = {}) {
+      return request<VercelDeployment>(
+        `/v13/deployments/${encodeURIComponent(idOrUrl)}`,
+        {
+          method: 'GET',
+          query: {
+            withGitRepoInfo: deploymentOptions.withGitRepoInfo,
+          },
+        },
+      );
     },
   };
 }

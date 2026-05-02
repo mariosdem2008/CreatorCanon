@@ -41,6 +41,8 @@ export default async function ProjectDomainPage({
       domainVerified: deployment.domainVerified,
       sslReady: deployment.sslReady,
       liveUrl: deployment.liveUrl,
+      deploymentStatus: deployment.status,
+      lastError: deployment.lastError,
       domainAttachedAt: deployment.domainAttachedAt,
     })
     .from(hub)
@@ -77,6 +79,8 @@ export default async function ProjectDomainPage({
         initialDomainVerified={hubRow.domainVerified ?? false}
         initialSslReady={hubRow.sslReady ?? false}
         initialLiveUrl={hubRow.liveUrl}
+        initialDeploymentStatus={hubRow.deploymentStatus ?? 'pending'}
+        initialDeploymentError={hubRow.lastError}
         statusStartedAtIso={hubRow.domainAttachedAt?.toISOString() ?? null}
       />
     </div>

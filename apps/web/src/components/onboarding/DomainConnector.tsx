@@ -8,6 +8,7 @@ import {
   normalizeDomainInput,
   validateCustomDomain,
 } from '@/lib/vercel/domain-utils';
+import type { DeploymentUiStatus } from '@/lib/vercel/verification-status';
 import { DnsRecordCard } from './DnsRecordCard';
 import { VerificationStatus } from './VerificationStatus';
 
@@ -17,6 +18,8 @@ interface DomainConnectorProps {
   initialDomainVerified?: boolean;
   initialSslReady?: boolean;
   initialLiveUrl?: string | null;
+  initialDeploymentStatus?: DeploymentUiStatus;
+  initialDeploymentError?: string | null;
   statusStartedAtIso?: string | null;
 }
 
@@ -38,26 +41,44 @@ export function DomainConnector({
   initialDomainVerified = false,
   initialSslReady = false,
   initialLiveUrl = null,
+  initialDeploymentStatus = initialLiveUrl ? 'live' : 'pending',
+  initialDeploymentError = null,
   statusStartedAtIso = null,
 }: DomainConnectorProps) {
   const [domain, setDomain] = useState(initialDomain ?? '');
   const [attachedDomain, setAttachedDomain] = useState(initialDomain ?? '');
   const [domainVerified, setDomainVerified] = useState(initialDomainVerified);
   const [sslReady, setSslReady] = useState(initialSslReady);
+  const [liveUrl, setLiveUrl] = useState(initialLiveUrl);
+  const [deploymentStatus, setDeploymentStatus] =
+    useState<DeploymentUiStatus>(initialDeploymentStatus);
   const [state, setState] = useState<SubmitState>('idle');
   const [message, setMessage] = useState<string | null>(null);
 
   const validation = useMemo(() => validateCustomDomain(domain), [domain]);
   const records = attachedDomain ? getDnsRecordsForDomain(attachedDomain) : [];
   const handleStatusChange = useCallback(
-    (status: { domainVerified: boolean; sslReady: boolean }) => {
+    (status: {
+      domainVerified: boolean;
+      sslReady: boolean;
+      deploymentStatus: DeploymentUiStatus;
+      liveUrl: string | null;
+    }) => {
       setDomainVerified(status.domainVerified);
       setSslReady(status.sslReady);
+      setDeploymentStatus(status.deploymentStatus);
+      setLiveUrl(status.liveUrl);
     },
     [],
   );
   const connectionPill = attachedDomain ? (
-    sslReady ? (
+    deploymentStatus === 'live' && liveUrl ? (
+      <StatusPill tone="success">Live</StatusPill>
+    ) : deploymentStatus === 'building' ? (
+      <StatusPill tone="info">Deploying</StatusPill>
+    ) : deploymentStatus === 'failed' ? (
+      <StatusPill tone="danger">Deploy failed</StatusPill>
+    ) : sslReady ? (
       <StatusPill tone="success">SSL ready</StatusPill>
     ) : domainVerified ? (
       <StatusPill tone="info">SSL provisioning</StatusPill>
@@ -100,6 +121,8 @@ export function DomainConnector({
     setAttachedDomain(finalDomain);
     setDomainVerified(Boolean(body.domain?.verified));
     setSslReady(false);
+    setLiveUrl(null);
+    setDeploymentStatus('pending');
     setState('attached');
     setMessage(
       body.domain?.verified
@@ -160,10 +183,13 @@ export function DomainConnector({
 
         {attachedDomain ? (
           <VerificationStatus
+            key={attachedDomain}
             hubId={hubId}
             initialDomainVerified={domainVerified}
             initialSslReady={sslReady}
-            initialLiveUrl={initialLiveUrl}
+            initialLiveUrl={liveUrl}
+            initialDeploymentStatus={deploymentStatus}
+            initialDeploymentError={initialDeploymentError}
             startedAtIso={statusStartedAtIso}
             onStatusChange={handleStatusChange}
           />

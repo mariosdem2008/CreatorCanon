@@ -32,6 +32,7 @@ export const deployment = pgTable(
     vercelCertId: varchar('vercel_cert_id', { length: 64 }),
     status: deploymentStatusEnum('status').notNull().default('pending'),
     liveUrl: text('live_url'),
+    lastError: text('last_error'),
     /** Mirrors `hub.custom_domain`; API writes keep both columns synchronized. */
     customDomain: varchar('custom_domain', { length: 255 }),
     domainVerified: boolean('domain_verified').notNull().default(false),

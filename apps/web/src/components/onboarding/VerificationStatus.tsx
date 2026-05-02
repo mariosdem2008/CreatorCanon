@@ -4,19 +4,29 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { StatusPill } from '@/components/cc';
 import {
+  type DeploymentUiStatus,
   isVerificationTimedOut,
   resolveVerificationStep,
   type VerificationStep,
 } from '@/lib/vercel/verification-status';
+
+type StatusChange = {
+  domainVerified: boolean;
+  sslReady: boolean;
+  deploymentStatus: DeploymentUiStatus;
+  liveUrl: string | null;
+};
 
 interface VerificationStatusProps {
   hubId: string;
   initialDomainVerified?: boolean;
   initialSslReady?: boolean;
   initialLiveUrl?: string | null;
+  initialDeploymentStatus?: DeploymentUiStatus;
+  initialDeploymentError?: string | null;
   startedAtIso?: string | null;
   pollIntervalMs?: number;
-  onStatusChange?: (status: { domainVerified: boolean; sslReady: boolean }) => void;
+  onStatusChange?: (status: StatusChange) => void;
 }
 
 interface VerifyResponse {
@@ -33,22 +43,36 @@ interface SslResponse {
   code?: string;
 }
 
+interface DeployResponse {
+  status: DeploymentUiStatus;
+  liveUrl: string | null;
+  lastError: string | null;
+  error?: string;
+}
+
 export function VerificationStatus({
   hubId,
   initialDomainVerified = false,
   initialSslReady = false,
   initialLiveUrl = null,
+  initialDeploymentStatus = initialLiveUrl ? 'live' : 'pending',
+  initialDeploymentError = null,
   startedAtIso,
   pollIntervalMs = 10_000,
   onStatusChange,
 }: VerificationStatusProps) {
   const [domainVerified, setDomainVerified] = useState(initialDomainVerified);
   const [sslReady, setSslReady] = useState(initialSslReady);
-  const [liveUrl] = useState(initialLiveUrl);
+  const [deploymentStatus, setDeploymentStatus] =
+    useState<DeploymentUiStatus>(initialDeploymentStatus);
+  const [liveUrl, setLiveUrl] = useState(initialLiveUrl);
   const [timedOut, setTimedOut] = useState(() =>
     isVerificationTimedOut(startedAtIso),
   );
   const [error, setError] = useState<string | null>(null);
+  const [deployError, setDeployError] = useState<string | null>(
+    initialDeploymentError,
+  );
 
   const step = useMemo<VerificationStep>(
     () =>
@@ -56,14 +80,15 @@ export function VerificationStatus({
         domainVerified,
         sslReady,
         liveUrl,
-        failed: Boolean(error),
+        deploymentStatus,
+        failed: Boolean(error || deployError),
       }),
-    [domainVerified, error, liveUrl, sslReady],
+    [deployError, deploymentStatus, domainVerified, error, liveUrl, sslReady],
   );
 
   useEffect(() => {
-    onStatusChange?.({ domainVerified, sslReady });
-  }, [domainVerified, onStatusChange, sslReady]);
+    onStatusChange?.({ domainVerified, sslReady, deploymentStatus, liveUrl });
+  }, [deploymentStatus, domainVerified, liveUrl, onStatusChange, sslReady]);
 
   useEffect(() => {
     if ((domainVerified && sslReady) || timedOut) return;
@@ -111,6 +136,53 @@ export function VerificationStatus({
     };
   }, [domainVerified, hubId, pollIntervalMs, sslReady, timedOut]);
 
+  useEffect(() => {
+    if (!domainVerified || !sslReady || timedOut) return;
+    if ((deploymentStatus === 'live' && liveUrl) || deploymentStatus === 'failed') {
+      return;
+    }
+
+    let cancelled = false;
+    async function pollDeploy() {
+      try {
+        const response = await fetch(`/api/deploy/trigger/${hubId}`, {
+          method: 'POST',
+        });
+        const body = (await response.json()) as DeployResponse;
+        if (!response.ok) {
+          throw new Error(body.error ?? 'Deployment trigger failed');
+        }
+        if (!cancelled) {
+          setDeploymentStatus(body.status);
+          setLiveUrl(body.liveUrl);
+          setDeployError(body.lastError);
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setDeploymentStatus('failed');
+          setDeployError(
+            cause instanceof Error ? cause.message : 'Deployment trigger failed',
+          );
+        }
+      }
+    }
+
+    void pollDeploy();
+    const timer = window.setInterval(() => void pollDeploy(), pollIntervalMs);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    deploymentStatus,
+    domainVerified,
+    hubId,
+    liveUrl,
+    pollIntervalMs,
+    sslReady,
+    timedOut,
+  ]);
+
   const tone =
     step === 'live'
       ? 'success'
@@ -145,7 +217,7 @@ export function VerificationStatus({
         </div>
       ) : (
         <p className="mt-2 text-[12px] leading-[1.6] text-[var(--cc-ink-3)]">
-          {messageForStep(step, error)}
+          {messageForStep(step, error ?? deployError)}
         </p>
       )}
     </div>
@@ -156,6 +228,7 @@ function labelForStep(step: VerificationStep, timedOut: boolean): string {
   if (timedOut) return 'Needs help';
   if (step === 'pending') return 'Pending';
   if (step === 'ssl_provisioning') return 'SSL provisioning';
+  if (step === 'deploying') return 'Deploying';
   if (step === 'live') return 'Live';
   if (step === 'failed') return 'Check failed';
   return 'Verified';
@@ -171,6 +244,9 @@ function messageForStep(
   }
   if (step === 'ssl_provisioning') {
     return 'Domain ownership is verified. Vercel is issuing the SSL certificate.';
+  }
+  if (step === 'deploying') {
+    return 'Domain and SSL are ready. Vercel is building the hub for this domain.';
   }
   if (step === 'live') return 'Domain and SSL are ready.';
   return 'Domain ownership is verified.';

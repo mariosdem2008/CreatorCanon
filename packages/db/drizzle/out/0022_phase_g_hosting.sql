@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS "deployment" (
 	"vercel_cert_id" varchar(64),
 	"status" "deployment_status" DEFAULT 'pending' NOT NULL,
 	"live_url" text,
+	"last_error" text,
 	"custom_domain" varchar(255),
 	"domain_verified" boolean DEFAULT false NOT NULL,
 	"ssl_ready" boolean DEFAULT false NOT NULL,
