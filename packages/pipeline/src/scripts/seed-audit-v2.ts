@@ -35,7 +35,7 @@
  *                                              [--regen-canon] [--regen-bodies]
  *                                              [--regen-synthesis] [--regen-journey]
  *                                              [--regen-briefs] [--regen-hero]
- *                                              [--regen-hero-only]
+ *                                              [--regen-hero-only] [--regen-briefs-only]
  *                                              [--regen-evidence] [--regen-workshops]
  *                                              [--per-video-canon]
  *
@@ -54,6 +54,13 @@
  *                       writes hubTitle/hubTagline/hero_candidates back. Skips
  *                       Stages 1-8 + 10-11. Use to backfill hubTitle without
  *                       triggering a full --regen-channel. (Task 9.3)
+ *   --regen-briefs-only Fast path: run ONLY Stage 8 (page brief shells + bodies).
+ *                       Loads existing channel profile + canon nodes from DB,
+ *                       deletes existing v2 briefs, regenerates briefs (with
+ *                       fallback prompt for thin-content canons). Skips Stages
+ *                       1-7 + 9-11. Use to backfill empty brief bodies without
+ *                       a full re-run. Incompatible with --regen-channel/canon/bodies.
+ *                       (Task 10.1)
  *   --regen-evidence    Re-tag evidence registries on all entities (Stage 10)
  *   --regen-workshops   Regenerate workshop stages (Stage 11)
  *                       Using --regen-evidence and/or --regen-workshops alone
@@ -753,6 +760,132 @@ async function main() {
       .where(eq(channelProfile.runId, runId));
 
     console.info(`[v2] Stage 9 only: hubTitle="${updatedProfile.hubTitle}" / hubTagline="${updatedProfile.hubTagline}" (${refined.rewriteCount} lines rewritten)`);
+    await closeDb();
+    return;
+  }
+
+  // ── --regen-briefs-only fast path (Task 10.1) ────────────────────────────
+  // Runs ONLY Stage 8 (page brief bodies). Loads existing channel profile +
+  // canon shells from DB, deletes existing v2 briefs, regenerates all brief
+  // shells + bodies (with fallback prompt for thin-content canons), persists.
+  // Skips Stages 1-7 + 9-11. Use after a fallback-prompt fix to backfill
+  // empty brief bodies without re-running the full pipeline.
+  const regenBriefsOnly = process.argv.includes('--regen-briefs-only');
+  if (regenBriefsOnly && !regenChannel && !regenCanon && !regenBodies) {
+    console.info(`[v2] --regen-briefs-only: running Stage 8 only for ${runId}`);
+    const db = getDb();
+
+    // Load existing channel profile.
+    const cpRows = await db.select({ payload: channelProfile.payload })
+      .from(channelProfile)
+      .where(eq(channelProfile.runId, runId))
+      .limit(1);
+    if (!cpRows[0]) throw new Error(`No channelProfile found for runId=${runId}. Run without --regen-briefs-only first.`);
+    const briefOnlyProfile = cpRows[0].payload as unknown as ChannelProfile_v2;
+    if (!briefOnlyProfile._internal_niche) throw new Error(`channelProfile for ${runId} is not v2 (missing _internal_niche). Re-run --regen-channel first.`);
+
+    // Load existing canon nodes (shells + bodies).
+    const canonRows = await db.select({ id: canonNode.id, payload: canonNode.payload })
+      .from(canonNode)
+      .where(eq(canonNode.runId, runId));
+    const v2CanonRows = canonRows.filter(
+      (c) => (c.payload as { schemaVersion?: string }).schemaVersion === 'v2',
+    );
+    if (v2CanonRows.length < 3) {
+      throw new Error(`Only ${v2CanonRows.length} v2 canon nodes found for ${runId}. Run --regen-canon first.`);
+    }
+
+    const briefOnlyCanonRefs: CanonRefForBrief[] = v2CanonRows.map((c) => {
+      const p = c.payload as CanonShell_v2 & { body?: string };
+      return {
+        id: c.id,
+        title: p.title,
+        type: p.type,
+        body: p.body ?? '',
+        internal_summary: p._internal_summary,
+        pageWorthinessScore: p.pageWorthinessScore,
+      };
+    }).filter((r) => r.pageWorthinessScore >= 40);
+
+    // Identify pillar canons (synthesis kind nodes).
+    const briefOnlyPillarIds = v2CanonRows
+      .filter((c) => (c.payload as CanonShell_v2).kind === 'synthesis')
+      .map((c) => c.id);
+
+    // Delete existing v2 briefs.
+    const existingBriefRows = await db.select({ id: pageBrief.id, payload: pageBrief.payload })
+      .from(pageBrief)
+      .where(eq(pageBrief.runId, runId));
+    const v2BriefIds = existingBriefRows
+      .filter((b) => (b.payload as { schemaVersion?: string }).schemaVersion === 'v2')
+      .map((b) => b.id);
+    if (v2BriefIds.length > 0) {
+      await db.delete(pageBrief).where(inArray(pageBrief.id, v2BriefIds));
+      console.info(`[v2] --regen-briefs-only: deleted ${v2BriefIds.length} existing v2 briefs`);
+    }
+
+    // Resolve voice mode.
+    const briefOnlyVoiceMode: VoiceMode = voiceModeFlag ?? defaultVoiceMode(briefOnlyProfile._index_archetype);
+
+    // Load run for workspaceId.
+    const briefOnlyRun = await loadRun(runId);
+
+    // Re-run Stage 8.
+    const targetCount = Math.min(12, briefOnlyCanonRefs.length);
+    console.info(`[v2] Stage 8 (briefs-only): ${briefOnlyCanonRefs.length} canon refs, ${briefOnlyPillarIds.length} pillars, target=${targetCount}`);
+    const briefShells = await generateBriefShells({
+      canonNodes: briefOnlyCanonRefs,
+      pillarCanonIds: briefOnlyPillarIds,
+      creatorName: briefOnlyProfile.creatorName,
+      archetype: briefOnlyProfile._index_archetype,
+      niche: briefOnlyProfile._internal_niche,
+      audience: briefOnlyProfile._internal_audience,
+      recurringPromise: briefOnlyProfile._internal_recurring_promise,
+      preserveTerms: briefOnlyProfile._index_creator_terminology,
+      defaultVoiceFingerprint: {
+        profanityAllowed: briefOnlyProfile._index_archetype === 'operator-coach',
+        tonePreset: briefOnlyProfile._internal_dominant_tone,
+        preserveTerms: briefOnlyProfile._index_creator_terminology.slice(0, 12),
+      },
+      targetCount,
+    });
+
+    for (const b of briefShells) b.pageTitle = enforceTitleCase(b.pageTitle);
+
+    const briefBodyInputs: BriefBodyInput[] = briefShells.map((b) => {
+      const primaryCanons = b._index_primary_canon_node_ids
+        .map((cid) => briefOnlyCanonRefs.find((r) => r.id === cid))
+        .filter((r): r is CanonRefForBrief => r !== undefined);
+      return {
+        brief: b,
+        primaryCanons,
+        creatorName: briefOnlyProfile.creatorName,
+        archetype: briefOnlyProfile._index_archetype,
+        voiceFingerprint: b._index_voice_fingerprint,
+        channelDominantTone: briefOnlyProfile._internal_dominant_tone,
+        channelAudience: briefOnlyProfile._internal_audience,
+        voiceMode: briefOnlyVoiceMode,
+      };
+    });
+
+    const briefBodies = await writeBriefBodiesParallel(briefBodyInputs, { concurrency: 3 });
+
+    for (const shell of briefShells) {
+      const result = briefBodies.get(shell.pageId);
+      const finalShell = { ...shell, body: result?.body ?? '' };
+      await db.insert(pageBrief).values({
+        id: `pb_${crypto.randomUUID().slice(0, 12)}`,
+        workspaceId: briefOnlyRun.workspaceId,
+        runId,
+        payload: finalShell as unknown as Record<string, unknown>,
+        pageWorthinessScore: finalShell._internal_page_worthiness_score,
+        position: finalShell._index_position,
+      });
+    }
+
+    const withBodies = [...briefBodies.values()].filter((r) => r.body.length > 0).length;
+    const degraded = [...briefBodies.values()].filter((r) => r._degraded).length;
+    console.info(`[v2] --regen-briefs-only: ${briefShells.length} briefs persisted (${withBodies} with bodies, ${degraded} degraded)`);
     await closeDb();
     return;
   }
