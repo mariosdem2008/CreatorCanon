@@ -323,7 +323,12 @@ export interface CanonRef {
     /** Audience-job tags for diagnostic routing. */
     _index_audience_job_tags?: string[];
     /** Voice fingerprint summary attached during audit. */
-    _index_voice_fingerprint?: { archetype?: ArchetypeSlug | string };
+    _index_voice_fingerprint?: {
+      archetype?: ArchetypeSlug | string;
+      /** Tags that classify rhetorical posture (e.g. "myth-busting"). */
+      rhetoricalMoves?: string[];
+      [k: string]: unknown;
+    };
     [k: string]: unknown;
   };
 }
