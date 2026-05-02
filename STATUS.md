@@ -50,4 +50,4 @@ All 8 tasks done. 8 commits on the branch. Draft PR open.
 
 ## Pull request
 
-Draft PR: (to be filled after `gh pr create`)
+Draft PR: https://github.com/mariosdem2008/CreatorCanon/pull/20
