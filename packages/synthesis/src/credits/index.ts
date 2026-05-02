@@ -8,6 +8,19 @@ export type { GrantArgs, ConsumeArgs, GrantResult } from './ledger';
 export { getBalance } from './balance';
 export type { BalanceMap } from './balance';
 
+export {
+  allocateTierCredits,
+  addAddonCredit,
+  tierAmount,
+  tierSource,
+  tierResetSource,
+} from './allocator';
+export type {
+  Tier,
+  AllocateTierCreditsArgs,
+  AddAddonCreditArgs,
+} from './allocator';
+
 export { MemoryCreditLedger } from './memory-store';
 export { DrizzleCreditLedger } from './drizzle-store';
 
