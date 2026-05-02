@@ -1,6 +1,8 @@
 import { and, asc, eq, getDb } from '@creatorcanon/db';
 import { generationRun } from '@creatorcanon/db/schema';
 import {
+  completeAuditGeneratedRun as defaultCompleteAuditGeneratedRun,
+  markAuditGeneratedRunFailed as defaultMarkAuditGeneratedRunFailed,
   runGenerationPipeline,
   type RunGenerationPipelinePayload,
 } from '@creatorcanon/pipeline';
@@ -10,6 +12,59 @@ interface LogFn {
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 15_000;
+
+interface ProcessQueuedRunDeps {
+  log: LogFn;
+  runGenerationPipeline?: typeof runGenerationPipeline;
+  completeAuditGeneratedRun?: typeof defaultCompleteAuditGeneratedRun;
+  markAuditGeneratedRunFailed?: typeof defaultMarkAuditGeneratedRunFailed;
+}
+
+export async function processQueuedRun(
+  payload: RunGenerationPipelinePayload,
+  deps: ProcessQueuedRunDeps,
+): Promise<void> {
+  const runPipeline = deps.runGenerationPipeline ?? runGenerationPipeline;
+  const completeAuditGeneratedRun =
+    deps.completeAuditGeneratedRun ?? defaultCompleteAuditGeneratedRun;
+  const markAuditGeneratedRunFailed =
+    deps.markAuditGeneratedRunFailed ?? defaultMarkAuditGeneratedRunFailed;
+
+  try {
+    const result = await runPipeline(payload);
+    deps.log('completed queued run', {
+      runId: payload.runId,
+      pageCount: result.pageCount,
+      segmentsCreated: result.segmentsCreated,
+      transcriptsFetched: result.transcriptsFetched,
+    });
+
+    const published = await completeAuditGeneratedRun({ runId: payload.runId });
+    if (published) {
+      deps.log('auto-published audit generated hub', {
+        runId: payload.runId,
+        releaseId: published.releaseId,
+        publicPath: published.publicPath,
+      });
+    }
+  } catch (error) {
+    deps.log('queued run failed', {
+      runId: payload.runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    try {
+      await markAuditGeneratedRunFailed({ runId: payload.runId, error });
+    } catch (failureUpdateError) {
+      deps.log('audit generated hub failure transition failed', {
+        runId: payload.runId,
+        error:
+          failureUpdateError instanceof Error
+            ? failureUpdateError.message
+            : String(failureUpdateError),
+      });
+    }
+  }
+}
 
 async function claimNextQueuedRun(): Promise<RunGenerationPipelinePayload | null> {
   const db = getDb();
@@ -36,10 +91,7 @@ async function claimNextQueuedRun(): Promise<RunGenerationPipelinePayload | null
       startedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(and(
-      eq(generationRun.id, next.runId),
-      eq(generationRun.status, 'queued'),
-    ))
+    .where(and(eq(generationRun.id, next.runId), eq(generationRun.status, 'queued')))
     .returning({
       runId: generationRun.id,
     });
@@ -84,20 +136,7 @@ export function startQueueRunner(log: LogFn) {
           workspaceId: payload.workspaceId,
         });
 
-        try {
-          const result = await runGenerationPipeline(payload);
-          log('completed queued run', {
-            runId: payload.runId,
-            pageCount: result.pageCount,
-            segmentsCreated: result.segmentsCreated,
-            transcriptsFetched: result.transcriptsFetched,
-          });
-        } catch (error) {
-          log('queued run failed', {
-            runId: payload.runId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
+        await processQueuedRun(payload, { log });
       }
     } finally {
       draining = false;

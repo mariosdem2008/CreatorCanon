@@ -114,7 +114,7 @@ export async function runGenerationPipeline(
       run: segmentTranscripts,
     });
 
-    // Require a hub row — the Editorial Atlas pipeline always publishes to a hub.
+    // Require a hub row because the adapt stage writes a hub-specific Creator Manual manifest.
     const db = getDb();
     const hubRows = await db
       .select({ id: hub.id })
@@ -124,7 +124,7 @@ export async function runGenerationPipeline(
     const hubRow = hubRows[0];
     if (!hubRow) {
       throw new Error(
-        `Editorial Atlas pipeline requires a hub row for projectId='${payload.projectId}'`,
+        `Creator Manual pipeline requires a hub row for projectId='${payload.projectId}'`,
       );
     }
 
@@ -200,8 +200,8 @@ export async function runGenerationPipeline(
         validateMaterializedOutput: validatePageQualityMaterialization,
       });
 
-      // canon_v1 still emits the editorial-atlas manifest via the existing
-      // adapter — Phase 8 retargeted it to read canon_node when present.
+      // canon_v1 hands its materialized rows to the Creator Manual adapter,
+      // which prefers canon_node content when present.
       await assertWithinRunBudget(payload.runId);
       const adapt = await runStage({
         ctx,

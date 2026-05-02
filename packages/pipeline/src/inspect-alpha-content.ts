@@ -17,7 +17,7 @@ import {
 import {
   ensureTranscriptsStageOutputSchema,
 } from './contracts';
-import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
+import type { CreatorManualManifest } from './adapters/creator-manual/manifest-types';
 import { loadDefaultEnvFiles } from './env-files';
 
 function requireRunId(): string {
@@ -37,10 +37,10 @@ function toRecordCounts(values: string[]) {
   }, {});
 }
 
-function evidenceDensity(sourceRefCount: number, pageCount: number) {
+function evidenceDensity(sourceRefCount: number, nodeCount: number) {
   if (sourceRefCount <= 0) return 'limited';
-  const refsPerPage = sourceRefCount / Math.max(1, pageCount);
-  if (refsPerPage >= 2) return 'strong';
+  const refsPerNode = sourceRefCount / Math.max(1, nodeCount);
+  if (refsPerNode >= 2) return 'strong';
   return 'partial';
 }
 
@@ -137,7 +137,8 @@ async function main() {
 
   const liveHub = liveHubRows[0];
   let manifestSummary: {
-    pageCount: number;
+    nodeCount: number;
+    sourceCount: number;
     sourceRefCount: number;
     evidenceDensity: string;
   } | null = null;
@@ -145,14 +146,18 @@ async function main() {
   if (liveHub?.manifestR2Key) {
     const r2 = createR2Client(parseServerEnv(process.env));
     const manifestObject = await r2.getObject(liveHub.manifestR2Key);
-    const raw = JSON.parse(new TextDecoder().decode(manifestObject.body)) as EditorialAtlasManifest;
-    const pageCount = raw.pages?.length ?? 0;
-    // Count citation references across all page sections as a proxy for source density.
-    const citationCount = raw.pages?.reduce((sum, p) => sum + (p.citations?.length ?? 0), 0) ?? 0;
+    const raw = JSON.parse(new TextDecoder().decode(manifestObject.body)) as CreatorManualManifest;
+    if (raw.schemaVersion !== 'creator_manual_v1') {
+      throw new Error(`Expected creator_manual_v1 manifest, got ${raw.schemaVersion}.`);
+    }
+    const nodeCount = raw.stats?.nodeCount ?? raw.nodes?.length ?? 0;
+    const sourceCount = raw.stats?.sourceCount ?? raw.sources?.length ?? 0;
+    const evidenceRefCount = raw.nodes?.reduce((sum, node) => sum + node.evidence.length, 0) ?? 0;
     manifestSummary = {
-      pageCount,
-      sourceRefCount: citationCount,
-      evidenceDensity: evidenceDensity(citationCount, pageCount),
+      nodeCount,
+      sourceCount,
+      sourceRefCount: evidenceRefCount,
+      evidenceDensity: evidenceDensity(evidenceRefCount, nodeCount),
     };
   }
 

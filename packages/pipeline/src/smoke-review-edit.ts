@@ -43,7 +43,7 @@ import {
 } from '@creatorcanon/db/schema';
 
 import { loadDefaultEnvFiles, repoRoot } from './env-files';
-import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
+import type { CreatorManualManifest } from './adapters/creator-manual/manifest-types';
 import { publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
 
@@ -51,6 +51,8 @@ const WORKSPACE_ID = 'local-smoke-workspace';
 const ACTOR_USER_ID = 'local-smoke-user';
 const VIDEO_SET_ID = 'review-edit-smoke-video-set';
 const PROJECT_ID = 'review-edit-smoke-project';
+const HUB_ID = 'review-edit-smoke-hub';
+const HUB_SUBDOMAIN = 'review-edit-smoke';
 const RUN_ID = 'review-edit-smoke-run';
 const PROJECT_TITLE = 'Review Edit Smoke Hub';
 
@@ -159,6 +161,20 @@ async function seedDedicatedRun(videoIds: string[]) {
     updatedAt: now,
   });
 
+  await db.insert(hub).values({
+    id: HUB_ID,
+    workspaceId: WORKSPACE_ID,
+    projectId: PROJECT_ID,
+    subdomain: HUB_SUBDOMAIN,
+    theme: 'paper',
+    templateKey: 'creator_manual',
+    accessMode: 'public',
+    freePreview: 'all',
+    metadata: {},
+    createdAt: now,
+    updatedAt: now,
+  });
+
   await db.insert(generationRun).values({
     id: RUN_ID,
     workspaceId: WORKSPACE_ID,
@@ -176,10 +192,15 @@ async function seedDedicatedRun(videoIds: string[]) {
   });
 }
 
-async function fetchManifest(manifestR2Key: string): Promise<EditorialAtlasManifest> {
+async function fetchManifest(manifestR2Key: string): Promise<CreatorManualManifest> {
   const r2 = createR2Client(parseServerEnv(process.env));
   const obj = await r2.getObject(manifestR2Key);
-  return JSON.parse(new TextDecoder().decode(obj.body)) as EditorialAtlasManifest;
+  const manifest = JSON.parse(new TextDecoder().decode(obj.body)) as CreatorManualManifest;
+  assert(
+    manifest.schemaVersion === 'creator_manual_v1',
+    `Expected creator_manual_v1 manifest, got ${manifest.schemaVersion}.`,
+  );
+  return manifest;
 }
 
 async function createCreatorEdit(input: { pageId: string; newTitle: string; newHeading: string }) {
@@ -328,8 +349,8 @@ async function main() {
   const firstReleaseNumber = firstReleaseRow.releaseNumber;
 
   const firstManifest = await fetchManifest(first.manifestR2Key);
-  assert(firstManifest.pages.length > 0, 'First manifest must contain pages.');
-  const originalTitle = firstManifest.pages[0]!.title;
+  assert(firstManifest.nodes.length > 0, 'First manifest must contain nodes.');
+  const originalTitle = firstManifest.nodes[0]!.title;
 
   // Creator edits one page
   const pageRowsBeforeEdit = await getDb()
@@ -375,7 +396,7 @@ async function main() {
   );
 
   const secondManifest = await fetchManifest(second.manifestR2Key);
-  const titleMatch = secondManifest.pages.some((p) => p.title === EDITED_TITLE);
+  const titleMatch = secondManifest.nodes.some((node) => node.title === EDITED_TITLE);
   assert(titleMatch, 'Second manifest must contain the creator-edited title.');
 
   // Third publish with no edits — must be idempotent and return the SAME release id

@@ -21,7 +21,7 @@ import {
 } from '@creatorcanon/db/schema';
 
 import { loadDefaultEnvFiles, repoRoot } from './env-files';
-import type { EditorialAtlasManifest } from './adapters/editorial-atlas/manifest-types';
+import type { CreatorManualManifest } from './adapters/creator-manual/manifest-types';
 import { publishRunAsHub } from './publish-run-as-hub';
 import { runGenerationPipeline } from './run-generation-pipeline';
 
@@ -29,6 +29,8 @@ const WORKSPACE_ID = 'local-smoke-workspace';
 const ACTOR_USER_ID = 'local-smoke-user';
 const VIDEO_SET_ID = 'audio-fixture-publish-video-set';
 const PROJECT_ID = 'audio-fixture-publish-project';
+const HUB_ID = 'audio-fixture-publish-hub';
+const HUB_SUBDOMAIN = 'audio-fixture-publish';
 const RUN_ID = 'audio-fixture-publish-run';
 const PROJECT_TITLE = 'Audio Fixture Evidence Hub';
 
@@ -36,9 +38,17 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function manifestCitationCount(manifest: unknown): number {
-  const m = manifest as EditorialAtlasManifest;
-  return m.pages?.reduce((sum, p) => sum + (p.citations?.length ?? 0), 0) ?? 0;
+function parseCreatorManualManifest(manifest: unknown): CreatorManualManifest {
+  const parsed = manifest as CreatorManualManifest;
+  assert(
+    parsed.schemaVersion === 'creator_manual_v1',
+    `Expected creator_manual_v1 manifest, got ${parsed.schemaVersion}.`,
+  );
+  return parsed;
+}
+
+function manifestEvidenceRefCount(manifest: CreatorManualManifest): number {
+  return manifest.nodes.reduce((sum, node) => sum + node.evidence.length, 0);
 }
 
 async function resetDedicatedRows(videoIds: string[]) {
@@ -110,6 +120,20 @@ async function seedDedicatedRun(videoIds: string[]) {
       presentation_preset: 'field',
     },
     currentRunId: RUN_ID,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await db.insert(hub).values({
+    id: HUB_ID,
+    workspaceId: WORKSPACE_ID,
+    projectId: PROJECT_ID,
+    subdomain: HUB_SUBDOMAIN,
+    theme: 'field',
+    templateKey: 'creator_manual',
+    accessMode: 'public',
+    freePreview: 'all',
+    metadata: {},
     createdAt: now,
     updatedAt: now,
   });
@@ -231,14 +255,13 @@ async function main() {
     .from(hub)
     .where(eq(hub.projectId, PROJECT_ID))
     .limit(1);
-  assert(hubs[0]?.theme === 'field', `Expected Studio Vault field theme, got ${hubs[0]?.theme ?? 'missing'}.`);
+  assert(hubs[0]?.theme === 'field', `Expected Studio Manual field theme, got ${hubs[0]?.theme ?? 'missing'}.`);
 
   const r2 = createR2Client(parseServerEnv(process.env));
   const manifestObject = await r2.getObject(publishResult.manifestR2Key);
-  const citationCount = manifestCitationCount(
-    JSON.parse(new TextDecoder().decode(manifestObject.body)),
-  );
-  assert(citationCount > 0, 'Expected published manifest to include citations from audio transcription.');
+  const manifest = parseCreatorManualManifest(JSON.parse(new TextDecoder().decode(manifestObject.body)));
+  const evidenceRefCount = manifestEvidenceRefCount(manifest);
+  assert(evidenceRefCount > 0, 'Expected published manifest to include source evidence refs from audio transcription.');
 
   await closeDb();
 
@@ -247,7 +270,9 @@ async function main() {
     runId: RUN_ID,
     videoCount: videoIds.length,
     transcribedVideoCount: transcribedRows.length,
-    citationCount,
+    nodeCount: manifest.stats.nodeCount,
+    sourceCount: manifest.stats.sourceCount,
+    evidenceRefCount,
     publicPath: publishResult.publicPath,
     theme: hubs[0].theme,
     manifestR2Key: publishResult.manifestR2Key,

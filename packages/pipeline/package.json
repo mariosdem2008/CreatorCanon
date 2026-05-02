@@ -9,7 +9,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./stages": "./src/stages/index.ts",
-    "./contracts": "./src/contracts/index.ts"
+    "./contracts": "./src/contracts/index.ts",
+    "./audit": "./src/audit/index.ts",
+    "./audit-handoff": "./src/audit-handoff/index.ts"
   },
   "scripts": {
     "lint": "eslint src",

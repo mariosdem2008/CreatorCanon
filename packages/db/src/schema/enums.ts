@@ -300,9 +300,13 @@ export const relationTypeEnum = pgEnum('relation_type', [
   'contradicts',
 ]);
 
-export const hubTemplateKeyEnum = pgEnum('hub_template_key', [
-  'editorial_atlas',
-  'legacy_v0',
+export const hubTemplateKeyEnum = pgEnum('hub_template_key', ['creator_manual']);
+
+export const archiveAuditStatusEnum = pgEnum('archive_audit_status', [
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
 ]);
 
 // ----- Manual video upload -----

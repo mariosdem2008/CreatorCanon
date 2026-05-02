@@ -25,12 +25,64 @@ import { generationRun } from './run';
 export interface HubMetadata {
   /** Optional display tagline shown on the hub home; falls back to a template default. */
   tagline?: string;
+  /** Optional Creator Manual home headline override; falls back to the project title. */
+  homeHeadline?: string;
+  /** Optional Creator Manual home summary override; falls back to a template default. */
+  homeSummary?: string;
   /** Per-hub override of the template's trust block. Adapter shallow-merges per top-level key. */
   trust?: {
     methodologySummary?: string;
     qualityPrinciples?: { title: string; body: string }[];
     creationProcess?: { stepNumber: number; title: string; body: string }[];
     faq?: { question: string; answer: string }[];
+  };
+  /** Creator Manual brand overrides merged by the hub adapter. */
+  brand?: {
+    name?: string;
+    tone?: string;
+    colors?: Partial<{
+      background: string;
+      foreground: string;
+      surface: string;
+      elevated: string;
+      border: string;
+      muted: string;
+      accent: string;
+      accentForeground: string;
+      warning: string;
+      success: string;
+      typeMap: Record<string, string>;
+    }>;
+    typography?: Partial<{
+      headingFamily: string;
+      bodyFamily: string;
+    }>;
+    assets?: Partial<{
+      logoUrl: string;
+      heroImageUrl: string;
+      patternImageUrl: string;
+    }>;
+    style?: {
+      mode?: 'light' | 'dark' | 'system' | 'custom';
+    };
+    labels?: Partial<{
+      evidence: string;
+      workshop: string;
+      library: string;
+    }>;
+    radius?: string;
+    shadow?: string;
+  };
+  /** Audit handoff metadata retained for downstream template customization. */
+  designSpec?: {
+    version: 1;
+    customization: {
+      editableKeys: string[];
+    };
+    motion: {
+      intensity: 'subtle' | 'standard' | 'expressive';
+      principles: string[];
+    };
   };
 }
 
@@ -56,7 +108,7 @@ export const hub = pgTable(
     subdomain: citext('subdomain').notNull(),
     customDomain: text('custom_domain'),
     theme: hubThemeEnum('theme').notNull().default('paper'),
-    templateKey: hubTemplateKeyEnum('template_key').notNull().default('editorial_atlas'),
+    templateKey: hubTemplateKeyEnum('template_key').notNull().default('creator_manual'),
     accessMode: hubAccessModeEnum('access_mode').notNull().default('public'),
     paywallPriceCents: integer('paywall_price_cents'),
     metadata: jsonb('metadata').$type<HubMetadata>().notNull().default({}),

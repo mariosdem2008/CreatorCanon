@@ -70,6 +70,9 @@ export interface OpenAIClient {
 }
 
 export const createOpenAIClient = (env: ServerEnv): OpenAIClient => {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is required for OpenAI API client calls.');
+  }
   const raw = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
   return {

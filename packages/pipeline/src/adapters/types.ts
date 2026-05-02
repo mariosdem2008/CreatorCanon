@@ -1,4 +1,4 @@
-import type { EditorialAtlasManifest } from './editorial-atlas/manifest-types';
+import type { CreatorManualManifest } from './creator-manual/manifest-types';
 
 export interface AdapterInput {
   runId: string;
@@ -6,4 +6,4 @@ export interface AdapterInput {
   releaseId: string;
 }
 
-export type AdapterFn = (input: AdapterInput) => Promise<EditorialAtlasManifest>;
+export type AdapterFn = (input: AdapterInput) => Promise<CreatorManualManifest>;

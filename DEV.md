@@ -24,6 +24,22 @@
    TRIGGER_SECRET_KEY=tr_dev_...   # from Trigger.dev dashboard, OR see "Trigger.dev setup" below
    ```
 
+For local hub-generation cost control, you can route the tool-less Author's
+Studio and Creator Manual design-spec calls through your logged-in Codex CLI
+account:
+
+```bash
+PIPELINE_QUALITY_MODE=codex_dev
+# optional:
+CODEX_CLI_MODEL=gpt-5.5
+CODEX_CLI_TIMEOUT_MS=900000
+```
+
+This is development-only. Tool-using audit and canon stages still require the
+normal OpenAI/Gemini API clients because Codex CLI does not support the
+pipeline's function-calling protocol. Production runs should use API-key
+providers only.
+
 ## One-time setup
 
 ```bash
@@ -39,11 +55,11 @@ pnpm dev
 
 This spins up three parallel processes via Turbo + concurrently:
 
-| Label | What | Port |
-|---|---|---|
-| `web` | Next.js dev server (the SaaS app) | 3000 |
-| `queue` | Worker queue runner (in-process pipeline executor) | — |
-| `trigger` | Trigger.dev local dev runtime (handles upload-transcription tasks) | — |
+| Label     | What                                                               | Port |
+| --------- | ------------------------------------------------------------------ | ---- |
+| `web`     | Next.js dev server (the SaaS app)                                  | 3000 |
+| `queue`   | Worker queue runner (in-process pipeline executor)                 | —    |
+| `trigger` | Trigger.dev local dev runtime (handles upload-transcription tasks) | —    |
 
 Open `http://localhost:3000` and click through the flow:
 
@@ -52,9 +68,10 @@ Open `http://localhost:3000` and click through the flow:
 3. **`/app/library`** → your upload appears with the "Uploaded" badge
 4. **`/app/projects/new`** → create a project, pick your uploads as sources
 5. Click "Generate" → watch the `queue` and `trigger` terminals scroll as `discovery → synthesis → verify → merge → adapt` runs
-6. **`/h/<hubSlug>`** → the rendered hub (loads `editorial_atlas_v1` manifest from R2)
+6. **`/h/<hubSlug>`** → the rendered hub (loads a `creator_manual_v1` manifest from R2)
 
 Inspect what landed for any run:
+
 ```bash
 pnpm inspect:run --runId <runId>
 ```
@@ -62,6 +79,7 @@ pnpm inspect:run --runId <runId>
 ## Trigger.dev setup (first time)
 
 Manual upload transcription requires Trigger.dev. If you don't have an account:
+
 1. Sign up at https://trigger.dev (free tier)
 2. Create a project
 3. Copy `TRIGGER_SECRET_KEY` (and `TRIGGER_PROJECT_ID` if shown) into your `.env`
@@ -79,21 +97,22 @@ pnpm -C apps/worker dev:queue  # in another
 ```
 
 If you only want the web UI (mockManifest fallback for renderer testing):
+
 ```bash
 pnpm -C apps/web dev
 ```
 
 ## Common one-offs
 
-| What | Command |
-|---|---|
-| Reset the dev DB | `pnpm dev:db:reset` |
-| Apply pending migrations | `pnpm db:migrate` |
-| Seed local fixtures | `pnpm dev:seed` |
-| Repo-wide typecheck | `pnpm typecheck` |
-| Repo-wide tests | `pnpm test` (DB + API integration tests skip without `DATABASE_URL`; Gemini stage tests skip without `GEMINI_API_KEY`) |
-| Format | `pnpm format` |
-| Inspect any run's findings + cost | `pnpm inspect:run --runId <id>` |
+| What                              | Command                                                                                                                |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Reset the dev DB                  | `pnpm dev:db:reset`                                                                                                    |
+| Apply pending migrations          | `pnpm db:migrate`                                                                                                      |
+| Seed local fixtures               | `pnpm dev:seed`                                                                                                        |
+| Repo-wide typecheck               | `pnpm typecheck`                                                                                                       |
+| Repo-wide tests                   | `pnpm test` (DB + API integration tests skip without `DATABASE_URL`; Gemini stage tests skip without `GEMINI_API_KEY`) |
+| Format                            | `pnpm format`                                                                                                          |
+| Inspect any run's findings + cost | `pnpm inspect:run --runId <id>`                                                                                        |
 
 ## Gotchas
 

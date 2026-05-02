@@ -44,6 +44,7 @@ export * from './billing';
 
 // Observability / audit
 export * from './audit';
+export * from './archive_audit';
 
 // Atlas agent + inbox
 export * from './agent';
