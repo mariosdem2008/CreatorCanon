@@ -120,6 +120,13 @@
       "when": 1778112000000,
       "tag": "0016_repair_creator_manual_template_key",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778198400000,
+      "tag": "0017_phase_a_synthesis_tables",
+      "breakpoints": true
     }
   ]
 }
