@@ -7,12 +7,16 @@
  *     see packages/pipeline/src/scripts/run-synthesis.ts in Task A.10)
  *   - codex (CodexClient — runner is provider-agnostic; CLI runner injects
  *     the real Codex CLI client, tests inject a deterministic stub)
+ *   - embedder (Embedder, optional — only needed for contemplative-thinker
+ *     theme clustering. Real wiring to OpenAI lives in Phase L.)
  *
  * The runner:
  *   1. Resolves voiceMode (channelProfile.voiceMode or archetype default).
  *   2. Routes which composers run via routeComposers(archetype).
  *   3. Runs all selected composers in parallel.
- *   4. Assembles the ProductBundle envelope.
+ *   4. For contemplative-thinker, runs theme clustering AFTER cards are
+ *      forged (it consumes them).
+ *   5. Assembles the ProductBundle envelope.
  *
  * NOTE: The runner does NOT load DB substrate or write back; that lives in
  * the CLI script and the API route handlers (Task A.10 + A.9). Keeping the
@@ -36,6 +40,7 @@ import { composeCalculators } from './composers/calculator-forge';
 import { composeDiagnostic } from './composers/diagnostic-composer';
 import { composeFunnel } from './composers/funnel-composer';
 import { composeCards } from './composers/card-forge';
+import { composeThemes, type Embedder } from './composers/theme-curator';
 
 export interface RunSynthesisInput {
   runId: string;
@@ -44,6 +49,11 @@ export interface RunSynthesisInput {
   channelProfile: ChannelProfileRef;
   canons: CanonRef[];
   codex: CodexClient;
+  /**
+   * Optional embedder. Required for the contemplative-thinker archetype's
+   * theme clustering pass. Omit for archetypes that don't need themes.
+   */
+  embedder?: Embedder;
 }
 
 const ARCHETYPE_VOICE_DEFAULT: Record<ArchetypeSlug, VoiceMode> = {
@@ -110,7 +120,9 @@ export async function runSynthesis(input: RunSynthesisInput): Promise<ProductBun
       selected.has('diagnostic')
         ? composeDiagnostic(baseInput, { codex: input.codex })
         : undefined,
-      selected.has('cards') ? composeCards(baseInput, { codex: input.codex }) : undefined,
+      selected.has('cards')
+        ? composeCards(baseInput, { codex: input.codex })
+        : undefined,
       composeFunnel(
         {
           ...baseInput,
@@ -120,6 +132,17 @@ export async function runSynthesis(input: RunSynthesisInput): Promise<ProductBun
         { codex: input.codex },
       ),
     ]);
+
+  // Theme clustering must run AFTER cards are forged (it consumes them).
+  // Skipped silently when no embedder is supplied — the caller decides
+  // whether to provide one. The card deck still ships even without themes.
+  let themes;
+  if (cards && cards.length > 0 && selected.has('themes') && input.embedder) {
+    themes = await composeThemes(cards, {
+      embedder: input.embedder,
+      codex: input.codex,
+    });
+  }
 
   const bundle: ProductBundle = {
     archetype,
@@ -132,6 +155,7 @@ export async function runSynthesis(input: RunSynthesisInput): Promise<ProductBun
       ...(calculators ? { calculators } : {}),
       ...(diagnostic ? { diagnostic } : {}),
       ...(cards ? { cards: { cards } } : {}),
+      ...(themes ? { themes: { themes } } : {}),
       funnel,
     },
     generatedAt: new Date().toISOString(),

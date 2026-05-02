@@ -65,3 +65,8 @@ export {
   extractShortPrincipleSentences,
   dedupCandidates,
 } from './composers/card-forge';
+export {
+  composeThemes,
+  clusterByEmbedding,
+} from './composers/theme-curator';
+export type { Embedder } from './composers/theme-curator';
